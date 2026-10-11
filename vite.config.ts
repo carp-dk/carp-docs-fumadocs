@@ -27,6 +27,9 @@ export default defineConfig({
     tsconfigPaths: true,
     alias: {
       tslib: 'tslib/tslib.es6.js',
+      // `fumadocs-ui` is installed as an alias of `@fumadocs/base-ui`, the name that CLI-added components import.
+      // Resolve both to one copy, so they share contexts (search, i18n, etc.) with `RootProvider`.
+      '@fumadocs/base-ui': 'fumadocs-ui',
     },
   },
 });
