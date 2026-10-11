@@ -9,7 +9,7 @@ import {
   DocsTitle,
   MarkdownCopyButton,
   ViewOptionsPopover,
-} from 'fumadocs-ui/layouts/docs/page';
+} from '@/layouts/spacious/page';
 import { baseOptions } from '@/lib/layout.shared';
 import { getPageImageUrl, getPageMarkdownUrl, gitConfig } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';

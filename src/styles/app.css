@@ -1,9 +1,16 @@
 @import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';
+@import './theme.css';
 @import 'fumadocs-ui/css/preset.css';
 
 html {
   scrollbar-gutter: stable;
+}
+
+/* the Spacious layout scrolls in its page panel instead of the window, from `md` up */
+@media (width >= 48rem) {
+  html:has(#fd-spacious-layout) {
+    scrollbar-gutter: auto;
+  }
 }
 
 html > body[data-scroll-locked] {
