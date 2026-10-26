@@ -84,7 +84,7 @@ The site runs as a Docker container behind `docs.carp.dk`.
 | Setting | Where | Purpose |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | Portainer stack environment variable | Ask AI (required for Ask AI) |
-| `OPENROUTER_MODEL` | Portainer stack environment variable | OpenRouter model id (optional) |
+| `OPENROUTER_MODEL` | Portainer stack environment variable | OpenRouter model id with tool support (optional; default `anthropic/claude-haiku-5.5`) |
 | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | GitHub repository secrets | Push to `registry.carp.dk` |
 | `PORTAINER_API_KEY` | GitHub repository secret | Redeploy the `docs` stack |
 | `SITE_URL` | GitHub repository variable | Public URL, if not `https://docs.carp.dk` (optional) |

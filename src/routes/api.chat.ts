@@ -84,8 +84,9 @@ export const Route = createFileRoute("/api/chat")({
         const reqJson = await req.json();
 
         const result = streamText({
-          // An empty OPENROUTER_MODEL (e.g. an unset stack variable) falls back to the default.
-          model: openrouter.chat(process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet'),
+          // An empty OPENROUTER_MODEL (e.g. an unset stack variable) falls back to the default. The model
+          // must support tool calling and be available through the OpenRouter API (some free ones are not).
+          model: openrouter.chat(process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-5.5'),
           stopWhen: stepCountIs(5),
           tools: {
             search: searchTool,

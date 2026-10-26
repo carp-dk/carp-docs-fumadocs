@@ -15,5 +15,5 @@ services:
     environment:
       # Ask AI. Without a key the docs still work, but Ask AI cannot answer.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # Optional; an OpenRouter model id. Defaults to anthropic/claude-3.5-sonnet.
+      # Optional; an OpenRouter model id with tool support. Defaults to anthropic/claude-haiku-5.5.
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
