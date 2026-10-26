@@ -79,7 +79,7 @@ The site runs as a Docker container behind `docs.carp.dk`.
   `registry.carp.dk/carp/carp-docs-fumadocs` (`latest` on every push to `main`, `1.2.3` and `1.2`
   for version tags, and a `sha-…` tag for every build), then redeploys the `docs` stack on
   `https://test.carp.dk/portainer` through the Portainer API. Pull requests only build.
-- `deploy/docker-compose.yml` is the `docs` Portainer stack.
+- `deploy/docker-compose.yml` is the `docs` Portainer stack; it publishes the site on host port 3333.
 
 | Setting | Where | Purpose |
 | --- | --- | --- |

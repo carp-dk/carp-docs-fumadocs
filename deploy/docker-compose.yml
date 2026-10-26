@@ -3,14 +3,15 @@
 # In Portainer: Stacks > Add stack, name it "docs", and either use this repository (compose path
 # deploy/docker-compose.yml, reference refs/heads/main) or paste this file. Add the environment
 # variables below under "Environment variables", and point the reverse proxy for docs.carp.dk at
-# port 3000. Portainer pulls from registry.carp.dk with the registry credentials it already has.
+# port 3333. Portainer pulls from registry.carp.dk with the registry credentials it already has.
 # The deployment pipeline redeploys this stack after each push to main.
 services:
   docs:
     image: registry.carp.dk/carp/carp-docs-fumadocs:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # The host serves the docs on port 3333; the container listens on 3000.
+      - "3333:3000"
     environment:
       # Ask AI. Without a key the docs still work, but Ask AI cannot answer.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
