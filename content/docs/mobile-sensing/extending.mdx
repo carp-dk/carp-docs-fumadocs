@@ -834,7 +834,7 @@ For how to use transformers and privacy schemas in a study protocol, see [Data t
 
 ### Creating data transformer schemas
 
-To create a [`DataTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchema-class.html), implement the `namespace` getter and the `onRegister()` callback. This is the [Open mHealth](http://www.openmhealth.org) transformer schema:
+To create a [`DataTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchema-class.html), implement the `namespace` getter and the `onRegister()` callback. This is the [Open mHealth](https://www.openmhealth.org/) transformer schema:
 
 ```dart
 /// A default [DataTransformerSchema] for Open mHealth (OMH) transformers
@@ -888,7 +888,7 @@ class OMHGeopositionDataPoint extends OMHContextDataPoint
 
 - The most important member is `transformer`, a function that transforms one type of `Data` into another. The mapping between the two data types happens in the `fromLocationData` factory.
 - The class must support JSON serialization. Here the superclass `OMHContextDataPoint` handles it. The `toJson` method is needed to serialize and store the data.
-- The namespace of the [`DataFormat`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataFormat-class.html) of `OMHGeopositionDataPoint` is `OMH`.
+- The namespace of the [`DataType`](https://pub.dev/documentation/carp_core/latest/common/DataType-class.html) of `OMHGeopositionDataPoint` is `OMH`.
 
 Add the transformer to the schema:
 
@@ -897,7 +897,7 @@ DataTransformerSchemaRegistry().lookup(NameSpace.OMH)!
   ..add(LOCATION, OMHGeopositionDataPoint.transformer);
 ```
 
-In `carp_context_package`, this happens in the [`onRegister()`](https://pub.dev/documentation/carp_context_package/latest/context/ContextSamplingPackage/onRegister.html) method of the [`ContextSamplingPackage`](https://pub.dev/documentation/carp_context_package/latest/context/ContextSamplingPackage-class.html).
+In `carp_context_package`, this happens in the [`onRegister()`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/ContextSamplingPackage/onRegister.html) method of the [`ContextSamplingPackage`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/ContextSamplingPackage-class.html).
 
 ### Using data transformer schemas
 

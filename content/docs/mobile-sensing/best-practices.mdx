@@ -83,7 +83,7 @@ In the Android Settings, optimize the battery settings for background mode.
 
 Further reading:
 
-- [Issue #97](https://github.com/cph-cachet/carp.sensing-flutter/issues/97): discussion of background sensing.
+- [Issue #97](https://github.com/carp-dk/carp.sensing-flutter/issues/97): discussion of background sensing.
 - [This Reddit thread](https://www.reddit.com/r/samsung/comments/1b0j8jg/s24_ultra_stop_closing_my_apps/): how to keep an app running in the background on Samsung phones.
 - [Don't Kill My App](https://dontkillmyapp.com/): suggestions per vendor, for example for [Samsung](https://dontkillmyapp.com/samsung) phones.
 - [Setup page for the Cardata app](https://help.cardata.co/article/175-how-to-turn-off-your-androids-battery-optimizer): simple guidelines for different phones.
@@ -105,8 +105,8 @@ If **Background App Refresh** is greyed out for the app, first enable it globall
 
 Other ways to keep the app running:
 
-- **Guided Access:** the [Guided Access](https://support.apple.com/en-us/HT202612) feature in iOS forces the app to be the *only* app running, always in the foreground. It is therefore not useful for background sensing, but it can be useful when a phone is dedicated to one study, for example a study phone handed to a participant to use only for that study.
-- **Audio playback:** configure the app as an audio player app. iOS keeps audio playing apps running in the background. This is a hack; see the [sensors](https://github.com/olafuroskar/Bridging-Labs/tree/main/apps/sensors) app for inspiration.
+- **Guided Access:** the [Guided Access](https://support.apple.com/en-us/111795) feature in iOS forces the app to be the *only* app running, always in the foreground. It is therefore not useful for background sensing, but it can be useful when a phone is dedicated to one study, for example a study phone handed to a participant to use only for that study.
+- **Audio playback:** configure the app as an audio player app. iOS keeps audio playing apps running in the background. This is a hack; see the [sensors](https://github.com/dtu-digital-health/Bridging-Labs/tree/main/apps/sensors) app for inspiration.
 - **Open BLE connection:** as shown in [this coverage study](https://carp.dk/coverage-analysis-on-android-14-and-ios-18/), iOS keeps the app running in the background if it samples data from a BLE device. This drains the battery significantly.
 
 ## iOS setup
@@ -172,8 +172,8 @@ If you store data locally on the phone with the `SQLiteDataManager` or `FileData
 On iOS 12 and later, collection of Wi-Fi information is restricted. See:
 
 - [connectivity](https://pub.dev/packages/connectivity)
-- [CNCopyCurrentNetworkInfo](https://developer.apple.com/documentation/systemconfiguration/1614126-cncopycurrentnetworkinfo)
-- [Access WiFi Information Entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_developer_networking_wifi-info?language=objc)
+- [CNCopyCurrentNetworkInfo](https://developer.apple.com/documentation/systemconfiguration/cncopycurrentnetworkinfo)
+- [Access WiFi Information Entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.wifi-info)
 - [How To Enable the WiFi Information Entitlement in iOS 13](https://medium.com/better-programming/wifi-permission-changes-for-ios-12-1-iphone-x-and-other-devices-c313e24f90ae)
 
 ### `App.framework` compatibility
@@ -186,7 +186,7 @@ Building for iOS, but the linked and embedded framework 'App.framework' was buil
 
 ```
 
-This is a well-known issue with iOS / Xcode 11.4 for Flutter versions earlier than v1.15.3. See the Flutter [Xcode 11.4 Support](https://flutter.dev/docs/development/ios-project-migration) page.
+This is a well-known issue with iOS / Xcode 11.4 for Flutter versions earlier than v1.15.3. See Flutter's archived [Xcode migration](https://web.archive.org/web/20220614103526/https://docs.flutter.dev/development/ios-project-migration) page.
 
 ## Notifications
 
@@ -217,7 +217,7 @@ See [What Does `WidgetsFlutterBinding.ensureInitialized()` do?](https://stackove
 
 ## Android manifest merge
 
-When you build your app, the `AndroidManifest.xml` files from all packages and their underlying plugins are [merged](https://developer.android.com/studio/build/manage-manifests#merge-manifests).
+When you build your app, the `AndroidManifest.xml` files from all packages and their underlying plugins are [merged](https://developer.android.com/build/manage-manifests#merge-manifests).
 
 An app that uses CARP packages and plugins can be rejected from the Google Play Store if it, for example, tries to collect SMS texts and call logs. Google considers these a [restricted group of permissions](https://support.google.com/googleplay/android-developer/answer/10208820?visit_id=637547856829628711-3104765488&rd=1&hl=en) that need a valid reason for access, and research is not on the list of exceptions. In that case you may want to remove collection of SMS texts and call logs while keeping collection of calendar information (all in the `carp_communication_package`).
 
@@ -230,7 +230,7 @@ To omit restricted permissions, specify that they must not be merged from a lowe
 <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove"/>
 ```
 
-See also [issue #183](https://github.com/cph-cachet/carp.sensing-flutter/issues/183).
+See also [issue #183](https://github.com/carp-dk/carp.sensing-flutter/issues/183).
 
 ## Permissions
 

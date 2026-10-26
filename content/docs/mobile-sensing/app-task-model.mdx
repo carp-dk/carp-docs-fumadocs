@@ -31,7 +31,7 @@ The runtime APIs handle task state transitions and local notifications.
 </Step>
 </Steps>
 
-The examples on this page come from the [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) app.
+The examples on this page come from the [PulmonaryMonitor](https://github.com/carp-dk/pulmonary_monitor_app) app.
 
 <Cards>
 <Card title="Task list">
@@ -48,7 +48,7 @@ The examples on this page come from the [PulmonaryMonitor](https://github.com/cp
 
 ## Configuring app tasks
 
-In PulmonaryMonitor, app tasks are defined in [`study_protocol_manager.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/sensing/study_protocol_manager.dart). The sensing task at the bottom of the task list comes from this configuration:
+In PulmonaryMonitor, app tasks are defined in [`study_protocol_manager.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/services/study_protocol_manager.dart). The sensing task at the bottom of the task list comes from this configuration:
 
 ```dart
 var protocol = SmartphoneStudyProtocol(...);
@@ -111,7 +111,7 @@ An app task follows the [Trigger-Task-Measure domain model in CAMS](/docs/mobile
 | `notification` | Whether a notification is sent when a new task is available. |
 | `expire` | When the task expires and is no longer available. |
 
-For the rest of the setup, see the [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) source.
+For the rest of the setup, see the [PulmonaryMonitor](https://github.com/carp-dk/pulmonary_monitor_app) source.
 
 ## App task execution
 
@@ -125,7 +125,7 @@ When an app task is triggered, an [`AppTaskExecutor`](https://pub.dev/documentat
 
 ## The user task queue
 
-Use the [`userTaskQueue`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController/userTaskQueue.html) property on `AppTaskController` to access enqueued tasks. In PulmonaryMonitor this happens in [`sensing_bloc.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/bloc/sensing_bloc.dart):
+Use the [`userTaskQueue`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController/userTaskQueue.html) property on `AppTaskController` to access enqueued tasks. In PulmonaryMonitor this happens in [`task_list_view_model.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/view_models/task_list_view_model.dart):
 
 ```dart
 List<UserTask> get tasks => AppTaskController().userTaskQueue;
@@ -166,7 +166,7 @@ To react to state changes, listen to events on the user task queue:
 
 ## Rendering user tasks in the app
 
-You can render enqueued user tasks in any app-specific UI. In PulmonaryMonitor, the task list shown above is implemented in [`task_list_page.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/ui/task_list_page.dart).
+You can render enqueued user tasks in any app-specific UI. In PulmonaryMonitor, the task list shown above is implemented in [`task_list_page.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/views/task_list_page.dart).
 
 This widget builds the scrollable list view of task cards:
 
@@ -291,7 +291,7 @@ To add a custom app task, create a new `UserTask` type and register a factory fo
 
 ### Create a custom user task
 
-The `AudioUserTask` in [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) is a custom app task. It is implemented in [`audio_user_task.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/sensing/audio_user_task.dart):
+The `AudioUserTask` in [PulmonaryMonitor](https://github.com/carp-dk/pulmonary_monitor_app) is a custom app task. It is implemented in [`audio_user_task.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/sensing/audio_user_task.dart):
 
 ```dart
 /// A user task handling audio recordings.

@@ -4,10 +4,10 @@ description: Study protocols, triggers, tasks, measures, devices and measurement
 icon: AccountTree
 ---
 
-The [`carp_mobile_sensing`](https://pub.dartlang.org/documentation/carp_mobile_sensing/latest/) library uses and extends the [`carp_core`](https://pub.dev/packages/carp_core) domain model. The CAMS domain model has two parts:
+The [`carp_mobile_sensing`](https://pub.dev/documentation/carp_mobile_sensing/latest/) library uses and extends the [`carp_core`](https://pub.dev/packages/carp_core) domain model. The CAMS domain model has two parts:
 
-- The `carp_core` [domain](https://pub.dev/documentation/carp_core/latest/) model, a Dart implementation of the overall [CARP Core Domain Model](https://github.com/cph-cachet/carp.core-kotlin).
-- The `carp_mobile_sensing` [domain](https://pub.dartlang.org/documentation/carp_mobile_sensing/latest/domain/domain-library.html) model.
+- The `carp_core` [domain](https://pub.dev/documentation/carp_core/latest/) model, a Dart implementation of the overall [CARP Core Domain Model](https://github.com/carp-dk/carp.core-kotlin).
+- The `carp_mobile_sensing` [domain](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/) model.
 
 This page covers the parts of the CARP domain models that CAMS uses: the domain classes related to a [study protocol](#defining-a-study-protocol), data transformers, sampling configurations and [collected measurements](#measurements-and-data). Sampling produces `Measurement` streams with typed `Data` payloads.
 
@@ -286,7 +286,7 @@ protocol.addTaskControl(
 
 ## Measurements and data
 
-CAMS models data according to the [data](https://github.com/cph-cachet/carp.core-kotlin/blob/develop/docs/carp-data.md) subsystem of the CARP Core domain model. Data collected during sampling is modeled as a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html), which holds a [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) object of a specific [`DataType`](https://pub.dev/documentation/carp_core/latest/common/DataType-class.html).
+CAMS models data according to the [data](https://github.com/carp-dk/carp.core-kotlin/blob/develop/docs/carp-data.md) subsystem of the CARP Core domain model. Data collected during sampling is modeled as a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html), which holds a [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) object of a specific [`DataType`](https://pub.dev/documentation/carp_core/latest/common/DataType-class.html).
 
 In CAMS, all data objects are of type `Data`. For example, [`BatteryState`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/BatteryState-class.html) holds the state of the phone's battery, such as battery level and charging status. A data object is measured either at a point in time or over a time span.
 
