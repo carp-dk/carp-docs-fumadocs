@@ -1,7 +1,9 @@
-# Checks the code, builds the production Docker image and publishes it to the GitHub Container
-# Registry as ghcr.io/<owner>/<repo>. Pushes to main publish `latest` and redeploy Portainer;
-# version tags (v1.2.3) publish `1.2.3` and `1.2`; pull requests only build.
-name: Docker image
+# Checks the code, builds the production Docker image, pushes it to the CARP registry and
+# redeploys the "docs" stack on Portainer. Pushes to main publish `latest`; version tags (v1.2.3)
+# publish `1.2.3` and `1.2`; pull requests only build.
+#
+# Secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (registry.carp.dk), PORTAINER_API_KEY.
+name: Deployment pipeline
 
 on:
   push:
@@ -11,12 +13,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: docker-${{ github.ref }}
+  group: deployment-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: registry.carp.dk
+  IMAGE: registry.carp.dk/carp/carp-docs-fumadocs
+  PORTAINER_URL: https://test.carp.dk/portainer
+  STACK_NAME: docs
 
 jobs:
   check:
@@ -32,36 +36,33 @@ jobs:
       - run: bun run lint
 
   image:
-    name: Build and publish the image
+    name: Build and push the image
     needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-      - name: Log in to the GitHub Container Registry
+      - name: Log in to the CARP registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Tags and labels
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+      # The Dockerfile makes a production build: minified, prerendered and precompressed.
       - name: Build and push
-        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -76,19 +77,36 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Redeploy on Portainer
+    name: Redeploy the Portainer stack
     needs: image
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      # The webhook of the Portainer stack or service re-pulls `latest` and restarts it. Without the
-      # PORTAINER_WEBHOOK_URL secret, this step is skipped and Portainer is updated by hand.
-      - name: Trigger the Portainer webhook
+      # Portainer CE has no stack webhooks, so this calls its API with an access token. A stack
+      # deployed from this repository is redeployed from main; a stack made in the web editor keeps
+      # its compose file. Both pull the new image and keep their environment variables.
+      - name: Pull the new image and redeploy
         env:
-          WEBHOOK: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         run: |
-          if [ -z "$WEBHOOK" ]; then
-            echo "PORTAINER_WEBHOOK_URL is not set; skipping the redeploy."
-            exit 0
+          set -euo pipefail
+          api() { curl --fail-with-body --silent --show-error --max-time 600 -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' "$@"; }
+
+          stack=$(api "$PORTAINER_URL/api/stacks" | jq -c --arg name "$STACK_NAME" 'first(.[] | select(.Name == $name)) // empty')
+          if [ -z "$stack" ]; then
+            echo "::error::Portainer has no stack named '$STACK_NAME'."
+            exit 1
           fi
-          curl --fail --silent --show-error --max-time 60 -X POST "$WEBHOOK"
+          id=$(jq -r '.Id' <<<"$stack")
+          endpoint=$(jq -r '.EndpointId' <<<"$stack")
+          env=$(jq -c '.Env // []' <<<"$stack")
+
+          if [ "$(jq -r '.GitConfig != null' <<<"$stack")" = true ]; then
+            body=$(jq -n --argjson env "$env" '{env: $env, prune: false, pullImage: true, repositoryReferenceName: "refs/heads/main"}')
+            api -X PUT "$PORTAINER_URL/api/stacks/$id/git/redeploy?endpointId=$endpoint" -d "$body" > /dev/null
+          else
+            file=$(api "$PORTAINER_URL/api/stacks/$id/file" | jq -r '.StackFileContent')
+            body=$(jq -n --argjson env "$env" --arg file "$file" '{stackFileContent: $file, env: $env, prune: false, pullImage: true}')
+            api -X PUT "$PORTAINER_URL/api/stacks/$id?endpointId=$endpoint" -d "$body" > /dev/null
+          fi
+          echo "Redeployed the '$STACK_NAME' stack (id $id) with the new image."

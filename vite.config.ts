@@ -50,8 +50,14 @@ export default defineConfig({
     nitro({
       // A Node server for the Docker image; set NITRO_PRESET (e.g. vercel) to build for another host.
       preset: process.env.NITRO_PRESET || 'node-server',
-      // The site opens on the docs: redirect the root permanently at the host, before any static file.
-      routeRules: { '/': { redirect: { to: '/docs', status: 308 } } },
+      // Ship Brotli and gzip copies of the static files, so the server sends them precompressed.
+      compressPublicAssets: true,
+      routeRules: {
+        // The site opens on the docs: redirect the root permanently, before any static file.
+        '/': { redirect: { to: '/docs', status: 308 } },
+        // Fingerprinted build assets never change, so browsers and proxies can keep them for a year.
+        '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+      },
       // M3E's compiled helpers must be bundled, including tslib's ESM entry.
       noExternals: ['tslib'],
     }),

@@ -72,17 +72,21 @@ section a `changelog.mdx` page.
 
 The site runs as a Docker container behind `docs.carp.dk`.
 
-- `Dockerfile` builds the site with Bun and runs the self-contained Node server on port 3000.
-- `.github/workflows/docker.yml` type-checks, lints and publishes the image to
-  `ghcr.io/carp-dk/carp-docs-fumadocs`: `latest` on every push to `main`, `1.2.3` and `1.2` for
-  version tags (`v1.2.3`), and a `sha-…` tag for every build. Pull requests only build.
-- `deploy/docker-compose.yml` is the Portainer stack.
+- `Dockerfile` makes a production build with Bun (minified, prerendered, with Brotli and gzip
+  copies of the static files) and runs the self-contained Node server on port 3000. Docs pages are
+  served from the prerendered HTML; build assets are cached for a year.
+- `.github/workflows/docker.yml` type-checks and lints, pushes the image to
+  `registry.carp.dk/carp/carp-docs-fumadocs` (`latest` on every push to `main`, `1.2.3` and `1.2`
+  for version tags, and a `sha-…` tag for every build), then redeploys the `docs` stack on
+  `https://test.carp.dk/portainer` through the Portainer API. Pull requests only build.
+- `deploy/docker-compose.yml` is the `docs` Portainer stack.
 
 | Setting | Where | Purpose |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | Portainer stack environment variable | Ask AI (required for Ask AI) |
 | `OPENROUTER_MODEL` | Portainer stack environment variable | OpenRouter model id (optional) |
-| `PORTAINER_WEBHOOK_URL` | GitHub repository secret | Redeploys the stack after `latest` is published (optional) |
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | GitHub repository secrets | Push to `registry.carp.dk` |
+| `PORTAINER_API_KEY` | GitHub repository secret | Redeploy the `docs` stack |
 | `SITE_URL` | GitHub repository variable | Public URL, if not `https://docs.carp.dk` (optional) |
 
 The OpenRouter settings are read when the container starts, so they never go into the image or

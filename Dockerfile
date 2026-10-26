@@ -15,7 +15,8 @@ COPY . .
 # The public URL used for canonical links, Open Graph and the sitemap.
 ARG VITE_SITE_URL=https://docs.carp.dk
 ENV VITE_SITE_URL=$VITE_SITE_URL NITRO_PRESET=node-server
-RUN bun run build
+# A production build: minified, prerendered, with precompressed static files.
+RUN NODE_ENV=production bun run build
 
 # --- Runtime: only the self-contained server output ---
 FROM node:24-bookworm-slim AS runtime

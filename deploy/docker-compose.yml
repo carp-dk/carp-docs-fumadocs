@@ -1,11 +1,13 @@
-# Portainer stack for docs.carp.dk.
+# The "docs" Portainer stack for docs.carp.dk.
 #
-# In Portainer: Stacks > Add stack > paste this file, then add the environment variables below
-# under "Environment variables". Point the reverse proxy for docs.carp.dk at port 3000.
-# If the image is private, add ghcr.io as a registry in Portainer with a token that can read packages.
+# In Portainer: Stacks > Add stack, name it "docs", and either use this repository (compose path
+# deploy/docker-compose.yml, reference refs/heads/main) or paste this file. Add the environment
+# variables below under "Environment variables", and point the reverse proxy for docs.carp.dk at
+# port 3000. Portainer pulls from registry.carp.dk with the registry credentials it already has.
+# The deployment pipeline redeploys this stack after each push to main.
 services:
   docs:
-    image: ghcr.io/carp-dk/carp-docs-fumadocs:latest
+    image: registry.carp.dk/carp/carp-docs-fumadocs:latest
     restart: unless-stopped
     ports:
       - "3000:3000"

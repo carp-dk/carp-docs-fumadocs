@@ -1,21 +1,12 @@
 import { llms, loader } from 'fumadocs-core/source';
 import { findPath, type Folder } from 'fumadocs-core/page-tree';
-import { defineDocs } from 'fumadocs-mdx/macro';
+import { docs } from './docs';
 import { icons as lucideIcons } from 'lucide-react';
 import { createElement } from 'react';
 import { materialIcons } from '@/components/ui/icons';
 import { docsRoute } from './shared';
 
-export const docs = defineDocs({
-  dir: 'content/docs',
-  docs: {
-    async: true,
-    postprocess: {
-      includeProcessedMarkdown: true,
-      extractLinkReferences: true,
-    },
-  },
-});
+export { docs };
 
 export const source = loader({
   source: docs.toFumadocsSource(),

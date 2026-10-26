@@ -1,7 +1,8 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { DocsLayout } from '@/components/ai/layout';
 import { createServerFn } from '@tanstack/react-start';
-import { docs, getPageSection, source } from '@/lib/source';
+import { docs } from '@/lib/docs';
+import { getPageSection, source } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
