@@ -1,0 +1,99 @@
+---
+title: Software architecture
+description: The runtime, infrastructure and plugin layers of CARP Mobile Sensing, and how a study is executed.
+icon: Layers
+---
+
+The runtime architecture of CARP Mobile Sensing (CAMS) has three layers:
+
+| Layer | Main responsibility |
+| --- | --- |
+| [**Runtime**](#runtime) | The main runtime layer of CAMS. Orchestrates the client manager with study controllers, device managers, controllers and registries. |
+| [**Infrastructure**](#infrastructure) | Provides services for deployment, background sensing, persistence, data management and sampling packages. |
+| [**Plugins**](#plugins) | Flutter plugins that CAMS uses to access the operating system (OS), online services and connected BLE devices on Android and iOS. |
+
+The architecture is designed to be highly extensible, cross-platform and maintainable.
+
+![CAMS architecture diagram: the runtime layer with the client manager, study controllers, device managers and registries; the infrastructure layer with deployment services, data managers and sampling packages; and the Flutter plugins that access the operating system and devices](/images/mobile-sensing/cams_architecture_v2.svg)
+
+## Runtime
+
+The runtime layer is the main entry point to CAMS. It holds the client manager, a study controller for each running study, device managers, and a set of controllers and registries.
+
+| Component | Singleton | Role |
+| --- | --- | --- |
+| [`SmartPhoneClientManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager-class.html) | Yes | The main entry point to CAMS. Holds references to its deployment service, the device controller and the client repository, which holds the set of running studies. |
+| [`SmartphoneStudyController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController-class.html) | No | Created for each study added to the client manager's repository. Handles the study at runtime: collects data through its deployment executor and sends it to its data manager for storage or upload. |
+| [`DeviceController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceController-class.html) | Yes | Controls all primary and connected devices at runtime. Each device available on the phone has a [`DeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceManager-class.html), such as the [`SmartphoneDeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneDeviceManager-class.html). |
+| [`DataManagerRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManagerRegistry-class.html) | Yes | Registry of available [`DataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManager-class.html) implementations. |
+| [`AppTaskController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController-class.html) | Yes | Manages the [`AppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask-class.html) lifecycle and queueing. |
+| [`NotificationManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/NotificationManager-class.html) | Yes | Handles OS-level notifications. |
+| [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) | Yes | Registry of available [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html) implementations. |
+| [`DataTransformerSchemaRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchemaRegistry-class.html) | Yes | Registry of available [`DataTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchema-class.html) mappings. |
+
+Singletons can be accessed throughout the app.
+
+### Study execution flow
+
+<Steps>
+<Step title="Configure the client manager">
+
+The [`SmartPhoneClientManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager-class.html) is [configured](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/configure.html) with a deployment service, a device controller and runtime options.
+
+</Step>
+<Step title="Add studies">
+
+[Adding](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/addStudy.html) a study creates and hosts a [`SmartphoneStudyController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController-class.html) for that study.
+
+</Step>
+<Step title="Deploy a study">
+
+[Deploying](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/tryDeployment.html) a study fetches the study deployment from the deployment service and adds it to the study controller. The study deployment describes what data to collect and which data manager to use for data upload and/or transformation.
+
+</Step>
+<Step title="Control sampling">
+
+Once a study is deployed, control data sampling by [resuming](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/resume.html) or [pausing](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/pause.html) all studies in the client. To control a single study, use the [`resume`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController/resume.html) and [`pause`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController/pause.html) methods on its `SmartphoneStudyController`.
+
+</Step>
+<Step title="Store or upload data">
+
+The data manager associated with a study (available in the study controller) stores or uploads the sampled data.
+
+</Step>
+</Steps>
+
+<Callout type="tip" title="Sampling state persists across app restarts">
+
+CAMS keeps the state of data sampling persistently across app restarts, so you only follow this flow once, when you add a new study. Once a study is added and deployed, its runtime status is saved and restored automatically when the app restarts, for example after the OS kills the app. See [background sensing](/docs/mobile-sensing/best-practices#background-sensing).
+
+</Callout>
+
+## Infrastructure
+
+The infrastructure layer holds services for getting study deployments, collecting data and storing it. The most important part is the set of sampling packages, described in detail in [this scientific paper](https://www.mdpi.com/1424-8220/22/7/2813).
+
+| Component | Role |
+| --- | --- |
+| [`DeploymentService`](https://pub.dev/documentation/carp_core/latest/deployment/DeploymentService-class.html) | Handles study deployment configurations for the client. CAMS includes the built-in [`SmartphoneDeploymentService`](https://pub.dev/documentation/carp_mobile_sensing/latest/infrastructure/SmartphoneDeploymentService-class.html) (default), used by apps that only run local deployments. [`CarpDeploymentService`](https://pub.dev/documentation/carp_webservices/latest/carp_services_carp_services/CarpDeploymentService-class.html) is the CAWS-specific implementation of the `DeploymentService` interface. |
+| [`DataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManager-class.html) | [Data managers](/docs/mobile-sensing/data-managers) store, save or upload data. Examples are [`SQLiteDataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/infrastructure/SQLiteDataManager-class.html) and [`CarpDataManager`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataManager-class.html). |
+| [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html) | A [sampling package](/docs/mobile-sensing/extending#adding-new-sampling-capabilities) supports data collection of measures on a specific device. |
+
+### Sampling packages
+
+CAMS includes two built-in sampling packages, [`DeviceSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) and [`SensorSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html). Most sampling packages are external and you include them as needed, so an app **only** requests permissions for the probes and sensors it actually uses.
+
+A sampling package always collects data from a device:
+
+- **External devices**, such as [Polar](https://pub.dev/packages/carp_polar_package) heart rate monitors. The Polar package uses a [`PolarDeviceManager`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarDeviceManager-class.html) for data collection.
+- **Online services**, such as the [`WeatherServiceManager`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/WeatherServiceManager-class.html) in the [`carp_context_package`](https://pub.dev/packages/carp_context_package).
+
+See [Measure types](/docs/mobile-sensing/measure-types) for the measures each sampling package provides.
+
+## Plugins
+
+CAMS relies on the [Flutter package and plugin architecture](https://docs.flutter.dev/packages-and-plugins/developing-packages) for **cross-platform** access to OS-level services and sensors. These packages and plugins are maintained independently of CAMS and are available from [pub.dev](https://pub.dev/).
+
+Plugins for data collection are typically used in probes. Each sampling package contains one or more [`Probe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/Probe-class.html)s that access the underlying sensors and collect data. The plugins are external to CAMS and are loaded by the sampling package as needed.
+
+For example, location data, which both Android and iOS consider sensitive, is accessed in the [`carp_context_package`](https://pub.dev/packages/carp_context_package), which uses the [`location`](https://pub.dev/packages/location) plugin. If your study does not need this measure, leave out `carp_context_package` and your app does not ask for location permissions.

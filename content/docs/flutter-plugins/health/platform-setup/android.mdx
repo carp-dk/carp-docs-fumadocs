@@ -1,0 +1,114 @@
+---
+title: Android
+description: Declare Health Connect permissions, request runtime permissions, and enable history and background access for the health plugin on Android.
+---
+
+On Android, the plugin uses Google Health Connect. Health Connect may not be preinstalled, so check its availability at runtime and guide the user if needed:
+
+```dart
+final status = await health.getHealthConnectSdkStatus();
+final available = await health.isHealthConnectAvailable();
+if (!available) {
+  await health.installHealthConnect();
+}
+```
+
+See [Health Connect](/docs/flutter-plugins/health/health-connect) for the status values and the install flow.
+
+## Declare permissions in AndroidManifest.xml
+
+Declare the permissions for the types you read and write. Start from this baseline, taken from the example app, and remove what you do not need:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<!-- android/app/src/main/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
+  <!-- Health Connect permissions (add those you need) -->
+  <uses-permission android:name="android.permission.health.READ_STEPS"/>
+  <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
+  <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
+  <uses-permission android:name="android.permission.health.WRITE_WEIGHT"/>
+  <uses-permission android:name="android.permission.health.READ_HEIGHT"/>
+  <uses-permission android:name="android.permission.health.WRITE_HEIGHT"/>
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+  <uses-permission android:name="android.permission.health.WRITE_HEART_RATE"/>
+  <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+  <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
+  <uses-permission android:name="android.permission.health.READ_SLEEP"/>
+  <uses-permission android:name="android.permission.health.WRITE_SLEEP"/>
+  <uses-permission android:name="android.permission.health.READ_SPEED"/>
+  <uses-permission android:name="android.permission.health.WRITE_SPEED"/>
+  <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+  <uses-permission android:name="android.permission.health.WRITE_DISTANCE"/>
+  <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+  <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED"/>
+  <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+  <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED"/>
+  <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE"/>
+  <uses-permission android:name="android.permission.health.WRITE_BLOOD_GLUCOSE"/>
+  <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE"/>
+  <uses-permission android:name="android.permission.health.WRITE_BLOOD_PRESSURE"/>
+  <uses-permission android:name="android.permission.health.READ_BODY_FAT"/>
+  <uses-permission android:name="android.permission.health.WRITE_BODY_FAT"/>
+  <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE"/>
+  <uses-permission android:name="android.permission.health.WRITE_BODY_TEMPERATURE"/>
+  <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION"/>
+  <uses-permission android:name="android.permission.health.WRITE_OXYGEN_SATURATION"/>
+  <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
+  <uses-permission android:name="android.permission.health.WRITE_HYDRATION"/>
+  <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE"/>
+  <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE"/>
+  <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED"/>
+  <uses-permission android:name="android.permission.health.WRITE_FLOORS_CLIMBED"/>
+  <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE"/>
+  <uses-permission android:name="android.permission.health.WRITE_BASAL_METABOLIC_RATE"/>
+  <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE"/>
+  <uses-permission android:name="android.permission.health.WRITE_RESPIRATORY_RATE"/>
+  <uses-permission android:name="android.permission.health.READ_NUTRITION"/>
+  <uses-permission android:name="android.permission.health.WRITE_NUTRITION"/>
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY"/>
+  <uses-permission android:name="android.permission.health.WRITE_HEART_RATE_VARIABILITY"/>
+  <uses-permission android:name="android.permission.health.BODY_SENSORS"/>
+  <uses-permission android:name="android.permission.health.READ_MENSTRUATION"/>
+  <uses-permission android:name="android.permission.health.WRITE_MENSTRUATION"/>
+  <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS"/>
+  <uses-permission android:name="android.permission.health.WRITE_LEAN_BODY_MASS"/>
+
+  <!-- Historic and background reading (optional) -->
+  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY"/>
+  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"/>
+</manifest>
+```
+
+<Callout type="info" title="Permission UI intent filters">
+
+Also add the intent filters from the [example app](https://github.com/cph-cachet/flutter-plugins/tree/master/packages/health/example) to your manifest. They enable the Health Connect permission UI.
+
+</Callout>
+
+## Request runtime permissions
+
+For activity-related data (steps, workouts), request `ACTIVITY_RECOGNITION` at runtime. For distance in workouts, optionally also request `ACCESS_FINE_LOCATION` or `ACCESS_COARSE_LOCATION`.
+
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+await Permission.activityRecognition.request();
+await Permission.location.request();
+```
+
+See [Android runtime permissions](/docs/flutter-plugins/health/permissions#android-runtime-permissions) for the complete flow.
+
+## Enable history and background access
+
+The optional `READ_HEALTH_DATA_HISTORY` and `READ_HEALTH_DATA_IN_BACKGROUND` permissions in the manifest above cover historic and background reading. On devices that support these capabilities, detect and request them with:
+
+| Capability | Check support | Request access |
+| --- | --- | --- |
+| Historical data | `isHealthDataHistoryAvailable()` | `requestHealthDataHistoryAuthorization()` |
+| Background reading | `isHealthDataInBackgroundAvailable()` | `requestHealthDataInBackgroundAuthorization()` |
+
+See [Historical data access](/docs/flutter-plugins/health/health-connect#historical-data-access) and [Background data access](/docs/flutter-plugins/health/health-connect#background-data-access) for examples.

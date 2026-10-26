@@ -1,0 +1,6 @@
+{
+  "title": "Overview",
+  "description": "Get started with CARP",
+  "icon": "Book",
+  "pages": ["index", "---Get started---", "introduction", "quickstart", "concepts", "architecture", "data-storage", "---Reference---", "api-reference", "mobile-sensing", "flutter-plugins", "sampling-packages"]
+}

@@ -1,0 +1,97 @@
+---
+title: Installation
+description: Add the health plugin to a Flutter app, configure it, and request permissions.
+icon: Download
+---
+
+This page covers the dependency, initialization and permission requests. Platform-specific configuration is described in [Android setup](/docs/flutter-plugins/health/platform-setup/android) and [iOS setup](/docs/flutter-plugins/health/platform-setup/ios).
+
+<Steps>
+<Step title="Add the dependency">
+
+<Tabs items={['pub.dev', 'Local path']}>
+<Tab value="pub.dev">
+
+```bash
+flutter pub add health
+```
+
+</Tab>
+<Tab value="Local path">
+
+```yaml title="pubspec.yaml"
+# pubspec.yaml
+dependencies:
+  health:
+    path: ../carp-health-flutter  # or use your published package source
+```
+
+If you use a published version instead of the local path, replace the path with the appropriate version constraint.
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Initialize the plugin">
+
+Call `configure()` once, before you use any other method:
+
+```dart
+import 'package:health/health.dart';
+
+final health = Health();
+
+Future<void> bootstrap() async {
+  // Must be called once before using any methods
+  await health.configure();
+}
+```
+
+`configure()` resolves a stable device identifier and registers JSON factories. For testing, you can pass a custom `DeviceInfoPlugin` to `Health()`.
+
+</Step>
+<Step title="Request permissions when needed">
+
+Check which permissions are granted and request the missing ones:
+
+```dart
+final types = [
+  HealthDataType.STEPS,
+  HealthDataType.HEART_RATE,
+  HealthDataType.WEIGHT,
+];
+
+final permissions = types.map((t) => HealthDataAccess.READ_WRITE).toList();
+
+final hasPerms = await health.hasPermissions(types, permissions: permissions);
+if (hasPerms != true) {
+  final ok = await health.requestAuthorization(types, permissions: permissions);
+  if (!ok) {
+    // Show guidance to user
+  }
+}
+```
+
+The plugin validates each type and access combination and throws an `ArgumentError` for illegal combinations:
+
+- On iOS, some types support READ only.
+- On Android, WRITE is not allowed for certain ECG-related event types.
+
+See [Permissions](/docs/flutter-plugins/health/permissions) for the full permission model.
+
+</Step>
+<Step title="Configure each platform">
+
+- **Android:** declare Health Connect permissions in `AndroidManifest.xml`, request activity recognition, optionally enable history and background access, and handle the Health Connect install flow.
+- **iOS:** enable the HealthKit capability and add `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription` to `Info.plist`.
+
+</Step>
+</Steps>
+
+## Next steps
+
+<Cards>
+<Card title="Android setup" href="/docs/flutter-plugins/health/platform-setup/android" icon="Android">Health Connect permissions, runtime permissions, and history and background access.</Card>
+<Card title="iOS setup" href="/docs/flutter-plugins/health/platform-setup/ios" icon="Iphone">HealthKit capability and Info.plist usage descriptions.</Card>
+<Card title="Quickstart" href="/docs/flutter-plugins/health/quickstart" icon="Bolt">Read, write and delete health data.</Card>
+</Cards>

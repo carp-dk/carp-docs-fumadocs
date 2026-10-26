@@ -1,0 +1,459 @@
+---
+title: Reading data
+description: Choose a read method for raw data points, time buckets, aggregates or step totals, then filter, sort and process the results.
+---
+
+The `Health` class provides four read methods with different levels of granularity and aggregation. Before you read, call `configure()` and request authorization for the types you read; see [Permissions](/docs/flutter-plugins/health/permissions). For the full API, see the [API reference on pub.dev](https://pub.dev/documentation/health/latest/).
+
+<Cards>
+<Card title="Data points" href="/docs/flutter-plugins/health/reading/basic" icon="Timeline">`getHealthDataFromTypes` fetches individual data points for a time range. Use it for detailed raw data, individual measurements, timelines and export or backup.</Card>
+<Card title="Interval data" href="/docs/flutter-plugins/health/reading/interval" icon="Insights">`getHealthIntervalDataFromTypes` aggregates data into fixed time intervals, such as hourly or daily. Use it for charts, daily, weekly or monthly summaries, trend analysis and statistical overviews.</Card>
+<Card title="Aggregate data" href="/docs/flutter-plugins/health/reading/aggregate" icon="Monitoring">`getHealthAggregateDataFromTypes` fetches pre-aggregated summaries across multiple types. Use it for workout summaries, multi-metric dashboards, performance analytics and activity overviews.</Card>
+<Card title="Step totals" href="/docs/flutter-plugins/health/reading/steps" icon="Run">`getTotalStepsInInterval` returns the total step count for a period. Use it for step counters, daily step goals, quick step queries and activity badges.</Card>
+</Cards>
+
+## Compare the methods
+
+| Method | Granularity | Types | Aggregation | Performance |
+|--------|-------------|-------|-------------|-------------|
+| `getHealthDataFromTypes` | Individual points | Multiple | None | Good for small ranges |
+| `getHealthIntervalDataFromTypes` | Time buckets | Multiple | Platform-native | Optimized for charts |
+| `getHealthAggregateDataFromTypes` | Multi-type summaries | Multiple | Cross-type | Best for workouts |
+| `getTotalStepsInInterval` | Single number | Steps only | Full sum | Fastest for steps |
+
+## Read flow
+
+```dart
+// 1. Configure Health
+await health.configure();
+
+// 2. Request permissions
+await health.requestAuthorization([HealthDataType.STEPS]);
+
+// 3. Choose reading method based on use case
+final data = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startTime: DateTime.now().subtract(Duration(hours: 24)),
+  endTime: DateTime.now(),
+);
+
+// 4. Process results
+for (var point in data) {
+  print('${point.type}: ${point.value} ${point.unit}');
+}
+```
+
+`getHealthDataFromTypes` also accepts a recording-method filter and, per type, a preferred unit. Preferred units apply on iOS only; see [Request preferred units (iOS)](/docs/flutter-plugins/health/reading/basic#request-preferred-units-ios).
+
+```dart
+final points = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.HEART_RATE,
+    HealthDataType.STEPS,
+  ],
+  startTime: start,
+  endTime: end,
+  // Optional: filter out entries by recording method
+  recordingMethodsToFilter: const [
+    // RecordingMethod.manual,
+  ],
+  // Optional: request a specific unit per type
+  preferredUnits: {
+    HealthDataType.HEIGHT: HealthDataUnit.METER,
+  },
+);
+```
+
+## Query patterns
+
+### Single type
+
+```dart
+final heartRateData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: start,
+  endTime: end,
+);
+```
+
+### Multiple types
+
+```dart
+final vitalSigns = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.HEART_RATE,
+    HealthDataType.BLOOD_OXYGEN,
+    HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+    HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+  ],
+  startTime: start,
+  endTime: end,
+);
+```
+
+To reuse groups of types across queries, define them as lists:
+
+```dart
+// All activity types
+final activityTypes = [
+  HealthDataType.STEPS,
+  HealthDataType.DISTANCE_WALKING_RUNNING,
+  HealthDataType.ACTIVE_ENERGY_BURNED,
+  HealthDataType.FLIGHTS_CLIMBED,
+];
+
+// All vital signs
+final vitalSigns = [
+  HealthDataType.HEART_RATE,
+  HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+  HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+  HealthDataType.BLOOD_OXYGEN,
+  HealthDataType.BODY_TEMPERATURE,
+  HealthDataType.RESPIRATORY_RATE,
+];
+
+// All body measurements
+final bodyMeasurements = [
+  HealthDataType.WEIGHT,
+  HealthDataType.HEIGHT,
+  HealthDataType.BODY_MASS_INDEX,
+  HealthDataType.BODY_FAT_PERCENTAGE,
+];
+```
+
+### Time ranges
+
+```dart
+// Last 24 hours
+final now = DateTime.now();
+final yesterday = now.subtract(Duration(hours: 24));
+
+// Today (since midnight)
+final today = DateTime(now.year, now.month, now.day);
+
+// This week
+final weekStart = now.subtract(Duration(days: now.weekday - 1));
+final weekStartMidnight = DateTime(weekStart.year, weekStart.month, weekStart.day);
+
+// This month
+final monthStart = DateTime(now.year, now.month, 1);
+
+// Custom range
+final customStart = DateTime(2024, 1, 1);
+final customEnd = DateTime(2024, 12, 31);
+```
+
+## Fetch a record by UUID (iOS)
+
+`getHealthDataByUUID` fetches a single `HealthDataPoint` by its UUID and type. It returns `null` if no record is found. This method is iOS only.
+
+```dart
+final dp = await health.getHealthDataByUUID(
+  uuid: '<record-uuid>',
+  type: HealthDataType.WORKOUT,
+);
+```
+
+## Value normalization
+
+- Some types normalize their value. For example, sleep and headache types are converted to minutes based on the time interval.
+- On Android, the plugin computes BMI values from the latest weight and height when you request `BODY_MASS_INDEX`.
+
+See [Platform-specific behavior](/docs/flutter-plugins/health/reading/basic#platform-specific-behavior) for examples.
+
+## Recording methods
+
+Each `HealthDataPoint` has a `recordingMethod`: `automatic`, `manual`, `active` or `unknown`.
+
+- **iOS:** only `automatic` and `manual` are valid for writes. Reads map to those values where available.
+- **Android:** all four values can be present, based on Health Connect metadata.
+
+To exclude recording methods at query time, pass `recordingMethodsToFilter`:
+
+```dart
+final data = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startTime: start,
+  endTime: end,
+  // Exclude manual entries
+  recordingMethodsToFilter: [RecordingMethod.manual],
+);
+```
+
+To filter a list you already fetched, filter on the `recordingMethod` field:
+
+```dart
+List<HealthDataPoint> filterByRecordingMethod(
+  List<HealthDataPoint> points,
+  RecordingMethod method,
+) {
+  return points.where((p) => p.recordingMethod == method).toList();
+}
+```
+
+## Process results
+
+### Remove duplicates
+
+The plugin removes duplicate points automatically, using a `LinkedHashSet`. You can also call `removeDuplicates` on your own lists:
+
+```dart
+List<HealthDataPoint> data = await health.getHealthDataFromTypes(...);
+data = health.removeDuplicates(data);
+```
+
+### Sort
+
+```dart
+// Sort by date (newest first)
+data.sort((a, b) => b.dateTo.compareTo(a.dateTo));
+
+// Sort by date (oldest first)
+data.sort((a, b) => a.dateTo.compareTo(b.dateTo));
+
+// Sort by value
+data.sort((a, b) {
+  final aValue = (a.value as NumericHealthValue).numericValue;
+  final bValue = (b.value as NumericHealthValue).numericValue;
+  return bValue.compareTo(aValue);
+});
+```
+
+### Group by type
+
+```dart
+Map<HealthDataType, List<HealthDataPoint>> groupByType(
+  List<HealthDataPoint> data,
+) {
+  final Map<HealthDataType, List<HealthDataPoint>> grouped = {};
+  
+  for (var point in data) {
+    grouped.putIfAbsent(point.type, () => []);
+    grouped[point.type]!.add(point);
+  }
+  
+  return grouped;
+}
+
+// Usage
+final allData = await health.getHealthDataFromTypes(...);
+final grouped = groupByType(allData);
+
+print('Heart rate points: ${grouped[HealthDataType.HEART_RATE]?.length ?? 0}');
+print('Step points: ${grouped[HealthDataType.STEPS]?.length ?? 0}');
+```
+
+### Extract numeric values
+
+```dart
+List<double> extractNumericValues(List<HealthDataPoint> points) {
+  return points
+      .where((p) => p.value is NumericHealthValue)
+      .map((p) => (p.value as NumericHealthValue).numericValue)
+      .toList();
+}
+```
+
+### Handle value types
+
+A data point's `value` is a `HealthValue`. Its concrete class depends on the data type:
+
+| Value type | Used for | Key properties |
+|------------|----------|----------------|
+| `NumericHealthValue` | Most metrics, such as `STEPS`, `WEIGHT`, `HEIGHT`, `HEART_RATE`, `BLOOD_GLUCOSE` and `BODY_TEMPERATURE` | `numericValue` |
+| `WorkoutHealthValue` | `WORKOUT` | `workoutActivityType`, `totalEnergyBurned`, `totalDistance` |
+| `AudiogramHealthValue` | `AUDIOGRAM` | `frequencies`, `leftEarSensitivities`, `rightEarSensitivities` |
+| `ElectrocardiogramHealthValue` | `ELECTROCARDIOGRAM` | `voltageValues`, `averageHeartRate`, `classification` |
+| `NutritionHealthValue` | `NUTRITION` | `calories`, `protein`, `carbs`, `fat`, `mealType` |
+| `InsulinDeliveryHealthValue` | `INSULIN_DELIVERY` | `units` |
+| `MenstruationFlowHealthValue` | `MENSTRUATION_FLOW` | `flow`, `isStartOfCycle` |
+
+Check the type before you read its properties:
+
+```dart
+void processHealthValue(HealthDataPoint point) {
+  final value = point.value;
+  
+  if (value is NumericHealthValue) {
+    print('Numeric: ${value.numericValue}');
+  } else if (value is WorkoutHealthValue) {
+    print('Workout: ${value.workoutActivityType.name}');
+  } else if (value is NutritionHealthValue) {
+    print('Meal: ${value.name}');
+  } else if (value is AudiogramHealthValue) {
+    print('Audiogram: ${value.frequencies.length} frequencies');
+  } else if (value is ElectrocardiogramHealthValue) {
+    print('ECG: ${value.averageHeartRate} bpm');
+  } else if (value is InsulinDeliveryHealthValue) {
+    print('Insulin: ${value.units} units');
+  } else if (value is MenstruationFlowHealthValue) {
+    print('Flow: ${value.flow.name}');
+  }
+}
+```
+
+For examples of each value type, see [Value types](/docs/flutter-plugins/health/reading/basic#value-types).
+
+## Performance
+
+### Large datasets
+
+For large time ranges, the plugin parses results in a background isolate. It does this automatically for more than 100 data points.
+
+```dart
+// The plugin automatically uses isolates for > 100 data points
+final data = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: DateTime.now().subtract(Duration(days: 365)),
+  endTime: DateTime.now(),
+);
+// Parsing happens in background isolate automatically
+```
+
+### Paginate
+
+For very large datasets, fetch in chunks:
+
+```dart
+Future<List<HealthDataPoint>> fetchPaginated({
+  required List<HealthDataType> types,
+  required DateTime start,
+  required DateTime end,
+  Duration chunkSize = const Duration(days: 7),
+}) async {
+  final allData = <HealthDataPoint>[];
+  var currentStart = start;
+  
+  while (currentStart.isBefore(end)) {
+    final currentEnd = currentStart.add(chunkSize);
+    final chunk = await health.getHealthDataFromTypes(
+      types: types,
+      startTime: currentStart,
+      endTime: currentEnd.isAfter(end) ? end : currentEnd,
+    );
+    
+    allData.addAll(chunk);
+    currentStart = currentEnd;
+  }
+  
+  return health.removeDuplicates(allData);
+}
+```
+
+### Cache
+
+```dart
+class HealthDataCache {
+  final Map<String, CachedData> _cache = {};
+  final Duration _cacheExpiry = Duration(minutes: 5);
+  
+  Future<List<HealthDataPoint>> getWithCache({
+    required List<HealthDataType> types,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final key = '${types.join(',')}_${start.toIso8601String()}_${end.toIso8601String()}';
+    
+    // Check cache
+    if (_cache.containsKey(key)) {
+      final cached = _cache[key]!;
+      if (DateTime.now().difference(cached.timestamp) < _cacheExpiry) {
+        return cached.data;
+      }
+    }
+    
+    // Fetch fresh data
+    final data = await health.getHealthDataFromTypes(
+      types: types,
+      startTime: start,
+      endTime: end,
+    );
+    
+    // Update cache
+    _cache[key] = CachedData(
+      data: data,
+      timestamp: DateTime.now(),
+    );
+    
+    return data;
+  }
+  
+  void clearCache() => _cache.clear();
+}
+
+class CachedData {
+  final List<HealthDataPoint> data;
+  final DateTime timestamp;
+  
+  CachedData({required this.data, required this.timestamp});
+}
+```
+
+## Error handling
+
+### Catch errors
+
+Read calls can throw a `HealthException` for health-related errors and a `PlatformException` for platform errors:
+
+```dart
+try {
+  final data = await health.getHealthDataFromTypes(
+    types: [HealthDataType.HEART_RATE],
+    startTime: start,
+    endTime: end,
+  );
+} on HealthException catch (e) {
+  // Specific health-related errors
+  print('Health error: ${e.dataType} - ${e.cause}');
+} on PlatformException catch (e) {
+  // Platform-specific errors
+  print('Platform error: ${e.code} - ${e.message}');
+} catch (e) {
+  // General errors
+  print('Unexpected error: $e');
+}
+```
+
+### Validate before reading
+
+Check the inputs, permissions and, on Android, Health Connect availability before you query:
+
+```dart
+Future<List<HealthDataPoint>> fetchHealthDataSafely({
+  required List<HealthDataType> types,
+  required DateTime start,
+  required DateTime end,
+}) async {
+  // Validate inputs
+  if (types.isEmpty) {
+    throw ArgumentError('types cannot be empty');
+  }
+  
+  if (start.isAfter(end)) {
+    throw ArgumentError('start must be before end');
+  }
+  
+  // Check permissions
+  final hasPerms = await health.hasPermissions(types);
+  if (hasPerms != true) {
+    throw StateError('Insufficient permissions');
+  }
+  
+  // Check availability (Android)
+  if (Platform.isAndroid) {
+    final available = await health.isHealthConnectAvailable();
+    if (!available) {
+      throw UnsupportedError('Health Connect not available');
+    }
+  }
+  
+  // Fetch data
+  return await health.getHealthDataFromTypes(
+    types: types,
+    startTime: start,
+    endTime: end,
+  );
+}
+```
+
+For Health Connect availability checks, see [Health Connect](/docs/flutter-plugins/health/health-connect).

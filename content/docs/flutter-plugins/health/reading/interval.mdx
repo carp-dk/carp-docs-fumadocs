@@ -1,0 +1,552 @@
+---
+title: Interval data
+description: Fetch health data aggregated into fixed time intervals using getHealthIntervalDataFromTypes.
+---
+
+`getHealthIntervalDataFromTypes` aggregates data into fixed-length buckets, such as hourly or daily. How each bucket is aggregated, for example as a sum or an average, is defined by the native APIs. Use it for charts, summaries and trend analysis.
+
+## Signature
+
+```dart
+Future<List<HealthDataPoint>> getHealthIntervalDataFromTypes({
+  required DateTime startDate,
+  required DateTime endDate,
+  required List<HealthDataType> types,
+  required int interval,
+  List<RecordingMethod> recordingMethodsToFilter = const [],
+})
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `startDate` | `DateTime` | Yes | Start of time range |
+| `endDate` | `DateTime` | Yes | End of time range |
+| `types` | `List<HealthDataType>` | Yes | Health data types to query |
+| `interval` | `int` | Yes | Interval duration in **seconds** |
+| `recordingMethodsToFilter` | `List<RecordingMethod>` | No | Recording methods to exclude |
+
+## Return value
+
+The method returns a `List<HealthDataPoint>` in which each point holds the aggregated data for one interval:
+
+- Values are summed, averaged or otherwise aggregated according to the platform rules; see [Aggregation behavior](#aggregation-behavior).
+- Each point's `dateFrom` and `dateTo` span the interval.
+- Duplicates are removed.
+
+## Common intervals
+
+```dart
+const int INTERVAL_HOUR = 3600;        // 1 hour
+const int INTERVAL_DAY = 86400;        // 1 day (24 hours)
+const int INTERVAL_WEEK = 604800;      // 1 week (7 days)
+const int INTERVAL_MONTH = 2592000;    // ~30 days
+```
+
+## Examples
+
+### Daily aggregation
+
+```dart
+final dailySteps = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 7)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.STEPS],
+  interval: 86400, // 1 day in seconds
+);
+
+print('Daily step counts for last 7 days:');
+for (var point in dailySteps) {
+  final steps = (point.value as NumericHealthValue).numericValue;
+  print('${point.dateFrom.toLocal()}: $steps steps');
+}
+```
+
+### Hourly aggregation
+
+```dart
+final hourlyHeartRate = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 1)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.HEART_RATE],
+  interval: 3600, // 1 hour in seconds
+);
+
+print('Hourly average heart rate:');
+for (var point in hourlyHeartRate) {
+  final hr = (point.value as NumericHealthValue).numericValue;
+  print('${point.dateFrom.hour}:00 - ${point.dateTo.hour}:00: ${hr.toStringAsFixed(1)} BPM');
+}
+```
+
+### Multiple types
+
+Query multiple types in one call:
+
+```dart
+final intervalData = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 30)),
+  endDate: DateTime.now(),
+  types: [
+    HealthDataType.STEPS,
+    HealthDataType.HEART_RATE,
+    HealthDataType.BLOOD_OXYGEN,
+    HealthDataType.WEIGHT,
+  ],
+  interval: 86400, // Daily
+);
+
+// Separate by type
+final stepsByDay = <DateTime, double>{};
+final heartRateByDay = <DateTime, double>{};
+
+for (var point in intervalData) {
+  final date = DateTime(
+    point.dateFrom.year,
+    point.dateFrom.month,
+    point.dateFrom.day,
+  );
+  final value = (point.value as NumericHealthValue).numericValue.toDouble();
+  
+  switch (point.type) {
+    case HealthDataType.STEPS:
+      stepsByDay[date] = value;
+      break;
+    case HealthDataType.HEART_RATE:
+      heartRateByDay[date] = value;
+      break;
+    // ... handle other types
+  }
+}
+```
+
+### Chart data
+
+```dart
+Future<List<ChartData>> getWeeklyStepsChart() async {
+  final data = await health.getHealthIntervalDataFromTypes(
+    startDate: DateTime.now().subtract(Duration(days: 7)),
+    endDate: DateTime.now(),
+    types: [HealthDataType.STEPS],
+    interval: 86400, // Daily
+  );
+  
+  return data.map((point) {
+    final steps = (point.value as NumericHealthValue).numericValue;
+    return ChartData(
+      date: point.dateFrom,
+      value: steps.toDouble(),
+    );
+  }).toList();
+}
+
+class ChartData {
+  final DateTime date;
+  final double value;
+  
+  ChartData({required this.date, required this.value});
+}
+```
+
+### Weekly summary
+
+```dart
+Future<Map<String, dynamic>> getWeeklySummary() async {
+  final data = await health.getHealthIntervalDataFromTypes(
+    startDate: DateTime.now().subtract(Duration(days: 7)),
+    endDate: DateTime.now(),
+    types: [
+      HealthDataType.STEPS,
+      HealthDataType.ACTIVE_ENERGY_BURNED,
+      HealthDataType.DISTANCE_WALKING_RUNNING,
+    ],
+    interval: 86400, // Daily buckets
+  );
+  
+  // Group by type
+  final byType = <HealthDataType, List<HealthDataPoint>>{};
+  for (var point in data) {
+    byType.putIfAbsent(point.type, () => []).add(point);
+  }
+  
+  // Calculate totals
+  double totalSteps = 0;
+  double totalCalories = 0;
+  double totalDistance = 0;
+  
+  for (var point in byType[HealthDataType.STEPS] ?? []) {
+    totalSteps += (point.value as NumericHealthValue).numericValue;
+  }
+  
+  for (var point in byType[HealthDataType.ACTIVE_ENERGY_BURNED] ?? []) {
+    totalCalories += (point.value as NumericHealthValue).numericValue;
+  }
+  
+  for (var point in byType[HealthDataType.DISTANCE_WALKING_RUNNING] ?? []) {
+    totalDistance += (point.value as NumericHealthValue).numericValue;
+  }
+  
+  return {
+    'steps': totalSteps,
+    'calories': totalCalories,
+    'distance': totalDistance,
+    'days': byType[HealthDataType.STEPS]?.length ?? 0,
+  };
+}
+```
+
+## Custom intervals
+
+### 15-minute intervals
+
+```dart
+final quarterHourly = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(hours: 4)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.HEART_RATE],
+  interval: 900, // 15 minutes in seconds
+);
+```
+
+### 6-hour intervals
+
+```dart
+final sixHourly = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 3)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.BLOOD_GLUCOSE],
+  interval: 21600, // 6 hours in seconds
+);
+```
+
+### Monthly intervals
+
+```dart
+// Approximate 30-day intervals
+final monthly = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 365)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.WEIGHT],
+  interval: 2592000, // ~30 days in seconds
+);
+```
+
+## Filter by recording method
+
+### Exclude manual entries
+
+```dart
+final autoSteps = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 7)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.STEPS],
+  interval: 86400,
+  recordingMethodsToFilter: [RecordingMethod.manual],
+);
+```
+
+### Filter per platform
+
+```dart
+final platformFiltered = await health.getHealthIntervalDataFromTypes(
+  startDate: start,
+  endDate: end,
+  types: [HealthDataType.WORKOUT],
+  interval: 86400,
+  recordingMethodsToFilter: Platform.isAndroid
+      ? [RecordingMethod.unknown, RecordingMethod.manual]
+      : [RecordingMethod.manual],
+);
+```
+
+## Aggregation behavior
+
+How a bucket's value is computed depends on the data type:
+
+| Aggregation | Types | Value of each point |
+|-------------|-------|---------------------|
+| Sum (cumulative) | `STEPS`, `DISTANCE_WALKING_RUNNING`, `ACTIVE_ENERGY_BURNED`, `BASAL_ENERGY_BURNED`, `FLIGHTS_CLIMBED` | Sum of all samples in the interval |
+| Average (sampling) | `HEART_RATE`, `BLOOD_OXYGEN`, `BLOOD_PRESSURE_*`, `BODY_TEMPERATURE` | Average of all samples in the interval |
+| Latest (point-in-time) | `WEIGHT`, `HEIGHT`, `BODY_FAT_PERCENTAGE` | Latest value in the interval |
+
+### Sum
+
+```dart
+// Daily step totals
+final dailySteps = await health.getHealthIntervalDataFromTypes(
+  startDate: start,
+  endDate: end,
+  types: [HealthDataType.STEPS],
+  interval: 86400,
+);
+// Each point = sum of all steps in that day
+```
+
+### Average
+
+```dart
+// Hourly average heart rate
+final hourlyHR = await health.getHealthIntervalDataFromTypes(
+  startDate: start,
+  endDate: end,
+  types: [HealthDataType.HEART_RATE],
+  interval: 3600,
+);
+// Each point = average of all HR measurements in that hour
+```
+
+### Latest
+
+```dart
+// Daily weight (last recorded value each day)
+final dailyWeight = await health.getHealthIntervalDataFromTypes(
+  startDate: start,
+  endDate: end,
+  types: [HealthDataType.WEIGHT],
+  interval: 86400,
+);
+// Each point = most recent weight measurement that day
+```
+
+## Analyze interval data
+
+### Detect trends
+
+```dart
+Future<HealthTrend> analyzeTrend(List<HealthDataPoint> intervalData) async {
+  if (intervalData.length < 2) {
+    return HealthTrend.insufficient;
+  }
+  
+  final values = intervalData
+      .map((p) => (p.value as NumericHealthValue).numericValue.toDouble())
+      .toList();
+  
+  // Simple linear regression
+  double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  
+  for (int i = 0; i < values.length; i++) {
+    sumX += i;
+    sumY += values[i];
+    sumXY += i * values[i];
+    sumX2 += i * i;
+  }
+  
+  final n = values.length;
+  final slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  
+  if (slope > 0.1) return HealthTrend.increasing;
+  if (slope < -0.1) return HealthTrend.decreasing;
+  return HealthTrend.stable;
+}
+
+enum HealthTrend { increasing, decreasing, stable, insufficient }
+```
+
+### Find the peak interval
+
+```dart
+HealthDataPoint? findPeakInterval(List<HealthDataPoint> intervalData) {
+  if (intervalData.isEmpty) return null;
+  
+  return intervalData.reduce((a, b) {
+    final aValue = (a.value as NumericHealthValue).numericValue;
+    final bValue = (b.value as NumericHealthValue).numericValue;
+    return aValue > bValue ? a : b;
+  });
+}
+
+// Usage
+final hourlySteps = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 1)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.STEPS],
+  interval: 3600,
+);
+
+final peakHour = findPeakInterval(hourlySteps);
+if (peakHour != null) {
+  print('Most active hour: ${peakHour.dateFrom.hour}:00');
+  print('Steps: ${(peakHour.value as NumericHealthValue).numericValue}');
+}
+```
+
+### Find gaps
+
+```dart
+List<DateTimeRange> findDataGaps(
+  List<HealthDataPoint> intervalData,
+  int intervalSeconds,
+) {
+  if (intervalData.isEmpty) return [];
+  
+  final gaps = <DateTimeRange>[];
+  
+  for (int i = 0; i < intervalData.length - 1; i++) {
+    final current = intervalData[i].dateTo;
+    final next = intervalData[i + 1].dateFrom;
+    
+    final expectedGap = Duration(seconds: intervalSeconds);
+    final actualGap = next.difference(current);
+    
+    if (actualGap > expectedGap) {
+      gaps.add(DateTimeRange(start: current, end: next));
+    }
+  }
+  
+  return gaps;
+}
+```
+
+### Format for charts
+
+```dart
+class IntervalChartData {
+  final String label;
+  final double value;
+  final DateTime timestamp;
+  
+  IntervalChartData({
+    required this.label,
+    required this.value,
+    required this.timestamp,
+  });
+  
+  static Future<List<IntervalChartData>> fromHealth({
+    required List<HealthDataType> types,
+    required DateTime start,
+    required DateTime end,
+    required int interval,
+  }) async {
+    final data = await health.getHealthIntervalDataFromTypes(
+      startDate: start,
+      endDate: end,
+      types: types,
+      interval: interval,
+    );
+    
+    return data.map((point) {
+      final value = (point.value as NumericHealthValue).numericValue.toDouble();
+      final label = _formatIntervalLabel(point.dateFrom, interval);
+      
+      return IntervalChartData(
+        label: label,
+        value: value,
+        timestamp: point.dateFrom,
+      );
+    }).toList();
+  }
+  
+  static String _formatIntervalLabel(DateTime date, int interval) {
+    if (interval == 86400) {
+      // Daily: "Mon", "Tue", etc.
+      return ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][date.weekday];
+    } else if (interval == 3600) {
+      // Hourly: "14:00", "15:00", etc.
+      return '${date.hour}:00';
+    } else if (interval >= 604800) {
+      // Weekly/monthly: "Jan 1", "Jan 8", etc.
+      return '${_monthName(date.month)} ${date.day}';
+    }
+    return date.toString();
+  }
+  
+  static String _monthName(int month) {
+    return ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month];
+  }
+}
+```
+
+## Performance
+
+### Choose an interval size
+
+| Time range | Interval |
+|------------|----------|
+| Short (under 1 day) | Hourly (3600 s) |
+| Medium (1–30 days) | Daily (86400 s) |
+| Long (over 30 days) | Weekly or monthly |
+
+### Limit memory use
+
+Large ranges with small intervals return many points and can use a lot of memory:
+
+```dart
+// Large ranges with small intervals can use lots of memory
+// BAD: 1-year range with hourly intervals = 8,760 points
+final tooMany = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 365)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.HEART_RATE],
+  interval: 3600, // Hourly
+);
+
+// GOOD: 1-year range with weekly intervals = 52 points
+final reasonable = await health.getHealthIntervalDataFromTypes(
+  startDate: DateTime.now().subtract(Duration(days: 365)),
+  endDate: DateTime.now(),
+  types: [HealthDataType.HEART_RATE],
+  interval: 604800, // Weekly
+);
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Uses the Health Connect aggregate APIs.
+- May return fewer points if data is sparse.
+- Aggregation follows Health Connect semantics.
+
+</Tab>
+<Tab value="iOS">
+
+- Uses HealthKit statistics queries.
+- Very efficient for large time ranges.
+- Aggregation follows HealthKit rules.
+
+</Tab>
+</Tabs>
+
+## Error handling
+
+Validate the interval and time range, and return an empty list on errors:
+
+```dart
+Future<List<HealthDataPoint>> fetchIntervalDataSafely({
+  required List<HealthDataType> types,
+  required DateTime start,
+  required DateTime end,
+  required int interval,
+}) async {
+  if (interval <= 0) {
+    throw ArgumentError('Interval must be positive');
+  }
+  
+  if (start.isAfter(end)) {
+    throw ArgumentError('Start must be before end');
+  }
+  
+  try {
+    return await health.getHealthIntervalDataFromTypes(
+      startDate: start,
+      endDate: end,
+      types: types,
+      interval: interval,
+    );
+  } on HealthException catch (e) {
+    print('Health error: ${e.dataType} - ${e.cause}');
+    return [];
+  } catch (e) {
+    print('Error: $e');
+    return [];
+  }
+}
+```
+
+## Related
+
+- [Data points](/docs/flutter-plugins/health/reading/basic): individual data points
+- [Aggregate data](/docs/flutter-plugins/health/reading/aggregate): multi-type summaries
+- [Step totals](/docs/flutter-plugins/health/reading/steps): optimized step queries

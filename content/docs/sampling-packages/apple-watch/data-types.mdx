@@ -1,0 +1,167 @@
+---
+title: Data types
+description: The nine watch measure types and the fields of their data classes.
+icon: Dataset
+---
+
+All measure types in this package live in the `dk.carp.watch.aware` namespace and are **event-based**: once started, they keep producing data until the study stops them.
+
+```dart
+Measure(type: AppleWatchSamplingPackage.MOTION)
+// equivalent to
+Measure(type: 'dk.carp.watch.aware.motion')
+```
+
+| Constant | Type string | Data class |
+|---|---|---|
+| `AppleWatchSamplingPackage.MOTION` | `dk.carp.watch.aware.motion` | `AppleWatchMotion` |
+| `AppleWatchSamplingPackage.HEART_RATE` | `dk.carp.watch.aware.heartrate` | `AppleWatchHeartRate` |
+| `AppleWatchSamplingPackage.BATTERY` | `dk.carp.watch.aware.battery` | `AppleWatchBattery` |
+| `AppleWatchSamplingPackage.LOCATION` | `dk.carp.watch.aware.location` | `AppleWatchLocation` |
+| `AppleWatchSamplingPackage.HEADING` | `dk.carp.watch.aware.heading` | `AppleWatchHeading` |
+| `AppleWatchSamplingPackage.BLUETOOTH` | `dk.carp.watch.aware.bluetooth` | `AppleWatchBluetooth` |
+| `AppleWatchSamplingPackage.AMBIENT_NOISE` | `dk.carp.watch.aware.ambientnoise` | `AppleWatchAmbientNoise` |
+| `AppleWatchSamplingPackage.AUDIO_LABEL` | `dk.carp.watch.aware.audiolabel` | `AppleWatchAudioLabel` |
+| `AppleWatchSamplingPackage.DEVICE` | `dk.carp.watch.aware.device` | `AppleWatchDeviceInfo` |
+
+## Common fields
+
+All nine data classes extend `AppleWatchData`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `deviceId` | `String?` | The AWARE device id of the watch that collected the record |
+| `timestamp` | `DateTime` | When the watch recorded it (UTC), not when the phone received it |
+| `label` | `String?` | The AWARE data label from `AppleWatchDevice.label`, if set |
+| `recordId` | `String?` | Stable identity of the record, used to discard duplicates |
+
+`recordId` is formed as `watch device id / measure type / row id in the watch database`. It makes re-transferred records safe: the same record never lands twice in the local CAMS database.
+
+## Reading the data
+
+```dart
+client.measurements
+    .where((m) => m.dataType.toString() == AppleWatchSamplingPackage.HEART_RATE)
+    .listen((measurement) {
+      final heartRate = measurement.data as AppleWatchHeartRate;
+      print('${heartRate.timestamp}: ${heartRate.hr} BPM');
+    });
+```
+
+## Data classes
+
+### Motion
+
+`AppleWatchMotion`: sampled at `motionSamplingRate` Hz. Fields that belong to a disabled sub-sensor (`accelerometerEnabled`, `deviceMotionEnabled`) are zero.
+
+| Field | Unit | Description |
+|---|---|---|
+| `accX`, `accY`, `accZ` | G | Raw acceleration, including gravity |
+| `roll`, `pitch`, `yaw` | radians | Attitude |
+| `gravityX`, `gravityY`, `gravityZ` | G | Gravity vector |
+| `rotationX`, `rotationY`, `rotationZ` | rad/s | Rotation rate |
+| `userAccX`, `userAccY`, `userAccZ` | G | User acceleration, gravity removed |
+
+### Heart rate
+
+`AppleWatchHeartRate`: read from HealthKit on the watch.
+
+| Field | Unit | Description |
+|---|---|---|
+| `hr` | BPM | Heart rate in beats per minute |
+
+Requires the HealthKit capability and the participant's permission, granted on the watch. watchOS decides the sampling frequency, not this package: the watch measures more often during activity and less often at rest.
+
+### Battery
+
+`AppleWatchBattery`: the battery of the watch itself.
+
+| Field | Unit | Description |
+|---|---|---|
+| `batteryLevel` | percent (0–100) | `-1` when unknown |
+| `batteryState` | `WatchBatteryState` | `unknown`, `unplugged`, `charging`, or `full` |
+
+<Callout type="info">
+
+watchOS reports the battery level in steps of 5%.
+
+</Callout>
+
+### Location
+
+`AppleWatchLocation`
+
+| Field | Unit | Description |
+|---|---|---|
+| `latitude`, `longitude` | decimal degrees | Position |
+| `altitude` | meters | Above mean sea level |
+| `ellipsoidalAltitude` | meters | Above the WGS 84 reference ellipsoid |
+| `horizontalAccuracy` | meters | Radius of uncertainty |
+| `verticalAccuracy` | meters | Vertical uncertainty |
+| `speed` | m/s | Instantaneous speed |
+| `speedAccuracy` | m/s | Accuracy of `speed` |
+| `course` | degrees | Direction of travel relative to true north |
+| `courseAccuracy` | degrees | Accuracy of `course` |
+
+<Callout type="warning">
+
+If the phone also collects location through `carp_context_package`, disable one of the two. Otherwise you get two location streams.
+
+</Callout>
+
+### Heading
+
+`AppleWatchHeading`: compass and magnetometer.
+
+| Field | Unit | Description |
+|---|---|---|
+| `trueHeading` | degrees | Relative to true north |
+| `magneticHeading` | degrees | Relative to magnetic north |
+| `headingAccuracy` | degrees | Maximum deviation of the reported heading |
+| `x`, `y`, `z` | microteslas | Geomagnetic field |
+
+### Bluetooth
+
+`AppleWatchBluetooth`: one record per device seen in a scan.
+
+| Field | Unit | Description |
+|---|---|---|
+| `identifier` | — | Identifier of the scanned device |
+| `name` | — | Advertised name, if any |
+| `rssi` | dBm | Received signal strength |
+
+### Ambient noise
+
+`AppleWatchAmbientNoise`: sound pressure level. No audio is stored.
+
+| Field | Unit | Description |
+|---|---|---|
+| `decibel` | dB | Sound pressure level |
+
+Requires `audioEnabled: true` together with `ambientNoiseEnabled: true`.
+
+### Audio label
+
+`AppleWatchAudioLabel`: sound classification using Apple's [SoundAnalysis](https://developer.apple.com/documentation/soundanalysis). No audio is stored.
+
+| Field | Unit | Description |
+|---|---|---|
+| `audioLabel` | — | The classified sound, e.g. `speech` or `laughter` |
+| `confidence` | 0.0–1.0 | Confidence of the classification |
+
+Requires `audioEnabled: true` together with `audioClassificationEnabled: true`. Filter on `confidence` in analysis: low-confidence labels are frequent in noisy environments.
+
+### Device information
+
+`AppleWatchDeviceInfo`: collected once each time data collection starts on the watch.
+
+| Field | Description |
+|---|---|
+| `pairedIosDeviceId` | The AWARE device id of the phone this watch is paired with |
+| `name` | The name of the watch, as set by the participant |
+| `model` | Watch model, e.g. `Apple Watch` |
+| `systemName` | Operating system name, e.g. `Watch OS` |
+| `systemVersion` | Operating system version, e.g. `11.2` |
+| `preferredContentSizeCategory` | The participant's dynamic type setting |
+
+This is the record that links the watch's AWARE device id to the phone's.

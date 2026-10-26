@@ -1,0 +1,90 @@
+---
+title: CARP Debug Toolkit
+description: An in-app debugging toolkit for CARP (and any) Flutter apps.
+icon: Bug
+---
+
+`carp_debug_flutter` adds a floating button to your app. Tapping it opens a self-contained debug menu that is independent of the host app's widget tree: it renders in its own theme, localization and navigator, so it keeps working when a screen throws or navigation breaks.
+
+The package is designed mainly for CARP apps. It ships adapters for `shared_preferences` and the `sembast` database, and a runtime override layer for the `--dart-define` launch arguments that CARP apps rely on. It works in any Flutter app.
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_debug_flutter" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_debug_flutter/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp_debug_flutter" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+## Features
+
+<Cards>
+<Card title="Environment and servers" icon="Server" href="/docs/flutter-plugins/debug-toolkit/environment">
+
+Switch the deployment server and override any `--dart-define` launch argument at runtime, then apply the change live or restart the app.
+
+</Card>
+<Card title="Shared preferences" icon="Settings" href="/docs/flutter-plugins/debug-toolkit/built-in-tools#shared-preferences">
+
+Inspect, search, edit, add and delete any key, including the CARP user data.
+
+</Card>
+<Card title="Database" icon="Database" href="/docs/flutter-plugins/debug-toolkit/built-in-tools#database">
+
+Browse the local `sembast` database: list stores and records, delete records and clear stores.
+
+</Card>
+<Card title="Device and app" icon="Smartphone" href="/docs/flutter-plugins/debug-toolkit/built-in-tools#device-and-app">
+
+Device and app metadata (model, OS, version, build) and screen metrics.
+
+</Card>
+<Card title="Logs and errors" icon="Terminal" href="/docs/flutter-plugins/debug-toolkit/built-in-tools#logs-and-errors">
+
+Captured `debugPrint` output, framework errors and uncaught async errors.
+
+</Card>
+<Card title="Custom tools" icon="Extension" href="/docs/flutter-plugins/debug-toolkit/custom-tools">
+
+Add your own screens to the debug menu by implementing `DebugTool`.
+
+</Card>
+</Cards>
+
+<Callout type="warning" title="Limitation">
+
+The toolkit handles exceptions, crashed screens and broken navigation. A *synchronous* infinite loop on the UI isolate, however, freezes all Dart rendering, including the toolkit.
+
+</Callout>
+
+## Requirements
+
+| Platform | Requirement |
+| --- | --- |
+| iOS | Minimum deployment target iOS 15.0. Swift Package Manager (recommended) or CocoaPods. |
+| Android | `minSdk 24` and `compileSdk 34` or higher. |
+
+See [Installation](/docs/flutter-plugins/debug-toolkit/installation) for the platform setup.
+
+## Next steps
+
+<Cards>
+<Card title="Installation" icon="Download" href="/docs/flutter-plugins/debug-toolkit/installation">
+
+Add the package as a dev dependency and configure iOS and Android.
+
+</Card>
+<Card title="Quickstart" icon="Bolt" href="/docs/flutter-plugins/debug-toolkit/quickstart">
+
+Wire the toolkit in so it runs in debug builds and is excluded from release builds.
+
+</Card>
+<Card title="Production builds" icon="Shield" href="/docs/flutter-plugins/debug-toolkit/production">
+
+Keep the toolkit out of release and profile archives, and verify it.
+
+</Card>
+<Card title="Environment and servers" icon="Tune" href="/docs/flutter-plugins/debug-toolkit/environment">
+
+Override launch arguments and switch servers at runtime.
+
+</Card>
+</Cards>

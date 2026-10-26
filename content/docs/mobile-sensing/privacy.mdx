@@ -1,0 +1,53 @@
+---
+title: Data transformation and privacy
+description: Transform collected data to another format and apply privacy schemas in a CAMS study protocol.
+icon: Shield
+---
+
+CAMS can transform sampled data before it is written to the data endpoint, for example into another data format, and can apply privacy transformations to measurements. You configure both on the study protocol.
+
+## Data transformation
+
+CAMS supports data transformation through two concepts:
+
+| Concept | Purpose |
+| --- | --- |
+| [`DataTransformer`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformer.html) | Transforms one type of `Data` into another type of `Data`. |
+| [`DataTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchema-class.html) | Holds a set of `DataTransformer`s that map from the native CARP namespace to another namespace. |
+
+To use a transformer schema, specify it in the protocol's data endpoint configuration: the endpoint's `dataFormat` property takes the schema's namespace, such as `NameSpace.OMH`. This protocol saves data to a file in the [Open mHealth](https://www.openmhealth.org/) (OMH) data format:
+
+```dart
+SmartphoneStudyProtocol protocol = SmartphoneStudyProtocol(
+  ownerId: 'AB',
+  name: 'Track patient movement',
+  dataEndPoint: FileDataEndPoint(
+    bufferSize: 500 * 1000,
+    zip: true,
+    encrypt: false,
+    dataFormat: NameSpace.OMH,
+  ),
+);
+```
+
+<Callout type="info">
+
+Not all data types in CAMS have an OMH data format. If no OMH transformer is found, the data is stored in the original CARP data format.
+
+</Callout>
+
+You can write your own transformers. See [Adding data and privacy transformers](/docs/mobile-sensing/extending#adding-data-and-privacy-transformers).
+
+## Privacy schemas
+
+To apply privacy transformations, set a privacy schema on the protocol:
+
+```dart
+SmartphoneStudyProtocol protocol = SmartphoneStudyProtocol(
+  ownerId: 'AB',
+  name: 'Track patient movement',
+  privacySchemaName: PrivacySchema.DEFAULT,
+);
+```
+
+`PrivacySchema.DEFAULT` holds the default privacy schemas and is a practical starting point. You can [extend](/docs/mobile-sensing/extending#adding-privacy-transformers) it or replace it with your own schema.

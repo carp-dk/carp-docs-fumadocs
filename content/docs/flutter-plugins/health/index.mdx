@@ -1,0 +1,165 @@
+---
+title: Health
+description: Read and write health and fitness data from Apple Health on iOS and Google Health Connect on Android with one Flutter API.
+icon: Heart
+---
+
+The `health` plugin gives Flutter apps one API for reading and writing health and fitness data on both mobile platforms:
+
+- **iOS:** Apple Health, through Apple's HealthKit framework.
+- **Android:** Google Health Connect.
+
+<Chips>
+<Chip href="https://pub.dev/packages/health" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/health/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp-health-flutter" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+Typical use cases:
+
+| App type | Typical data |
+| --- | --- |
+| Fitness | Workouts, steps, calories, activity levels |
+| Health monitoring | Vital signs such as heart rate, blood pressure and oxygen levels |
+| Wellness | Sleep, mindfulness, water intake, daily activities |
+| Medical | Blood glucose, medications, symptoms, health measurements |
+
+## Features
+
+### Reading data
+
+- Read individual data points.
+- Get time-bucketed aggregates (hourly, daily, weekly).
+- Fetch workout summaries.
+- Calculate step totals.
+
+```dart
+// Get last 24 hours of step data
+final data = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startDate: yesterday,
+  endDate: now,
+);
+```
+
+See [Reading data](/docs/flutter-plugins/health/reading).
+
+### Writing data
+
+- Write numeric health data.
+- Save workout sessions.
+- Log meals with nutrition information.
+- Record specialized data, such as ECG and audiograms.
+
+```dart
+// Save weight measurement
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+);
+```
+
+See [Writing data](/docs/flutter-plugins/health/writing).
+
+### Permissions
+
+- Request granular permissions per data type.
+- Check permission status.
+- Handle read and write access separately.
+- Use the platform-specific permission flows.
+
+```dart
+// Request read access
+final granted = await health.requestAuthorization(
+  [HealthDataType.STEPS],
+  permissions: [HealthDataAccess.READ],
+);
+```
+
+See [Permissions](/docs/flutter-plugins/health/permissions).
+
+### Supported data
+
+The plugin supports over 100 health data types, including:
+
+| Category | Data |
+| --- | --- |
+| Activity | Steps, distance, calories, workouts, flights climbed |
+| Body measurements | Weight, height, BMI, body fat %, lean mass |
+| Vital signs | Heart rate, blood pressure, blood oxygen, temperature |
+| Nutrition | Meals, water, calories, macros, micronutrients |
+| Sleep | Sleep stages, in bed time, asleep time, REM, deep sleep |
+| Reproductive | Menstruation flow, cycle tracking |
+
+For every type, its unit and its platform availability, see [Data types](/docs/flutter-plugins/health/data-types).
+
+## Platform support
+
+| Platform | Health store | Minimum version |
+| --- | --- | --- |
+| iOS | Apple Health (HealthKit) | iOS 13.0 |
+| Android | Google Health Connect | Android API level 26 |
+
+Each platform needs its own configuration before you use the plugin:
+
+<Cards>
+<Card title="Android setup" href="/docs/flutter-plugins/health/platform-setup/android" icon="Android">Configure Health Connect permissions and manifest settings.</Card>
+<Card title="iOS setup" href="/docs/flutter-plugins/health/platform-setup/ios" icon="Iphone">Enable the HealthKit capability and add privacy descriptions.</Card>
+</Cards>
+
+## How it works
+
+<Steps>
+<Step title="Set up your project">
+
+Add the plugin to your `pubspec.yaml` and configure the platform-specific settings. See [Installation](/docs/flutter-plugins/health/installation).
+
+</Step>
+<Step title="Request permissions">
+
+Ask the user for permission to access specific health data types. See [Permissions](/docs/flutter-plugins/health/permissions).
+
+</Step>
+<Step title="Read or write data">
+
+Use the `Health` API to read existing data or write new measurements. See [Reading data](/docs/flutter-plugins/health/reading) and [Writing data](/docs/flutter-plugins/health/writing).
+
+</Step>
+</Steps>
+
+## Example
+
+Configure the plugin, request permission and read today's step count:
+
+```dart
+import 'package:health/health.dart';
+
+// 1. Create Health instance
+final health = Health();
+await health.configure();
+
+// 2. Request permissions
+final types = [HealthDataType.STEPS];
+final granted = await health.requestAuthorization(types);
+
+if (granted) {
+  // 3. Read today's steps
+  final now = DateTime.now();
+  final midnight = DateTime(now.year, now.month, now.day);
+  final steps = await health.getTotalStepsInInterval(midnight, now);
+  
+  print('Steps today: ${steps ?? 0}');
+}
+```
+
+For a complete working implementation with UI, see the [example app](https://github.com/cph-cachet/flutter-plugins/tree/master/packages/health/example).
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/flutter-plugins/health/installation" icon="Download">Add the plugin to your Flutter project.</Card>
+<Card title="Quickstart" href="/docs/flutter-plugins/health/quickstart" icon="Bolt">Configure the plugin, request permissions, and read, write and delete data.</Card>
+<Card title="Permissions" href="/docs/flutter-plugins/health/permissions" icon="Lock">Request, check and revoke access to health data.</Card>
+<Card title="Data types" href="/docs/flutter-plugins/health/data-types" icon="Dataset">See every supported data type, its unit and its platforms.</Card>
+</Cards>

@@ -1,0 +1,338 @@
+---
+title: Domain model
+description: Study protocols, triggers, tasks, measures, devices and measurements in the CAMS domain model.
+icon: AccountTree
+---
+
+The [`carp_mobile_sensing`](https://pub.dartlang.org/documentation/carp_mobile_sensing/latest/) library uses and extends the [`carp_core`](https://pub.dev/packages/carp_core) domain model. The CAMS domain model has two parts:
+
+- The `carp_core` [domain](https://pub.dev/documentation/carp_core/latest/) model, a Dart implementation of the overall [CARP Core Domain Model](https://github.com/cph-cachet/carp.core-kotlin).
+- The `carp_mobile_sensing` [domain](https://pub.dartlang.org/documentation/carp_mobile_sensing/latest/domain/domain-library.html) model.
+
+This page covers the parts of the CARP domain models that CAMS uses: the domain classes related to a [study protocol](#defining-a-study-protocol), data transformers, sampling configurations and [collected measurements](#measurements-and-data). Sampling produces `Measurement` streams with typed `Data` payloads.
+
+## Defining a study protocol
+
+Data collection is configured as a [`StudyProtocol`](https://pub.dev/documentation/carp_core/latest/protocol/StudyProtocol-class.html). A study protocol is always executed by one or more [primary devices](https://pub.dev/documentation/carp_core/latest/protocol/StudyProtocol/primaryDevices.html) (for example a smartphone) and can use a set of [connected devices](https://pub.dev/documentation/carp_core/latest/protocol/StudyProtocol/connectedDevices.html) (for example a heart rate monitor).
+
+A study protocol holds a set of triggers. Each trigger can trigger one or more tasks, and each task holds a set of measures to collect. A measure can be configured with a sampling configuration.
+
+| Element | Configures | Example |
+| --- | --- | --- |
+| Trigger | **When** to collect data | Every hour |
+| Task | **How** to collect data | Which device to use |
+| Measure | **What** to collect | Location |
+
+![CARP study protocol domain model: a study protocol with a data endpoint and devices, holding task controls that link triggers, tasks and devices, where tasks hold measures with sampling configurations](/images/mobile-sensing/carp_protocol_domain.svg)
+
+### Study protocol
+
+A [`StudyProtocol`](https://pub.dev/documentation/carp_core/latest/protocol/StudyProtocol-class.html) holds the entire definition of the study, including the owner and name of the study, where to store the data, and which primary device is responsible for data collection.
+
+```dart
+// Create a study protocol storing data in a local SQLite database.
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'abc@dtu.dk',
+  name: 'Track patient movement',
+  dataEndPoint: SQLiteDataEndPoint(),
+);
+
+// Define which devices are used for data collection.
+// In this case, it is only a smartphone working as the primary device.
+var phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+```
+
+See [Data managers](/docs/mobile-sensing/data-managers) for the available data managers and endpoints.
+
+<Callout type="tip">
+
+To describe a protocol and the nature of a study in more detail, specify a [`StudyDescription`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/StudyDescription-class.html). It includes the study purpose, homepage, privacy and responsible researcher.
+
+</Callout>
+
+### Triggers
+
+Triggers are configured through a [`TriggerConfiguration`](https://pub.dev/documentation/carp_core/latest/common/TriggerConfiguration-class.html) and define the temporal configuration of a study, that is, **when** data sampling is done. CAMS includes these triggers:
+
+| Trigger | Description |
+| --- | --- |
+| [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html) | Starts sampling immediately. |
+| [`OneTimeTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/OneTimeTrigger-class.html) | Triggers only once during a deployment. |
+| [`DelayedTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DelayedTrigger-class.html) | Delays sampling for the specified `delay`, measured from sensing start. |
+| [`ElapsedTimeTrigger`](https://pub.dev/documentation/carp_core/latest/common/ElapsedTimeTrigger-class.html) | Delays sampling for the specified `delay`, measured from study deployment start. |
+| [`PassiveTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PassiveTrigger-class.html) | Started manually with `resume` and paused with `pause`. |
+| [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html) | Runs periodically with a fixed period. |
+| [`DateTimeTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DateTimeTrigger-class.html) | Schedules sampling at a specific date and time. |
+| [`RecurrentScheduledTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/RecurrentScheduledTrigger-class.html) | Schedules sampling with a recurrent date/time pattern. |
+| [`CronScheduledTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CronScheduledTrigger-class.html) | Resumes and pauses sampling based on a cron expression. |
+| [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) | Starts when a sampling event occurs, for example entering a geofence. |
+| [`ConditionalSamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ConditionalSamplingEventTrigger-class.html) | Resumes or pauses based on the result of a Dart function. |
+| [`ConditionalPeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ConditionalPeriodicTrigger-class.html) | Periodically checks whether an app-specific condition is met. |
+| [`RandomRecurrentTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/RandomRecurrentTrigger-class.html) | Triggers a random number of times within a defined daily period. |
+| [`UserTaskTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/UserTaskTrigger-class.html) | Triggers based on the state of a [`UserTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask-class.html). |
+| [`NoUserTaskTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/NoUserTaskTrigger-class.html) | Triggers when a certain user task is **not** on the task list. |
+| [`AppLifecycleTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppLifecycleTrigger-class.html) | Triggers when the life cycle of the app changes, as defined in [`AppLifecycleState`](https://api.flutter.dev/flutter/dart-ui/AppLifecycleState.html). |
+
+To add your own triggers, see [Adding new triggers](/docs/mobile-sensing/extending#adding-new-triggers).
+
+### Tasks and task controls
+
+A task is defined through a [`TaskConfiguration`](https://pub.dev/documentation/carp_core/latest/common/TaskConfiguration-class.html) and configures which measures to collect. For example, a task can sample accelerometer and gyroscope measures from the smartphone during a tremor assessment, or heart rate and ECG data from a wearable device.
+
+CAMS has two basic types of tasks:
+
+| Task | Type | Description |
+| --- | --- | --- |
+| [`BackgroundTask`](https://pub.dev/documentation/carp_core/latest/common/BackgroundTask-class.html) | Passive sensing | Starts collecting data as specified in its measures when the task is resumed. Used for background mobile sensing that does not involve the user. |
+| [`AppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask-class.html) | Active user task | Involves the app, and potentially the user, in data sampling. Notifies the app when resumed or paused. For example, if a `PeriodicTrigger` resumes an `AppTask` with a survey measure, the survey is handed over to the app whenever the trigger resumes. See the [app task model](/docs/mobile-sensing/app-task-model). |
+
+A [`TaskControl`](https://pub.dev/documentation/carp_core/latest/common/TaskControl-class.html) configures **how** to collect data and links a trigger, a task and a device. A task control controls (starts or stops) when a task is triggered on a device.
+
+### Measures
+
+A [`Measure`](https://pub.dev/documentation/carp_core/latest/common/Measure-class.html) defines **what** to measure. It specifies the **type** of data to collect, which at runtime maps to a specific probe that can collect this type of data. See [Measure types](/docs/mobile-sensing/measure-types) for the available types.
+
+CAMS follows a reactive programming model: all sampled data is collected in streams by listening to the underlying sensors. This is configured with the `Measure` class. Some probes, however, need to poll data and must be configured with a sampling frequency. For example, the [`MemoryProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/MemoryProbe-class.html) needs a sampling frequency, set with an [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html) in the sampling schema.
+
+Most CAMS users do not need this low-level configuration. It is handled through a [`SamplingConfiguration`](https://pub.dev/documentation/carp_core/latest/common/SamplingConfiguration-class.html) and the default sampling schemas, described in [Sampling configurations and schemas](#sampling-configurations-and-schemas).
+
+### Sampling configurations and schemas
+
+CAMS includes default sampling configurations for all measures. These are collected in [`DataTypeSamplingScheme`](https://pub.dev/documentation/carp_core/latest/common/DataTypeSamplingScheme-class.html) schemas for each sampling package. For example, the [`SensorSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) provides a map of default [`samplingSchemes`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage/samplingSchemes.html) for its measures.
+
+To change a default configuration, override it with the `overrideSamplingConfiguration` property of a measure. For example, the default configuration of the light measure is 10 seconds of sampling every 5 minutes:
+
+```dart
+  // Override the sampling configuration of the light measure in the protocol.
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: SensorSamplingPackage.AMBIENT_LIGHT)
+          ..overrideSamplingConfiguration = PeriodicSamplingConfiguration(
+            interval: const Duration(minutes: 10),
+            duration: const Duration(seconds: 20),
+          ),
+      ],
+    ),
+    phone,
+  );
+```
+
+### Devices
+
+Devices are configured in the study protocol. The CAMS domain model has two types of devices:
+
+- **Primary devices** aggregate, synchronize and optionally upload incoming data received from one or more connected devices (potentially just itself). In CAMS, the smartphone is typically the primary device.
+- **Connected devices** are any devices connected to a primary device, such as a wearable heart rate monitor.
+
+CAMS and its sampling packages include predefined device descriptors, such as the [`Smartphone`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/Smartphone-class.html) primary device descriptor or the [`PolarDevice`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarDevice-class.html) device descriptor in the [Polar sampling package](https://pub.dev/packages/carp_polar_package).
+
+A study protocol that uses a Polar device as a connected device of the phone:
+
+```dart
+// Create a study protocol
+StudyProtocol protocol = StudyProtocol(...);
+
+// Define which devices are used for data collection - both phone and polar devices
+var phone = Smartphone();
+var polar = PolarDevice(roleName: 'hr-sensor');
+
+// Add both devices
+protocol
+  ..addPrimaryDevice(phone)
+  ..addConnectedDevice(polar, phone);
+
+// Add a background task that immediately starts collecting step counts,
+// ambient light, screen activity, and battery level from the phone.
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask()
+    ..addMeasure(Measure(type: SensorSamplingPackage.STEP_EVENT))
+    ..addMeasure(Measure(type: SensorSamplingPackage.AMBIENT_LIGHT))
+    ..addMeasure(Measure(type: DeviceSamplingPackage.SCREEN_EVENT))
+    ..addMeasure(Measure(type: DeviceSamplingPackage.BATTERY_STATE)),
+  phone,
+);
+
+// Add a background task that immediately starts collecting HR and ECG data
+// from the Polar device.
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(type: PolarSamplingPackage.HR),
+      Measure(type: PolarSamplingPackage.ECG),
+    ],
+  ),
+  polar,
+);  
+```
+
+As a wearable device, the Polar device is a connected device, connected to the phone as the primary device.
+
+<Callout type="info">
+
+Connected devices must connect to the phone (for example over BLE) at runtime before data can be collected from them. The [`DeviceController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceController-class.html) handles this.
+
+</Callout>
+
+### Protocol examples
+
+A study protocol is a list of triggers and tasks with a set of measures:
+
+<Tabs items={['Background sensing', 'Triggers', 'AppTask']}>
+<Tab value="Background sensing">
+
+```dart
+final protocol =
+    SmartphoneStudyProtocol(
+        ownerId: 'AB',
+        name: 'Tracking steps, light, screen, and battery',
+        dataEndPoint: SQLiteDataEndPoint(),
+      )
+      ..addPrimaryDevice(Smartphone())
+      ..addParticipantRole(ParticipantRole('Participant'))
+      ..addTaskControl(
+        ImmediateTrigger(),
+        BackgroundTask(
+          measures: [
+            Measure(type: SensorSamplingPackage.STEP_EVENT),
+            Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+            Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+            Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+            Measure(type: DeviceSamplingPackage.DEVICE_INFORMATION),
+          ],
+        ),
+      );
+```
+
+</Tab>
+<Tab value="Triggers">
+
+```dart
+final protocol = SmartphoneStudyProtocol(...);
+var phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+
+// Collect timezone info every time the app restarts.
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: DeviceSamplingPackage.TIMEZONE)]),
+  phone,
+);
+
+// Collect device info only once, when this study is deployed.
+protocol.addTaskControl(
+  OneTimeTrigger(),
+  BackgroundTask(
+    measures: [Measure(type: DeviceSamplingPackage.DEVICE_INFORMATION)],
+  ),
+  phone,
+);
+
+// Collect IMU data every 10 secs for 1 sec.
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(seconds: 10)),
+  BackgroundTask(
+    measures: [
+      Measure(type: SensorSamplingPackage.ACCELERATION),
+      Measure(type: SensorSamplingPackage.ROTATION),
+    ],
+    duration: const Duration(seconds: 1),
+  ),
+  phone,
+);
+
+// Check periodically for a condition to trigger the task
+protocol.addTaskControl(
+  ConditionalPeriodicTrigger(
+    period: Duration(seconds: 20),
+    triggerCondition: () => ('jakob'.length == 5),
+  ),
+  BackgroundTask()
+    ..addMeasure(Measure(type: DeviceSamplingPackage.DEVICE_INFORMATION)),
+  phone,
+);
+```
+
+</Tab>
+<Tab value="AppTask">
+
+```dart
+final protocol = SmartphoneStudyProtocol(...);
+var phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+
+// Add a cron job that triggers an app task every day at 11:45
+// This will show a notification in the OS and when the user click this
+// the app task is triggered and the device information is collected.
+protocol.addTaskControl(
+  CronScheduledTrigger.parse(cronExpression: '45 11 * * *'),
+  AppTask(
+    type: AppTask.SENSING_TYPE,
+    title: "Click here to collect device information",
+    measures: [Measure(type: DeviceSamplingPackage.DEVICE_INFORMATION)],
+    notification: true,
+  ),
+  phone,
+);
+
+```
+
+</Tab>
+</Tabs>
+
+## Measurements and data
+
+CAMS models data according to the [data](https://github.com/cph-cachet/carp.core-kotlin/blob/develop/docs/carp-data.md) subsystem of the CARP Core domain model. Data collected during sampling is modeled as a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html), which holds a [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) object of a specific [`DataType`](https://pub.dev/documentation/carp_core/latest/common/DataType-class.html).
+
+In CAMS, all data objects are of type `Data`. For example, [`BatteryState`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/BatteryState-class.html) holds the state of the phone's battery, such as battery level and charging status. A data object is measured either at a point in time or over a time span.
+
+All measurement and data objects can be serialized to and from JSON:
+
+<Tabs items={['Point in time', 'Time span']}>
+<Tab value="Point in time">
+
+`sensorStartTime` is the timestamp of the measurement in microseconds, and `__type` holds the data type.
+
+```json
+{
+  "sensorStartTime": 1700082464783244,
+  "data": {
+   "__type": "dk.cachet.carp.batterystate",
+   "batteryLevel": 92,
+   "batteryStatus": "charging"
+  }
+}
+```
+
+</Tab>
+<Tab value="Time span">
+
+Ambient light is measured over a time period, so both `sensorStartTime` and `sensorEndTime` are specified.
+
+```json
+{
+  "sensorStartTime": 1700082626178562,
+  "sensorEndTime": 1700082636184268,
+  "data": {
+   "__type": "dk.cachet.carp.ambientlight",
+   "meanLux": 20.76923076923077,
+   "stdLux": 0.6965680875490359,
+   "minLux": 20,
+   "maxLux": 22
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+### Timestamps
+
+- CARP recommends **microseconds** (over milliseconds) since epoch. This gives greater precision, especially in high-frequency sampling.
+- Sensor timestamps (start and end time) are provided by the sensor, if available. Depending on the unit of the sensor timestamp, the phone may translate it to microseconds before storing it in a measurement.
+- If the sensor does not provide a timestamp, the phone time-stamps the data through the [`Measurement.fromData`](https://pub.dev/documentation/carp_core/latest/data/Measurement/Measurement.fromData.html) method.
+- A `Data` object may itself contain time information, modeled with the Dart `DateTime` format; see for example the `dateFrom` properties in [`HealthData`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthData-class.html) in the health package. These timestamps use Zulu (UTC) format, such as `2023-11-15T22:00:25.864650Z`.

@@ -1,0 +1,371 @@
+---
+title: App task model
+description: Configure, execute, render and extend user-facing app tasks in CAMS.
+icon: Checklist
+---
+
+An [`AppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask-class.html) is a user-facing task type in CAMS. You define app tasks in the study protocol, CAMS puts each triggered task on a queue, and your app renders that queue and drives each task through its lifecycle.
+
+## End-to-end flow
+
+<Steps>
+<Step title="Define an app task in the protocol">
+
+Configure an `AppTask` with task metadata and one or more background measures.
+
+</Step>
+<Step title="Trigger and enqueue a user task">
+
+When the task is triggered, CAMS creates a `UserTask` and puts it on the task queue in the `AppTaskController`.
+
+</Step>
+<Step title="Render and run the task in the app">
+
+The app listens to the task queue, renders the task list and each task, and calls the callback methods that start, complete or cancel tasks.
+
+</Step>
+<Step title="Handle completion and notifications">
+
+The runtime APIs handle task state transitions and local notifications.
+
+</Step>
+</Steps>
+
+The examples on this page come from the [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) app.
+
+<Cards>
+<Card title="Task list">
+
+![PulmonaryMonitor task list with Reading, Coughing, Symptoms, Demographics and Weather & Air Quality tasks, each with a PRESS HERE TO FINISH TASK button](/images/mobile-sensing/task_list.png)
+
+</Card>
+<Card title="Task done">
+
+![PulmonaryMonitor task list where the Weather & Air Quality task is done and shows a check mark instead of the button](/images/mobile-sensing/task_list_done.png)
+
+</Card>
+</Cards>
+
+## Configuring app tasks
+
+In PulmonaryMonitor, app tasks are defined in [`study_protocol_manager.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/sensing/study_protocol_manager.dart). The sensing task at the bottom of the task list comes from this configuration:
+
+```dart
+var protocol = SmartphoneStudyProtocol(...);
+
+...
+
+// Define which devices are used for data collection.
+Smartphone phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+
+// Define the online weather service and add it as a 'device'
+final weatherService = WeatherService(
+  apiKey: '...',
+);
+protocol.addConnectedDevice(weatherService, phone);
+
+// Define the online air quality service and add it as a 'device'
+final airQualityService = AirQualityService(
+  apiKey: '...',
+);
+protocol.addConnectedDevice(airQualityService, phone);
+
+// Create an app task that collects air quality and weather data,
+// and notify the user.
+//
+// Note that for this to work, the AirQualityService and WeatherService 
+// need to be defined and added as connected devices to this phone.
+var environmentTask = AppTask(
+  type: AppTask.SENSING_TYPE,
+  name: 'Environment Task',
+  title: "Weather & Air Quality",
+  description: "Collect local weather and air quality",
+  notification: true,
+  measures: [
+    Measure(type: ContextSamplingPackage.WEATHER),
+    Measure(type: ContextSamplingPackage.AIR_QUALITY),
+  ],
+);
+
+// Make sure to always have an environment task on the task list by using
+// a NoUserTaskTrigger.
+protocol.addTaskControl(
+  NoUserTaskTrigger(taskName: environmentTask.name),
+  environmentTask,
+  phone,
+);
+```
+
+This code adds a [`NoUserTaskTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/NoUserTaskTrigger-class.html) with an `AppTask` of type `sensing` and the measures `WEATHER` and `AIR_QUALITY`. When triggered, the task is enqueued and can be shown in the app UI. When the user starts it (for example by tapping **PRESS HERE TO FINISH TASK**), a background task collects the measures and the app task is marked as done.
+
+An app task follows the [Trigger-Task-Measure domain model in CAMS](/docs/mobile-sensing/domain-model#defining-a-study-protocol): a trigger activates the task, and the task defines which measures to collect. Unlike a [`BackgroundTask`](https://pub.dev/documentation/carp_core/latest/common/BackgroundTask-class.html), an `AppTask` has user-facing properties:
+
+| Property | Purpose |
+| --- | --- |
+| `type` | Task type, for example sensing, survey or audio. |
+| `title` | Short title shown on the task card. |
+| `description` | Short descriptive text shown on the task card. |
+| `instructions` | More detailed guidance for the user. |
+| `time to complete` | Estimated completion time for the task. |
+| `notification` | Whether a notification is sent when a new task is available. |
+| `expire` | When the task expires and is no longer available. |
+
+For the rest of the setup, see the [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) source.
+
+## App task execution
+
+When an app task is triggered, an [`AppTaskExecutor`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskExecutor-class.html) executes it:
+
+1. It creates a [`UserTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask-class.html) from the `AppTask` configuration. The user task embeds a [`BackgroundTaskExecutor`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BackgroundTaskExecutor-class.html) that collects the measures once the task is started.
+2. It enqueues the user task in the [`AppTaskController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController-class.html). The `AppTaskController` is a singleton and is central to handling app tasks, including creating notifications.
+3. All triggered user tasks are available in [`userTaskQueue`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController/userTaskQueue.html) for custom rendering in the app.
+4. The user task has a set of [callback methods](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask-class.html#instance-methods) that the app calls to mark the task as started, done, canceled or expired.
+5. When the user task is started, its embedded `BackgroundTaskExecutor` collects the measures. Collection stops when the task is marked as done or, for [one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures), when the measures have been collected.
+
+## The user task queue
+
+Use the [`userTaskQueue`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController/userTaskQueue.html) property on `AppTaskController` to access enqueued tasks. In PulmonaryMonitor this happens in [`sensing_bloc.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/master/lib/bloc/sensing_bloc.dart):
+
+```dart
+List<UserTask> get tasks => AppTaskController().userTaskQueue;
+```
+
+To react to state changes, listen to events on the user task queue:
+
+```dart
+ AppTaskController().userTaskEvents.listen((event) {
+   switch (event.state) {
+     case UserTaskState.initialized:
+       //
+       break;
+     case UserTaskState.enqueued:
+       //
+       break;
+     case UserTaskState.dequeued:
+       //
+       break;
+     case UserTaskState.started:
+       //
+       break;
+     case UserTaskState.done:
+       //
+       break;
+     case UserTaskState.canceled:
+       // 
+       break;
+     case UserTaskState.expired:
+       // 
+       break;
+     case UserTaskState.undefined:
+       //
+       break;
+   }
+ });
+```
+
+## Rendering user tasks in the app
+
+You can render enqueued user tasks in any app-specific UI. In PulmonaryMonitor, the task list shown above is implemented in [`task_list_page.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/ui/task_list_page.dart).
+
+This widget builds the scrollable list view of task cards:
+
+```dart
+class TaskListPageState extends State<TaskListPage> {
+  TaskListViewModel get model => widget.viewModel;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tasks')),
+    body: ListenableBuilder(
+      listenable: model,
+      builder: (BuildContext context, Widget? child) => Scrollbar(
+        child: ListView.builder(
+          itemCount: model.tasks.length,
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          itemBuilder: (context, index) =>
+              getTaskCard(context, model.tasks[index]),
+        ),
+      ),
+    ),
+  );
+  ...
+}
+```
+
+Each card uses a `StreamBuilder` on the task's `stateEvents` to render the user task:
+
+```dart
+Widget getTaskCard(BuildContext context, UserTask userTask) => Center(
+  child: Card(
+    elevation: 10,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
+    child: StreamBuilder<UserTaskState>(
+      stream: userTask.stateEvents,
+      initialData: UserTaskState.initialized,
+      builder: (context, AsyncSnapshot<UserTaskState> snapshot) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          ListTile(
+            leading: taskTypeIcon[userTask.type],
+            title: Text(userTask.title),
+            subtitle: Text(userTask.description),
+            trailing: taskStateIcon[userTask.state],
+          ),
+          (userTask.availableForUser)
+              ? OverflowBar(
+                  children: <Widget>[
+                    TextButton(
+                      child: const Text('PRESS HERE TO FINISH TASK'),
+                      onPressed: () {
+                        userTask.onStart(); // Mark the task as started.
+
+                        // Check if the task has a UI widget to be shown
+                        if (userTask.hasWidget) {
+                          // Push the task widget to the app.
+                          // Note that the widget is responsible for calling the onDone method when the task is done.
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<Widget>(
+                              builder: (context) => userTask.widget!,
+                            ),
+                          );
+                        } else {
+                          // A non-UI sensing task that collects sensor data.
+                          // Automatically stops after 10 seconds.
+                          Timer(
+                            const Duration(seconds: 10),
+                            () => userTask.onDone(),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                )
+              : const Text(""),
+        ],
+      ),
+    ),
+  ),
+);
+```
+
+When the user taps **PRESS HERE TO FINISH TASK**, the app starts the user task with `userTask.onStart()`. If the task has a widget, the app pushes that widget to the UI. A non-UI sensing task runs for 10 seconds.
+
+### User task callbacks
+
+The app calls these callback methods on a [`UserTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask-class.html):
+
+| Callback | Purpose |
+| --- | --- |
+| [`onStart`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask/onStart.html) | Starts the task and starts collecting the defined measures. |
+| [`onCancel`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask/onCancel.html) | Cancels the task. |
+| [`onDone`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask/onDone.html) | Marks the task as done and typically stops measure collection. |
+| [`onExpired`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask/onExpired.html) | Handles expiration and removes the task from the queue. |
+| [`onNotification`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTask/onNotification.html) | Called when the user taps the OS notification for this task. |
+
+## Notifications
+
+If you enable [`notification`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask/notification.html) on an app task, CAMS sends a local notification with the task `title` and `description`.
+
+![Android notification shade with PulmonaryMonitor notifications for new tasks, each showing the task title and description](/images/mobile-sensing/task_notification.jpg)
+
+Notifications use the [`flutter_local_notifications`](https://pub.dev/packages/flutter_local_notifications) plugin, which requires app-level configuration. See [Installation](/docs/mobile-sensing/installation).
+
+## Types of app tasks
+
+CAMS supports the following app task types, all enumerated in the [`AppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask-class.html) class:
+
+| Type | Purpose |
+| --- | --- |
+| `SENSING_TYPE` | Collects sensing data in a background task. |
+| `SURVEY_TYPE` | Starts a survey from the [carp_survey_package](https://pub.dev/packages/carp_survey_package). |
+| `INFORMED_CONSENT_TYPE` | Shows an informed consent flow to the user, typically using the [research_package](https://pub.dev/packages/research_package). |
+| `COGNITIVE_ASSESSMENT_TYPE` | Runs a cognitive assessment from the [carp_survey_package](https://pub.dev/packages/carp_survey_package). |
+| `HEALTH_ASSESSMENT_TYPE` | Collects health data via the [carp_health_package](https://pub.dev/packages/carp_health_package). |
+| `AUDIO_TYPE`, `VIDEO_TYPE`, `IMAGE_TYPE` | Collects media data via the [carp_audio_package](https://pub.dev/packages/carp_audio_package). |
+
+## Extending the app task model
+
+To add a custom app task, create a new `UserTask` type and register a factory for it. This works like extending measures and probes, as described in [Extending CAMS](/docs/mobile-sensing/extending).
+
+### Create a custom user task
+
+The `AudioUserTask` in [PulmonaryMonitor](https://github.com/cph-cachet/pulmonary_monitor_app) is a custom app task. It is implemented in [`audio_user_task.dart`](https://github.com/cph-cachet/pulmonary_monitor_app/blob/master/lib/sensing/audio_user_task.dart):
+
+```dart
+/// A user task handling audio recordings.
+///
+/// The [widget] returns an [AudioMeasurePage] that can be shown on the UI.
+///
+/// When the recording is started (calling the [onRecord] method),
+/// the background task collecting sensor measures is started.
+class AudioUserTask extends UserTask {
+  static const String AUDIO_TYPE = 'audio';
+
+  final StreamController<int> _countDownController =
+      StreamController.broadcast();
+  Stream<int> get countDownEvents => _countDownController.stream;
+  Timer? _timer;
+
+  /// Duration of audio recording in seconds.
+  int recordingDuration = 10;
+
+  AudioUserTask(super.executor, [this.recordingDuration = 10]);
+
+  @override
+  bool get hasWidget => true;
+
+  @override
+  Widget? get widget => AudioMeasurePage(audioUserTask: this);
+
+  /// Callback when recording is to start.
+  /// When recording is started, background sensing is also started.
+  void onRecord() {
+    backgroundTaskExecutor.start();
+
+    // start the countdown, once tick pr. second.
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _countDownController.add(--recordingDuration);
+
+      if (recordingDuration <= 0) {
+        _timer?.cancel();
+        _countDownController.close();
+
+        // pause the background sensing and mark this task as done
+        backgroundTaskExecutor.pause();
+        super.onDone();
+      }
+    });
+  }
+}
+```
+
+### Define a user task factory
+
+CAMS uses a [`UserTaskFactory`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTaskFactory-class.html) to create and enqueue the right user task type, so you need a factory for your custom types. The factory for `AudioUserTask`:
+
+```dart
+/// A factory that can [create] a [UserTask] based on the type of app task.
+/// In this case an [AudioUserTask].
+class PulmonaryUserTaskFactory implements UserTaskFactory {
+  @override
+  List<String> types = [AppTask.AUDIO_TYPE];
+
+  @override
+  UserTask create(AppTaskExecutor executor) => switch (executor.task.type) {
+    AppTask.AUDIO_TYPE => AudioUserTask(executor),
+    _ => BackgroundSensingUserTask(executor),
+  };
+}
+```
+
+### Register the factory
+
+Register the custom factory in `AppTaskController`:
+
+```dart
+AppTaskController().registerUserTaskFactory(PulmonaryUserTaskFactory());
+```
+
+Do this while you initialize CAMS in the app. In PulmonaryMonitor, registration happens when the `Sensing` class is created in [`sensing.dart`](https://github.com/carp-dk/pulmonary_monitor_app/blob/c2013a17a6e567be05490719e05d263cea18112b/lib/sensing/sensing.dart#L55).

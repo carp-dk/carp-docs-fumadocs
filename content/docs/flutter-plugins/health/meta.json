@@ -1,0 +1,7 @@
+{
+  "title": "Health",
+  "description": "health",
+  "icon": "Heart",
+  "root": true,
+  "pages": ["index", "installation", "platform-setup", "quickstart", "---Concepts---", "permissions", "data-types", "health-connect", "---Guides---", "reading", "writing", "deleting", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/health)", "[API reference](https://pub.dev/documentation/health/latest/)", "[GitHub](https://github.com/carp-dk/carp-health-flutter)"]
+}

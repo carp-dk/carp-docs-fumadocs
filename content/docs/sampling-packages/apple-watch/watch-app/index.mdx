@@ -1,0 +1,52 @@
+---
+title: The watch app
+description: The companion watchOS app that runs the AWARE sensors, and how it works with the phone app.
+---
+
+`carp_aware_package` **receives** data from an Apple Watch. A companion watchOS app does the collecting by running the AWARE sensors. That app is a watchOS target inside your Flutter app's Xcode project, and you add it once.
+
+## Project layout
+
+One Xcode project holds two targets, and both get their AWARE binaries from the same plugin:
+
+![Runner.xcodeproj holds two targets: the Runner iOS app, which gets the carp_aware_package plugin and its AWARE iOS binaries automatically, and the CarpWatch watchOS app that you add and link the carp-aware-watch product into.](/images/apple-watch/xcode-project.svg)
+
+Both halves of the AWARE framework ship inside the same Flutter plugin. There is no separate package to fetch and no AWARE source to check out.
+
+| Target | Platform | AWARE product | Linked |
+|---|---|---|---|
+| `Runner` | iOS | `carp-aware-package` | Automatically |
+| `CarpWatch Watch App` | watchOS | `carp-aware-watch` | Manually, in [Add the watch target](/docs/sampling-packages/apple-watch/watch-app/xcode-setup#link-the-aware-framework-into-the-watch-target) |
+
+## How the two apps communicate
+
+The watch asks, and the phone answers from the deployed study protocol:
+
+![Sequence: the watch app asks the phone for settings, the phone answers from the AppleWatchDevice in the deployed protocol, the AWARE sensors collect into the watch database, compressed chunk files are transferred every 15 minutes, and the phone turns the records into CAMS measurements.](/images/apple-watch/watch-phone-handshake.svg)
+
+The watch app carries no study configuration of its own. It asks the phone app what to sample, and the phone answers from the `AppleWatchDevice`. [Watch settings](/docs/sampling-packages/apple-watch/watch-settings) lists the keys it sends.
+
+## Setup steps
+
+<Cards>
+<Card title="1. Add the watch target" href="/docs/sampling-packages/apple-watch/watch-app/xcode-setup" icon="Build">
+
+Create the watchOS app target, set the bundle identifiers, and link the AWARE framework into it.
+
+</Card>
+<Card title="2. Capabilities and permissions" href="/docs/sampling-packages/apple-watch/watch-app/permissions" icon="Shield">
+
+HealthKit, background modes, and the privacy strings watchOS requires before it asks the participant for anything.
+
+</Card>
+<Card title="3. Watch app source code" href="/docs/sampling-packages/apple-watch/watch-app/source-code" icon="Code">
+
+A simple SwiftUI app on the watch that asks the phone for settings and collects AWARE sensors.
+
+</Card>
+<Card title="4. Build and verify" href="/docs/sampling-packages/apple-watch/watch-app/build-and-verify" icon="CheckCircle">
+
+Install the app on the watch and follow the data end to end.
+
+</Card>
+</Cards>

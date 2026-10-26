@@ -1,0 +1,469 @@
+---
+title: Deleting data
+description: Remove health data by type and time range, by UUID on iOS or by client record ID on Android.
+icon: Delete
+---
+
+The `Health` class provides three delete methods. Deleting requires WRITE permission for the type; see [Permissions](#permissions).
+
+| Method | Use case | Platform support |
+|--------|----------|------------------|
+| `delete` | Delete by type and time range | iOS, Android |
+| `deleteByUUID` | Delete a specific data point by UUID | iOS only |
+| `deleteByClientRecordId` | Delete by custom record ID | Android only |
+
+## Quick reference
+
+Delete by type and interval:
+
+```dart
+await health.delete(
+  type: HealthDataType.STEPS,
+  startTime: start,
+  endTime: end,
+);
+```
+
+Delete a specific record by UUID:
+
+```dart
+await health.deleteByUUID(
+  uuid: 'A91A2F10-3D7B-486A-B140-5ADCD3C9C6D0',
+  type: HealthDataType.WORKOUT, // required on iOS
+);
+```
+
+Delete by client record ID (Android Health Connect):
+
+```dart
+await health.deleteByClientRecordId(
+  dataTypeKey: HealthDataType.ACTIVE_ENERGY_BURNED,
+  clientRecordId: 'my-id-1',
+);
+```
+
+## Delete by type and time range
+
+`delete` removes all data of a type within a time period.
+
+```dart
+Future<bool> delete({
+  required HealthDataType type,
+  required DateTime startTime,
+  required DateTime endTime,
+})
+```
+
+### Delete recent data
+
+```dart
+// Delete today's steps
+final today = DateTime.now();
+final startOfDay = DateTime(today.year, today.month, today.day);
+
+await health.delete(
+  type: HealthDataType.STEPS,
+  startTime: startOfDay,
+  endTime: today,
+);
+
+// Delete weight measurements from last week
+await health.delete(
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now().subtract(Duration(days: 7)),
+  endTime: DateTime.now(),
+);
+```
+
+### Delete a specific day
+
+```dart
+Future<bool> deleteDay(HealthDataType type, DateTime date) async {
+  final startOfDay = DateTime(date.year, date.month, date.day);
+  final endOfDay = startOfDay.add(Duration(days: 1));
+  
+  return await health.delete(
+    type: type,
+    startTime: startOfDay,
+    endTime: endOfDay,
+  );
+}
+
+// Usage
+await deleteDay(HealthDataType.HEART_RATE, DateTime.now());
+```
+
+### Delete all data of a type
+
+```dart
+Future<bool> deleteAllData(HealthDataType type) async {
+  // Delete from a very old date to now
+  return await health.delete(
+    type: type,
+    startTime: DateTime(2000, 1, 1),
+    endTime: DateTime.now(),
+  );
+}
+
+// Usage
+await deleteAllData(HealthDataType.STEPS);
+```
+
+## Delete by UUID (iOS)
+
+`deleteByUUID` deletes a specific data point by its unique identifier. Read the data first to get the point's `uuid`; see [Data points](/docs/flutter-plugins/health/reading/basic).
+
+```dart
+Future<bool> deleteByUUID({
+  required String uuid,
+})
+```
+
+`deleteByUUID` also takes an optional `type` (`HealthDataType`), which iOS requires. Pass the type of the data point, as in the [quick reference](#quick-reference).
+
+### Delete a data point
+
+```dart
+// First, get the data with UUID
+final dataPoints = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WEIGHT],
+  startDate: DateTime.now().subtract(Duration(days: 7)),
+  endDate: DateTime.now(),
+);
+
+// Delete a specific point
+if (dataPoints.isNotEmpty) {
+  final uuid = dataPoints.first.uuid;
+  final success = await health.deleteByUUID(uuid: uuid);
+  
+  if (success) {
+    print('Data point deleted');
+  }
+}
+```
+
+### Delete specific readings
+
+```dart
+class DataPointManager {
+  final Health health;
+  
+  DataPointManager(this.health);
+  
+  Future<bool> deleteReading(HealthDataPoint point) async {
+    if (point.uuid.isEmpty) {
+      print('No UUID available');
+      return false;
+    }
+    
+    return await health.deleteByUUID(uuid: point.uuid);
+  }
+  
+  Future<int> deleteMultipleReadings(List<HealthDataPoint> points) async {
+    int deletedCount = 0;
+    
+    for (var point in points) {
+      if (point.uuid.isNotEmpty) {
+        final success = await health.deleteByUUID(uuid: point.uuid);
+        if (success) deletedCount++;
+      }
+    }
+    
+    return deletedCount;
+  }
+}
+
+// Usage
+final manager = DataPointManager(health);
+await manager.deleteReading(dataPoint);
+```
+
+## Delete by client record ID (Android)
+
+`deleteByClientRecordId` deletes data by a custom record identifier on Health Connect.
+
+```dart
+Future<bool> deleteByClientRecordId({
+  required String clientRecordId,
+})
+```
+
+`deleteByClientRecordId` also takes the data type as `dataTypeKey` (`HealthDataType`), as in the [quick reference](#quick-reference).
+
+### Delete a record
+
+```dart
+// Delete by custom record ID
+await health.deleteByClientRecordId(
+  clientRecordId: 'my-app-weight-2024-01-15',
+);
+```
+
+### Generate record IDs
+
+Generate a custom ID when you write the data, then delete by the same ID later. For a write method that accepts a client record ID, see the `writeBloodPressure` example in [Writing data](/docs/flutter-plugins/health/writing#blood-pressure).
+
+```dart
+class RecordIdGenerator {
+  static String generate(HealthDataType type, DateTime timestamp) {
+    final dateStr = timestamp.toIso8601String();
+    return 'myapp_${type.name}_$dateStr';
+  }
+}
+
+// When writing data, use custom ID
+final recordId = RecordIdGenerator.generate(
+  HealthDataType.WEIGHT,
+  DateTime.now(),
+);
+
+// Later, delete by this ID
+await health.deleteByClientRecordId(clientRecordId: recordId);
+```
+
+## Patterns
+
+### Delete several types
+
+```dart
+class BulkDeleteManager {
+  final Health health;
+  
+  BulkDeleteManager(this.health);
+  
+  Future<Map<HealthDataType, bool>> deleteMultipleTypes({
+    required List<HealthDataType> types,
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    final results = <HealthDataType, bool>{};
+    
+    for (var type in types) {
+      final success = await health.delete(
+        type: type,
+        startTime: startTime,
+        endTime: endTime,
+      );
+      results[type] = success;
+    }
+    
+    return results;
+  }
+  
+  Future<void> clearAllActivityData(DateTime date) async {
+    final activityTypes = [
+      HealthDataType.STEPS,
+      HealthDataType.DISTANCE_WALKING_RUNNING,
+      HealthDataType.ACTIVE_ENERGY_BURNED,
+      HealthDataType.FLIGHTS_CLIMBED,
+    ];
+    
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(Duration(days: 1));
+    
+    final results = await deleteMultipleTypes(
+      types: activityTypes,
+      startTime: startOfDay,
+      endTime: endOfDay,
+    );
+    
+    results.forEach((type, success) {
+      print('${type.name}: ${success ? "✓" : "✗"}');
+    });
+  }
+}
+
+// Usage
+final manager = BulkDeleteManager(health);
+await manager.clearAllActivityData(DateTime.now());
+```
+
+### Delete outliers
+
+Read the data, then delete only the points that match a condition:
+
+```dart
+class SelectiveDeleter {
+  final Health health;
+  
+  SelectiveDeleter(this.health);
+  
+  // Delete outliers (e.g., unrealistic values)
+  Future<int> deleteOutliers({
+    required HealthDataType type,
+    required DateTime startDate,
+    required DateTime endDate,
+    required bool Function(HealthDataPoint) isOutlier,
+  }) async {
+    // Read data
+    final dataPoints = await health.getHealthDataFromTypes(
+      types: [type],
+      startDate: startDate,
+      endDate: endDate,
+    );
+    
+    int deletedCount = 0;
+    
+    // Delete outliers
+    for (var point in dataPoints) {
+      if (isOutlier(point) && point.uuid.isNotEmpty) {
+        final success = await health.deleteByUUID(uuid: point.uuid);
+        if (success) deletedCount++;
+      }
+    }
+    
+    return deletedCount;
+  }
+}
+
+// Usage
+final deleter = SelectiveDeleter(health);
+
+final deletedCount = await deleter.deleteOutliers(
+  type: HealthDataType.WEIGHT,
+  startDate: DateTime.now().subtract(Duration(days: 30)),
+  endDate: DateTime.now(),
+  isOutlier: (point) {
+    final value = (point.value as NumericHealthValue).numericValue;
+    // Delete weights outside reasonable range
+    return value < 30 || value > 300;
+  },
+);
+
+print('Deleted $deletedCount outlier readings');
+```
+
+### Confirm before deleting
+
+Count the affected data points and ask the user to confirm before you delete:
+
+```dart
+Future<bool> safeDelete({
+  required Health health,
+  required HealthDataType type,
+  required DateTime startTime,
+  required DateTime endTime,
+  required Future<bool> Function(int count) confirmDeletion,
+}) async {
+  // First, count how many data points will be deleted
+  final dataPoints = await health.getHealthDataFromTypes(
+    types: [type],
+    startDate: startTime,
+    endDate: endTime,
+  );
+  
+  if (dataPoints.isEmpty) {
+    print('No data to delete');
+    return false;
+  }
+  
+  // Ask for confirmation
+  final confirmed = await confirmDeletion(dataPoints.length);
+  
+  if (!confirmed) {
+    print('Deletion cancelled');
+    return false;
+  }
+  
+  // Proceed with deletion
+  return await health.delete(
+    type: type,
+    startTime: startTime,
+    endTime: endTime,
+  );
+}
+
+// Usage
+await safeDelete(
+  health: health,
+  type: HealthDataType.STEPS,
+  startTime: startDate,
+  endTime: endDate,
+  confirmDeletion: (count) async {
+    print('About to delete $count data points');
+    // In real app, show a dialog
+    return true; // User confirmed
+  },
+);
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Supports `delete` and `deleteByClientRecordId`.
+- Time-range deletion may affect data from other apps.
+- Custom record IDs enable precise deletion.
+- Requires WRITE permission.
+- Check Health Connect availability first; see [Health Connect](/docs/flutter-plugins/health/health-connect).
+
+</Tab>
+<Tab value="iOS">
+
+- Supports `delete` and `deleteByUUID`.
+- UUID-based deletion is precise.
+- Deletion is immediate and cannot be undone.
+- May affect data in other apps.
+
+</Tab>
+</Tabs>
+
+## Error handling
+
+A delete returns `false` when it fails, for example because permission is missing or there is no data:
+
+```dart
+Future<void> deleteWithErrorHandling(
+  HealthDataType type,
+  DateTime start,
+  DateTime end,
+) async {
+  try {
+    final success = await health.delete(
+      type: type,
+      startTime: start,
+      endTime: end,
+    );
+    
+    if (success) {
+      print('✓ Data deleted successfully');
+    } else {
+      print('✗ Deletion failed');
+      print('  Check permissions or data existence');
+    }
+  } catch (e) {
+    print('✗ Error during deletion: $e');
+  }
+}
+```
+
+## Permissions
+
+Deletion requires WRITE permission:
+
+```dart
+final types = [HealthDataType.STEPS, HealthDataType.WEIGHT];
+
+final granted = await health.requestAuthorization(
+  types,
+  permissions: List.filled(types.length, HealthDataAccess.WRITE),
+);
+
+if (granted) {
+  // Can now delete data
+  await health.delete(
+    type: HealthDataType.STEPS,
+    startTime: startTime,
+    endTime: endTime,
+  );
+}
+```
+
+For managing permissions, see [Permissions](/docs/flutter-plugins/health/permissions).
+
+## Related
+
+- [Permissions](/docs/flutter-plugins/health/permissions): manage write permissions
+- [Data points](/docs/flutter-plugins/health/reading/basic): get data points with UUIDs
+- [Numeric data](/docs/flutter-plugins/health/writing/basic): write health data

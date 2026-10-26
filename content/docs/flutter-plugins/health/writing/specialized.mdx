@@ -1,0 +1,418 @@
+---
+title: Specialized types
+description: Write menstruation flow, audiograms and insulin delivery using writeMenstruationFlow, writeAudiogram and writeInsulinDelivery.
+---
+
+Menstruation flow, audiograms and insulin delivery each have a dedicated write method. Support for these types varies by platform; see [Platform differences](#platform-differences).
+
+## Menstruation flow
+
+`writeMenstruationFlow` writes menstrual cycle data.
+
+```dart
+Future<bool> writeMenstruationFlow({
+  required MenstruationFlow flow,
+  required DateTime startTime,
+  DateTime? endTime,
+})
+```
+
+### Flow types
+
+```dart
+enum MenstruationFlow {
+  UNSPECIFIED,
+  LIGHT,
+  MEDIUM,
+  HEAVY,
+  SPOTTING,
+}
+```
+
+### Write the flow
+
+```dart
+// Log menstruation flow
+await health.writeMenstruationFlow(
+  flow: MenstruationFlow.MEDIUM,
+  startTime: DateTime.now(),
+);
+
+// Different flow levels
+await health.writeMenstruationFlow(
+  flow: MenstruationFlow.HEAVY,
+  startTime: DateTime(2024, 1, 15, 8, 0),
+);
+
+await health.writeMenstruationFlow(
+  flow: MenstruationFlow.SPOTTING,
+  startTime: DateTime(2024, 1, 20, 10, 30),
+);
+```
+
+### Log a period
+
+This class writes one flow entry per day of a period:
+
+```dart
+class CycleTracker {
+  final Health health;
+  
+  CycleTracker(this.health);
+  
+  Future<void> logDailyFlow(MenstruationFlow flow) async {
+    await health.writeMenstruationFlow(
+      flow: flow,
+      startTime: DateTime.now(),
+    );
+  }
+  
+  Future<void> logPeriod({
+    required DateTime startDate,
+    required int durationDays,
+    required List<MenstruationFlow> dailyFlow,
+  }) async {
+    for (int i = 0; i < durationDays && i < dailyFlow.length; i++) {
+      final date = startDate.add(Duration(days: i));
+      await health.writeMenstruationFlow(
+        flow: dailyFlow[i],
+        startTime: date,
+      );
+    }
+  }
+}
+
+// Usage
+final tracker = CycleTracker(health);
+
+// Log a 5-day period
+await tracker.logPeriod(
+  startDate: DateTime(2024, 1, 15),
+  durationDays: 5,
+  dailyFlow: [
+    MenstruationFlow.LIGHT,
+    MenstruationFlow.MEDIUM,
+    MenstruationFlow.HEAVY,
+    MenstruationFlow.MEDIUM,
+    MenstruationFlow.LIGHT,
+  ],
+);
+```
+
+## Audiogram
+
+`writeAudiogram` writes hearing test results.
+
+```dart
+Future<bool> writeAudiogram({
+  required List<double> frequencies,
+  required List<double> leftEarSensitivities,
+  required List<double> rightEarSensitivities,
+  required DateTime startTime,
+  DateTime? endTime,
+})
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `frequencies` | `List<double>` | Test frequencies in Hz |
+| `leftEarSensitivities` | `List<double>` | Left ear hearing levels in dB |
+| `rightEarSensitivities` | `List<double>` | Right ear hearing levels in dB |
+| `startTime` | `DateTime` | Test timestamp |
+
+### Write an audiogram
+
+```dart
+// Standard audiogram frequencies
+await health.writeAudiogram(
+  frequencies: [125, 250, 500, 1000, 2000, 4000, 8000],
+  leftEarSensitivities: [20, 20, 15, 15, 20, 25, 30],
+  rightEarSensitivities: [20, 15, 15, 20, 20, 20, 25],
+  startTime: DateTime.now(),
+);
+```
+
+### Extended frequency range
+
+```dart
+// Extended audiogram with more frequencies
+await health.writeAudiogram(
+  frequencies: [
+    125, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000
+  ],
+  leftEarSensitivities: [
+    25, 20, 15, 15, 15, 20, 20, 25, 30, 35, 40
+  ],
+  rightEarSensitivities: [
+    20, 20, 15, 15, 15, 15, 20, 20, 25, 30, 35
+  ],
+  startTime: DateTime.now(),
+);
+```
+
+### Classify hearing loss
+
+This example saves an audiogram and classifies each ear by its pure tone average (PTA):
+
+```dart
+String classifyHearingLoss(double averageThreshold) {
+  if (averageThreshold <= 25) {
+    return 'Normal';
+  } else if (averageThreshold <= 40) {
+    return 'Mild hearing loss';
+  } else if (averageThreshold <= 55) {
+    return 'Moderate hearing loss';
+  } else if (averageThreshold <= 70) {
+    return 'Moderately severe hearing loss';
+  } else if (averageThreshold <= 90) {
+    return 'Severe hearing loss';
+  } else {
+    return 'Profound hearing loss';
+  }
+}
+
+class AudiogramAnalyzer {
+  static double calculatePTA(List<double> sensitivities) {
+    // Pure Tone Average: average of 500, 1000, 2000 Hz
+    if (sensitivities.length < 3) return 0;
+    return (sensitivities[0] + sensitivities[1] + sensitivities[2]) / 3;
+  }
+  
+  static Future<void> saveAndAnalyze(
+    Health health,
+    List<double> frequencies,
+    List<double> leftEar,
+    List<double> rightEar,
+  ) async {
+    // Save audiogram
+    await health.writeAudiogram(
+      frequencies: frequencies,
+      leftEarSensitivities: leftEar,
+      rightEarSensitivities: rightEar,
+      startTime: DateTime.now(),
+    );
+    
+    // Analyze results
+    final leftPTA = calculatePTA(leftEar);
+    final rightPTA = calculatePTA(rightEar);
+    
+    print('Left ear PTA: ${leftPTA.toStringAsFixed(1)} dB');
+    print('Classification: ${classifyHearingLoss(leftPTA)}');
+    print('Right ear PTA: ${rightPTA.toStringAsFixed(1)} dB');
+    print('Classification: ${classifyHearingLoss(rightPTA)}');
+  }
+}
+```
+
+## Insulin delivery
+
+`writeInsulinDelivery` writes insulin doses.
+
+```dart
+Future<bool> writeInsulinDelivery({
+  required double units,
+  required DateTime startTime,
+  DateTime? endTime,
+})
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `units` | `double` | Insulin units delivered |
+| `startTime` | `DateTime` | When insulin was administered |
+| `endTime` | `DateTime?` | End time (optional) |
+
+### Write a dose
+
+```dart
+// Bolus insulin dose
+await health.writeInsulinDelivery(
+  units: 5.0,
+  startTime: DateTime.now(),
+);
+
+// Basal insulin dose
+await health.writeInsulinDelivery(
+  units: 12.0,
+  startTime: DateTime.now(),
+);
+```
+
+### Log doses by insulin type
+
+```dart
+enum InsulinType {
+  rapid,
+  short,
+  intermediate,
+  long,
+}
+
+class InsulinLogger {
+  final Health health;
+  
+  InsulinLogger(this.health);
+  
+  Future<bool> logDose({
+    required double units,
+    required InsulinType type,
+    DateTime? administeredAt,
+  }) async {
+    final success = await health.writeInsulinDelivery(
+      units: units,
+      startTime: administeredAt ?? DateTime.now(),
+    );
+    
+    if (success) {
+      print('Logged $units units of ${type.name} insulin');
+    }
+    
+    return success;
+  }
+  
+  Future<void> logBasalBolusTherapy({
+    required double basalUnits,
+    required double bolusUnits,
+  }) async {
+    final now = DateTime.now();
+    
+    // Log long-acting basal
+    await logDose(
+      units: basalUnits,
+      type: InsulinType.long,
+      administeredAt: now,
+    );
+    
+    // Log rapid-acting bolus
+    await logDose(
+      units: bolusUnits,
+      type: InsulinType.rapid,
+      administeredAt: now,
+    );
+  }
+}
+
+// Usage
+final logger = InsulinLogger(health);
+
+// Meal-time bolus
+await logger.logDose(
+  units: 4.0,
+  type: InsulinType.rapid,
+);
+
+// Basal-bolus therapy
+await logger.logBasalBolusTherapy(
+  basalUnits: 10.0,
+  bolusUnits: 5.0,
+);
+```
+
+### Calculate a meal bolus
+
+This example calculates a bolus from a carb-to-insulin ratio and a correction factor, then writes it:
+
+```dart
+class InsulinCalculator {
+  final double carbRatio; // grams of carbs per unit
+  final double correctionFactor; // mg/dL per unit
+  final double targetGlucose; // mg/dL
+  
+  InsulinCalculator({
+    required this.carbRatio,
+    required this.correctionFactor,
+    required this.targetGlucose,
+  });
+  
+  double calculateBolusUnits({
+    required double carbsGrams,
+    required double currentGlucose,
+  }) {
+    // Carb coverage
+    final carbUnits = carbsGrams / carbRatio;
+    
+    // Correction dose
+    final glucoseAboveTarget = currentGlucose - targetGlucose;
+    final correctionUnits = glucoseAboveTarget / correctionFactor;
+    
+    // Total bolus (minimum 0)
+    return (carbUnits + correctionUnits).clamp(0, double.infinity);
+  }
+  
+  Future<void> logMealBolus({
+    required Health health,
+    required double carbsGrams,
+    required double currentGlucose,
+  }) async {
+    final units = calculateBolusUnits(
+      carbsGrams: carbsGrams,
+      currentGlucose: currentGlucose,
+    );
+    
+    print('Calculated $units units for $carbsGrams g carbs');
+    
+    await health.writeInsulinDelivery(
+      units: units,
+      startTime: DateTime.now(),
+    );
+  }
+}
+
+// Usage
+final calculator = InsulinCalculator(
+  carbRatio: 10.0,        // 1 unit per 10g carbs
+  correctionFactor: 50.0, // 1 unit lowers glucose by 50 mg/dL
+  targetGlucose: 100.0,   // Target 100 mg/dL
+);
+
+await calculator.logMealBolus(
+  health: health,
+  carbsGrams: 60.0,    // 60g carbs
+  currentGlucose: 150.0, // Current blood glucose
+);
+```
+
+## Permissions
+
+Request WRITE permission for each specialized type:
+
+```dart
+// Request permissions for specialized types
+final types = [
+  HealthDataType.MENSTRUATION_FLOW,
+  HealthDataType.AUDIOGRAM,
+  HealthDataType.INSULIN_DELIVERY,
+];
+
+final granted = await health.requestAuthorization(
+  types,
+  permissions: List.filled(types.length, HealthDataAccess.WRITE),
+);
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Support for specialized types varies.
+- Menstruation tracking is supported.
+- Audiogram and insulin support may be limited.
+- Check Health Connect compatibility.
+
+</Tab>
+<Tab value="iOS">
+
+- All specialized types are fully supported.
+- Menstruation data integrates with Cycle Tracking.
+- Audiograms appear in the Health app.
+- Insulin tracking is available.
+
+</Tab>
+</Tabs>
+
+## Related
+
+- [Numeric data](/docs/flutter-plugins/health/writing/basic): general health data
+- [Data types](/docs/flutter-plugins/health/data-types): all available types
+- [Data points](/docs/flutter-plugins/health/reading/basic): read specialized data

@@ -1,109 +1,35 @@
-@import 'fumadocs-ui/css/lib/default-colors.css';
-
 /*
- * CARP palette, built like Starlight's theme designer: from a hue and chroma for the accent, and one for the grays.
- * As in Starlight, chroma tapers for the tints of the accent and for the grays near white and black,
- * where even a little chroma reads as pink.
- *
- * Chroma 0.27 is beyond sRGB at hue 30: sRGB screens show the most saturated red at that lightness,
- * and wide-gamut (Display P3) screens show more of it than a hex value can.
+ * Brand colours. To rebrand, change these three values and the matching roles in
+ * color-roles.css. The primary blue (HCT H246.7, tone 40) is the interactive colour.
+ * The accent red marks identity only (logo, page-title overline, banner) and never
+ * signals a state. Every role for both themes is defined once, in color-roles.css.
  */
 :root {
-  --sl-accent-hue: 30;
-  --sl-accent-chroma: 0.27;
-  --sl-gray-hue: 30;
-  --sl-gray-chroma: 0.02;
+  --brand-primary: #006398;
+  --brand-ink: #001d32;
+  --brand-accent: #d61d41;
 }
 
-/*
- * Starlight's `:root[data-theme='light']` maps to Fumadocs' default theme, and its `:root` to `.dark`.
- * `--sl-color-gray-7` only exists in light mode, as in Starlight.
- */
-:root:not(.dark) {
-  --sl-color-accent-low: oklch(87.9% calc(var(--sl-accent-chroma) / 4) var(--sl-accent-hue));
-  --sl-color-accent: oklch(46% var(--sl-accent-chroma) var(--sl-accent-hue));
-  --sl-color-accent-high: oklch(31.8% calc(var(--sl-accent-chroma) / 2) var(--sl-accent-hue));
-  --sl-color-white: oklch(21.1% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-  --sl-color-gray-1: oklch(27.1% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-2: oklch(34% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-3: oklch(46% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-4: oklch(63.7% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-5: oklch(81.4% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-  --sl-color-gray-6: oklch(94.8% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-  --sl-color-gray-7: oklch(97.3% calc(var(--sl-gray-chroma) / 4) var(--sl-gray-hue));
-  --sl-color-black: oklch(100% 0 0);
-}
-
-.dark {
-  --sl-color-accent-low: oklch(26% calc(var(--sl-accent-chroma) / 3) var(--sl-accent-hue));
-  /* lighter than Starlight's 52%: it stands out from the dark surfaces at 3:1, and P3 screens can show its full chroma */
-  --sl-color-accent: oklch(60% var(--sl-accent-chroma) var(--sl-accent-hue));
-  --sl-color-accent-high: oklch(83.4% calc(var(--sl-accent-chroma) / 3) var(--sl-accent-hue));
-  --sl-color-white: oklch(100% 0 0);
-  --sl-color-gray-1: oklch(94.8% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-  --sl-color-gray-2: oklch(83.3% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-  --sl-color-gray-3: oklch(71.9% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-4: oklch(46% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-5: oklch(34% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-gray-6: oklch(27.1% var(--sl-gray-chroma) var(--sl-gray-hue));
-  --sl-color-black: oklch(21.1% calc(var(--sl-gray-chroma) / 2) var(--sl-gray-hue));
-}
-
-/* the palette as Tailwind colours, e.g. `bg-sl-accent` or `text-sl-gray-3` */
-@theme inline {
-  --color-sl-accent-low: var(--sl-color-accent-low);
-  --color-sl-accent: var(--sl-color-accent);
-  --color-sl-accent-high: var(--sl-color-accent-high);
-  --color-sl-white: var(--sl-color-white);
-  --color-sl-gray-1: var(--sl-color-gray-1);
-  --color-sl-gray-2: var(--sl-color-gray-2);
-  --color-sl-gray-3: var(--sl-color-gray-3);
-  --color-sl-gray-4: var(--sl-color-gray-4);
-  --color-sl-gray-5: var(--sl-color-gray-5);
-  --color-sl-gray-6: var(--sl-color-gray-6);
-  --color-sl-gray-7: var(--sl-color-gray-7);
-  --color-sl-black: var(--sl-color-black);
-}
-
-/*
- * Fumadocs colours, following the roles the palette has in Starlight:
- * page = `bg`, card = `bg-nav`, muted = `bg-inline-code`, primary = `text-accent` on `text-invert`.
- * In dark mode, text needs the light `accent-high`, as the accent itself is below 4.5:1 on the sidebar.
- */
-@theme {
-  --color-fd-background: var(--sl-color-black);
-  --color-fd-foreground: var(--sl-color-white);
-  --color-fd-muted: var(--sl-color-gray-6);
-  --color-fd-muted-foreground: var(--sl-color-gray-3);
-  --color-fd-popover: var(--sl-color-black);
-  --color-fd-popover-foreground: var(--sl-color-white);
-  --color-fd-card: var(--sl-color-gray-7);
-  --color-fd-card-foreground: var(--sl-color-white);
-  --color-fd-border: color-mix(in oklab, var(--sl-color-gray-5) 50%, transparent);
-  --color-fd-primary: var(--sl-color-accent);
-  --color-fd-primary-foreground: var(--sl-color-black);
-  --color-fd-secondary: var(--sl-color-gray-6);
-  --color-fd-secondary-foreground: var(--sl-color-white);
-  --color-fd-accent: color-mix(in oklab, var(--sl-color-gray-5) 50%, transparent);
-  --color-fd-accent-foreground: var(--sl-color-white);
-  --color-fd-ring: var(--sl-color-accent);
-}
-
-.dark {
-  --color-fd-background: var(--sl-color-black);
-  --color-fd-foreground: var(--sl-color-gray-1);
-  --color-fd-muted: var(--sl-color-gray-5);
-  --color-fd-muted-foreground: var(--sl-color-gray-3);
-  --color-fd-popover: var(--sl-color-gray-6);
-  --color-fd-popover-foreground: var(--sl-color-gray-1);
-  --color-fd-card: var(--sl-color-gray-6);
-  --color-fd-card-foreground: var(--sl-color-gray-1);
-  --color-fd-border: var(--sl-color-gray-5);
-  --color-fd-primary: var(--sl-color-accent-high);
-  --color-fd-primary-foreground: var(--sl-color-accent-low);
-  --color-fd-secondary: var(--sl-color-gray-5);
-  --color-fd-secondary-foreground: var(--sl-color-gray-1);
-  --color-fd-accent: var(--sl-color-gray-5);
-  --color-fd-accent-foreground: var(--sl-color-gray-1);
-  --color-fd-ring: var(--sl-color-accent);
+/* Fumadocs and Tailwind utilities (bg-fd-*, text-fd-*) read the Material roles. */
+@theme static {
+  --color-brand: var(--brand-accent);
+  --color-fd-background: var(--md-sys-color-surface);
+  --color-fd-foreground: var(--md-sys-color-on-surface);
+  --color-fd-muted: var(--md-sys-color-surface-container);
+  --color-fd-muted-foreground: var(--md-sys-color-on-surface-variant);
+  --color-fd-popover: var(--docs-popover);
+  --color-fd-popover-foreground: var(--md-sys-color-on-surface);
+  --color-fd-card: var(--md-sys-color-surface-container-low);
+  --color-fd-card-foreground: var(--md-sys-color-on-surface);
+  --color-fd-navigation: var(--docs-navigation);
+  --color-fd-border: var(--docs-border);
+  --color-fd-primary: var(--md-sys-color-primary);
+  --color-fd-primary-foreground: var(--md-sys-color-on-primary);
+  --color-fd-secondary: var(--md-sys-color-surface-container);
+  --color-fd-secondary-foreground: var(--md-sys-color-on-surface);
+  --color-fd-accent: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+  --color-fd-accent-foreground: var(--md-sys-color-on-surface);
+  --color-fd-ring: var(--md-sys-color-primary);
+  --color-fd-error: var(--md-sys-color-error);
+  --color-fd-error-foreground: var(--md-sys-color-on-error);
 }

@@ -1,0 +1,89 @@
+---
+title: Capabilities and permissions
+description: The capabilities, background modes and privacy strings that the watch target needs.
+---
+
+A sensor on watchOS needs three things before it produces data:
+
+1. a **capability** on the target;
+2. a **background mode**, if it runs while the wrist is lowered;
+3. a **privacy string** that explains why it is used.
+
+Set everything on this page on the **`CarpWatch Watch App`** target.
+
+## Capabilities
+
+Select the watch target → **Signing & Capabilities** → **+ Capability** and add:
+
+| Capability | Needed for |
+|---|---|
+| **Background Modes** → Audio | The `microphone` background session, and any sound sensing |
+| **Background Modes** → Workout processing | The `workout` background session |
+| **Background Modes** → Location updates | Location sampling |
+| **HealthKit** (tick **Background Delivery**) | Heart rate |
+
+This writes `CarpWatch Watch App.entitlements`:
+
+```xml title="CarpWatch Watch App.entitlements"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.background-delivery</key>
+	<true/>
+</dict>
+</plist>
+```
+
+<Callout type="info">
+
+You do **not** need HealthKit, microphone or location capabilities on the `Runner` (iOS) target for this package, unless your phone app also needs them.
+
+</Callout>
+
+## Background modes
+
+Adding the capabilities above writes the background modes for you. Verify that the watch target ends up with:
+
+```xml
+<key>WKBackgroundModes</key>
+<array>
+	<string>workout-processing</string>
+</array>
+<key>UIBackgroundModes</key>
+<array>
+	<string>audio</string>
+	<string>location</string>
+</array>
+```
+
+<Callout type="warning" title="Match the background session type">
+
+The background mode has to match the `backgroundSessionType` you set on the `AppleWatchDevice`: `microphone` needs the `audio` mode, and `workout` needs `workout-processing`. Without the matching mode, the session fails to start and the watch app is suspended as soon as the participant lowers their wrist.
+
+</Callout>
+
+## Privacy strings
+
+watchOS refuses to show a permission prompt whose purpose string is missing. Xcode 15 and later generate the watch app's `Info.plist` from build settings, so the easiest place to add these keys is the target's **Info** tab.
+
+| Key | Needed for | Example value |
+|---|---|---|
+| `NSHealthShareUsageDescription` | Heart rate | "This study reads your heart rate from the Health app for X." |
+| `NSHealthUpdateUsageDescription` | Required alongside the above | "This study does not write any data to the Health app." |
+| `NSMicrophoneUsageDescription` | Sound sensing and the `microphone` background session | "The microphone is used to measure the noise level around you. No audio is recorded or saved." |
+| `NSLocationWhenInUseUsageDescription` | Location | "Your location is collected to describe where you spend your time." |
+| `NSLocationAlwaysAndWhenInUseUsageDescription` | Location in the background | Same as above |
+| `NSBluetoothAlwaysUsageDescription` | Bluetooth scanning | "Nearby Bluetooth devices are scanned to estimate social context. No connection is made." |
+
+## Next step
+
+<Cards>
+<Card title="Watch app source code" href="/docs/sampling-packages/apple-watch/watch-app/source-code" icon="Code">
+
+A simple SwiftUI app on the watch that asks the phone for settings and collects AWARE sensors.
+
+</Card>
+</Cards>

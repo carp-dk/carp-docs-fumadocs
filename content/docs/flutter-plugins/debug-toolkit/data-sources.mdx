@@ -1,0 +1,83 @@
+---
+title: Data sources
+description: Expose preferences and databases to the Shared Preferences and Database tools.
+icon: Database
+---
+
+The **Shared Preferences** and **Database** tools are driven by two small interfaces. The toolkit includes adapters for the storage CARP apps use (`shared_preferences` and `sembast`), and you can implement the interfaces yourself for any other storage.
+
+| Interface | Powers | Config field | Built-in adapter |
+| --- | --- | --- | --- |
+| `KeyValueStore` | Shared Preferences tool | `DebugToolkitConfig.keyValueStores` | `SharedPreferencesKeyValueStore` |
+| `DebugDatabase` | Database tool | `DebugToolkitConfig.databases` | `SembastDebugDatabase` |
+
+## Key/value stores
+
+`KeyValueStore` powers the Preferences tool (inspect, search, edit, add and delete). Pass one or more stores with `DebugToolkitConfig.keyValueStores`:
+
+```dart
+keyValueStores: [
+  SharedPreferencesKeyValueStore(prefs, name: 'CARP Preferences'),
+],
+```
+
+<Accordions>
+<Accordion title="Hiding internal keys">
+
+By default, `SharedPreferencesKeyValueStore` hides `DebugEnv`'s own override keys (`carp_debug_env.*`) from the listing and from "clear all", so the inspector never clobbers the launch-argument override store. Customize this with `hiddenPrefixes`:
+
+```dart
+SharedPreferencesKeyValueStore(prefs, hiddenPrefixes: ['carp_debug_env.', 'flutter.']);
+```
+
+</Accordion>
+</Accordions>
+
+### Custom key/value store
+
+```dart
+class MyKeyValueStore implements KeyValueStore {
+  @override String get name => 'Secure Storage';
+  @override Future<List<String>> keys() async => myStore.allKeys();
+  @override Future<Object?> read(String key) => myStore.read(key);
+  @override Future<void> write(String key, Object value) => myStore.write(key, '$value');
+  @override Future<void> delete(String key) => myStore.delete(key);
+  @override Future<void> clear() => myStore.deleteAll();
+}
+```
+
+The supported value types for `write` are `String`, `bool`, `int`, `double` and `List<String>`.
+
+## Databases
+
+`DebugDatabase` powers the Database tool (browse stores, then records, and delete). Pass one or more databases with `DebugToolkitConfig.databases`:
+
+```dart
+databases: [
+  SembastDebugDatabase(db, [
+    SembastStoreDescriptor('settings', StoreRef<String, Object?>.main()),
+    SembastStoreDescriptor('results', intMapStoreFactory.store('result_store')),
+  ]),
+],
+```
+
+sembast does not enumerate its stores at runtime, so you list the `StoreRef`s you want to inspect. Any key and value types are accepted.
+
+### Custom database
+
+```dart
+class MyDebugDatabase implements DebugDatabase {
+  @override String get name => 'My DB';
+  @override List<String> get storeNames => ['users', 'events'];
+
+  @override
+  Future<List<DebugRecord>> records(String store) async =>
+      (await myDb.query(store)).map((row) => DebugRecord(row.id, row.toMap())).toList();
+
+  @override
+  Future<void> deleteRecord(String store, Object key) => myDb.delete(store, key);
+
+  @override
+  Future<void> clearStore(String store) => myDb.clear(store);
+}
+```

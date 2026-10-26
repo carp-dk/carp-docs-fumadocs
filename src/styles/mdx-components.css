@@ -1,0 +1,191 @@
+/* MDX components share the shell's Material roles and compact type scale. */
+.docs-mdx-icon { display: inline-block; flex: none; width: 1.25rem; height: 1.25rem; vertical-align: middle; }
+.docs-mdx-button-group { max-width: 100%; }
+.docs-mdx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 16px; }
+.docs-mdx-chip { --m3e-chip-container-height: 32px; --m3e-chip-label-text-font-size: 14px; }
+.docs-mdx-tooltip, .docs-mdx-dialog-trigger { display: inline-block; vertical-align: middle; }
+.docs-mdx-dialog { --m3e-dialog-max-width: min(32rem, calc(100vw - 2rem)); }
+/* Supporting text takes the dialog's body-medium role rather than page prose. */
+.docs-mdx-dialog .docs-mdx-body { font-size: inherit; line-height: inherit; }
+.docs-mdx-dialog .docs-mdx-body :where(p, ul, ol) { margin-block: 8px; }
+.docs-mdx-dialog-actions { justify-content: flex-end; }
+
+.docs-mdx-body { font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.docs-mdx-body > :first-child { margin-top: 0; }
+.docs-mdx-body > :last-child { margin-bottom: 0; }
+.docs-mdx-body :where(p, ul, ol) { margin-block: 12px; }
+.docs-mdx-body :where(ul, ol) { padding-inline-start: 1.5em; }
+.docs-mdx-body ul { list-style-type: disc; }
+.docs-mdx-body ol { list-style-type: decimal; }
+.docs-mdx-body li + li { margin-top: 4px; }
+.docs-mdx-body a { color: var(--md-sys-color-primary); text-decoration: underline 1px color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; }
+.docs-mdx-body a:hover { text-decoration-color: currentColor; text-decoration-thickness: 2px; }
+.docs-mdx-body :where(code):not(pre code) { font-size: 0.875em; padding: 2px 4px; border-radius: 4px; background: var(--color-fd-muted); box-shadow: inset 0 0 0 1px var(--docs-border); }
+.docs-mdx-body strong { font-weight: 700; }
+
+/* Status messages follow the Material banner anatomy on an M3 filled card: a tonal
+   container (16dp padding, 12dp corner, no outline or elevation), a 24dp
+   leading icon in the status colour, a title-small headline, body-medium supporting
+   text, and end-aligned actions. The title names the status, so colour is never the
+   only cue. */
+.docs-callout {
+  /* Content cards use 20dp padding site-wide; banners keep the 16dp Material spacing. */
+  --m3e-card-padding: 16px;
+  --m3e-filled-card-container-color: var(--docs-tone-container);
+  --m3e-filled-card-text-color: var(--docs-on-tone-container);
+}
+.docs-callout-content { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; column-gap: 16px; }
+/* Centre the 24dp icon on the 20dp first line of the headline. */
+.docs-callout-icon { width: 24px; height: 24px; margin-top: -2px; color: var(--docs-tone); }
+.docs-callout-title { margin: 0 0 4px; color: var(--docs-on-tone-container); font-size: 14px; font-weight: 700; line-height: 20px; letter-spacing: 0.1px; }
+.docs-callout .docs-mdx-body { color: var(--docs-on-tone-container); font-size: 14px; line-height: 20px; letter-spacing: 0.2px; }
+.docs-callout .docs-mdx-body a { color: inherit; font-weight: 500; }
+.docs-callout .docs-mdx-body :where(p, ul, ol) { margin-block: 8px; }
+.docs-callout .docs-mdx-body > :first-child { margin-top: 0; }
+.docs-callout .docs-mdx-body > :last-child { margin-bottom: 0; }
+/* Actions sit end-aligned below the text, 8dp in from the container's bottom and end edges. */
+.docs-callout-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 12px -8px -8px 0; }
+/* Callout actions take the callout's own colour pair rather than brand blue. */
+.docs-callout-actions m3e-button {
+  --m3e-button-container-color: color-mix(in srgb, var(--docs-tone) 14%, var(--docs-tone-container));
+  --m3e-button-label-text-color: var(--docs-on-tone-container);
+  --m3e-button-hover-label-text-color: var(--docs-on-tone-container);
+  --m3e-button-focus-label-text-color: var(--docs-on-tone-container);
+  --m3e-button-pressed-label-text-color: var(--docs-on-tone-container);
+  --m3e-button-icon-color: var(--docs-on-tone-container);
+  --m3e-button-hover-icon-color: var(--docs-on-tone-container);
+  --m3e-button-focus-icon-color: var(--docs-on-tone-container);
+  --m3e-button-pressed-icon-color: var(--docs-on-tone-container);
+  --m3e-button-hover-state-layer-color: var(--docs-on-tone-container);
+  --m3e-button-focus-state-layer-color: var(--docs-on-tone-container);
+  --m3e-button-pressed-state-layer-color: var(--docs-on-tone-container);
+  --m3e-text-button-label-text-color: var(--docs-tone);
+  --m3e-text-button-hover-label-text-color: var(--docs-on-tone-container);
+  --m3e-text-button-icon-color: var(--docs-tone);
+  --m3e-text-button-hover-state-layer-color: var(--docs-tone);
+  --m3e-text-button-focus-state-layer-color: var(--docs-tone);
+  --m3e-text-button-pressed-state-layer-color: var(--docs-tone);
+}
+/* Text badges keep the M3 badge anatomy (fully rounded, label type, no outline) at a
+   24dp height that sits inside a body line, with a label-medium label. Every tone uses
+   its container pair, so an error badge informs without shouting. */
+.docs-mdx-badge {
+  vertical-align: middle;
+  --m3e-badge-large-size: 24px;
+  --m3e-badge-large-font-size: 12px;
+  --m3e-badge-large-font-weight: 500;
+  --m3e-badge-large-line-height: 16px;
+  --m3e-badge-large-tracking: 0.5px;
+  --m3e-badge-container-color: var(--docs-tone-container);
+  --m3e-badge-color: var(--docs-on-tone-container);
+}
+.docs-property-badge { margin-inline-start: 8px; }
+.docs-mdx-divider { display: block; margin-block: 24px; }
+
+.docs-mdx-list {
+  display: block; margin-block: 16px; padding: 4px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px;
+  --m3e-list-item-container-color: transparent;
+  --m3e-list-item-container-shape: 8px;
+  --m3e-list-item-hover-container-shape: 8px;
+  --m3e-list-item-focus-container-shape: 8px;
+  --m3e-list-item-font-size: 14px;
+  --m3e-list-item-font-weight: 500;
+  --m3e-list-item-supporting-text-font-size: 13px;
+  --m3e-list-item-leading-space: 12px;
+  --m3e-list-item-trailing-space: 12px;
+  --m3e-list-item-between-space: 12px;
+}
+.docs-mdx-list-icon { display: flex; min-width: 20px; color: var(--md-sys-color-primary); }
+.docs-mdx-list-title, .docs-mdx-list-description { display: block; min-width: 0; contain: inline-size; overflow-wrap: anywhere; }
+.docs-mdx-list-description { color: var(--md-sys-color-on-surface-variant); }
+
+.docs-mdx-field { min-width: 0; margin-block: 20px; }
+.docs-mdx-field m3e-form-field { display: flex; width: 100%; --m3e-form-field-container-shape: 8px; --m3e-outlined-form-field-container-shape: 8px; --m3e-form-field-invalid-color: var(--md-sys-color-error); }
+.docs-mdx-field :is(input, textarea):focus-visible { outline: none; }
+.docs-mdx-field textarea { resize: vertical; min-height: 72px; }
+.docs-mdx-field-hint { margin: 6px 16px 0; color: var(--md-sys-color-on-surface-variant); font-size: 12px; line-height: 18px; }
+.docs-mdx-check-row { display: flex; align-items: center; gap: 12px; min-height: 48px; font-size: 14px; line-height: 20px; cursor: pointer; }
+.docs-mdx-check-row > :is(m3e-checkbox, m3e-switch, m3e-radio) { flex: none; }
+/* M3E writes a 38% inline colour on disabled labels; keep them muted but readable (>= 4.5:1). */
+label.docs-mdx-check-row:has(> [aria-disabled='true'], > [disabled]) { color: var(--docs-disabled-label) !important; }
+.docs-mdx-control-description { display: block; color: var(--md-sys-color-on-surface-variant); font-size: 13px; }
+.docs-mdx-radio-field, .docs-mdx-slider { margin-block: 24px; }
+.docs-mdx-field-label { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+.docs-mdx-radio-field m3e-radio-group { display: flex; flex-direction: column; }
+.docs-mdx-slider m3e-slider { display: flex; width: 100%; margin-top: 12px; }
+.docs-mdx-progress { margin-block: 24px; }
+.docs-mdx-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-size: 14px; color: var(--md-sys-color-on-surface-variant); }
+.docs-mdx-progress-label :last-child:not(:first-child) { font-variant-numeric: tabular-nums; color: var(--md-sys-color-primary); }
+.docs-mdx-progress m3e-linear-progress-indicator { display: block; width: 100%; }
+.docs-mdx-progress-static { display: inline-flex; color: var(--md-sys-color-primary); }
+.docs-mdx-progress-circular { display: flex; align-items: center; gap: 20px; }
+.docs-mdx-progress-circular .docs-mdx-progress-label { flex: 1; margin-bottom: 0; }
+.docs-mdx-loading { display: flex; align-items: center; gap: 12px; margin-block: 20px; color: var(--md-sys-color-on-surface-variant); font-size: 14px; }
+.docs-mdx-loading m3e-loading-indicator { width: 48px; height: 48px; }
+.docs-mdx-loading-static { display: none; }
+.docs-mdx-skeleton { position: relative; margin-block: 24px; }
+.docs-mdx-skeleton-line { height: 16px; margin-block: 12px; }
+.docs-mdx-skeleton-line:last-child { width: 65%; }
+/* Vertical stepper on M3 tokens: 56dp step rows (16dp padding around a 24dp indicator),
+   a title-medium label (so it is not smaller than the 16px step content) that is
+   emphasised on the current step, and panel content lined up with the labels. The panel
+   sits after the connector (padding + indicator / 2, plus the 1px line), so its start
+   padding is the label offset (16 + 24 + 16) minus 29px. */
+.docs-mdx-stepper {
+  min-width: 0; margin-block: 24px;
+  --m3e-step-padding: 16px;
+  --m3e-step-icon-label-space: 16px;
+  --m3e-step-font-size: 16px;
+  --m3e-step-line-height: 24px;
+  --m3e-step-tracking: 0.15px;
+  --m3e-step-panel-padding: 0 16px 24px 27px;
+  --m3e-step-panel-spacing: 16px;
+}
+.docs-mdx-stepper m3e-step:not([selected]):not([completed]) { --m3e-step-label-color: var(--md-sys-color-on-surface-variant); }
+.docs-mdx-stepper m3e-step[selected] { --m3e-step-font-weight: 700; }
+.docs-mdx-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.docs-component-preview { background: var(--md-sys-color-surface-container-low); display: grid; gap: 16px; padding: 20px; margin-block: 24px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; }
+.docs-component-preview > :is(.docs-mdx-field, .docs-mdx-progress, .docs-mdx-slider, .docs-mdx-radio-field) { margin-block: 0; }
+.docs-component-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+@media (width < 640px) {
+  .docs-component-preview { padding: 16px; }
+  /* Label offset 12 + 24 + 12, minus the connector at 12 + 12 and its 1px line. */
+  .docs-mdx-stepper { --m3e-step-padding: 12px; --m3e-step-icon-label-space: 12px; --m3e-step-panel-padding: 0 0 20px 23px; }
+  .docs-callout-content { column-gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-mdx-loading m3e-loading-indicator { display: none; }
+  .docs-mdx-loading-static { display: inline-block; color: var(--md-sys-color-primary); }
+}
+/* Mermaid diagrams sit on a low surface, like code blocks, and scroll when wider than the page. */
+.docs-mermaid { display: flex; justify-content: center; margin: 24px 0; padding: 16px; overflow-x: auto; border-radius: 12px; background: var(--md-sys-color-surface-container-low); }
+.docs-mermaid svg { max-width: 100%; height: auto; }
+.docs-mermaid-source { margin: 24px 0; padding: 16px; overflow-x: auto; border-radius: 12px; background: var(--md-sys-color-surface-container-low); color: var(--md-sys-color-on-surface-variant); font-family: var(--font-mono); font-size: 13px; line-height: 20px; }
+/* SVG diagrams are drawn for a light page; give them a light canvas in the dark theme. */
+.dark :is(.docs-image-trigger, .docs-image-stage) img[src$='.svg'] { padding: 12px; border-radius: 12px; background: #ffffff; }
+/* Changelog: versions sit on a timeline rail under their year, each marked by a dot. */
+.docs-changelog > section + section { margin-top: 40px; }
+.prose .docs-changelog-list { list-style: none; margin: 12px 0 0 6px; padding: 0 0 0 28px; border-inline-start: 2px solid var(--md-sys-color-outline-variant); }
+.prose .docs-changelog-list > .docs-changelog-entry { position: relative; margin: 0; padding: 0 0 28px; }
+.prose .docs-changelog-list > .docs-changelog-entry::marker { content: none; }
+.docs-changelog-entry::before { content: ''; position: absolute; inset-inline-start: -36px; top: 8px; width: 14px; height: 14px; border-radius: 50%; background: var(--md-sys-color-primary); box-shadow: 0 0 0 4px var(--md-sys-color-surface); }
+.docs-changelog-header { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 16px; row-gap: 2px; }
+.prose .docs-changelog-header > .docs-heading { margin: 0; }
+.prose .docs-changelog-meta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; color: var(--md-sys-color-on-surface-variant); font-size: 0.875rem; line-height: 1.25rem; }
+.docs-changelog-body { margin-top: 8px; }
+.prose .docs-changelog-body > :first-child { margin-top: 0; }
+.prose .docs-changelog-body > :last-child { margin-bottom: 0; }
+/* Changelog loading state: skeleton blocks in the timeline's shape, with neutral dots. */
+.docs-changelog-loading .docs-mdx-progress { margin-block: 8px 28px; }
+.docs-changelog-skeleton-year { width: 88px; height: 32px; margin-block: 8px 20px; }
+.docs-changelog-skeleton-version { width: 72px; height: 28px; }
+.docs-changelog-skeleton-date { width: 136px; height: 16px; }
+.docs-changelog-skeleton-line { height: 14px; margin-top: 14px; }
+.docs-changelog-skeleton-line:nth-child(1) { width: 92%; }
+.docs-changelog-skeleton-line:nth-child(2) { width: 76%; }
+.docs-changelog-skeleton-line:nth-child(3) { width: 84%; }
+.docs-changelog-skeleton-line:nth-child(4) { width: 58%; }
+.docs-changelog-loading .docs-changelog-entry::before { background: var(--md-sys-color-surface-container-highest); }
+/* Before M3E upgrades the skeleton, show its blocks as plain placeholders. */
+m3e-skeleton:not(:defined) > * { border-radius: 8px; background: var(--md-sys-color-surface-container-high); }

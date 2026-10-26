@@ -1,0 +1,65 @@
+diff --git a/dist/all.js b/dist/all.js
+index 16cf9e1d7f95304defa4548d599383ebd342e53c..6eb380da2ca2d88123377dec54d9325137821b91 100644
+--- a/dist/all.js
++++ b/dist/all.js
+@@ -1399,11 +1399,11 @@ function getTextContent(node, trim = false) {
+         for (const assignedNode of node.assignedNodes({
+           flatten: true
+         })) {
+-          textContent += getTextContent(assignedNode, trim);
++          textContent += getTextContent(assignedNode);
+         }
+       } else {
+         for (const child of node.childNodes) {
+-          textContent += getTextContent(child, trim);
++          textContent += getTextContent(child);
+         }
+       }
+       break;
+diff --git a/dist/core.js b/dist/core.js
+index ea4f3e84986955e39910b30dda3732805ade8c33..002622a953b5884f3f88412a2f02e18b4b23646c 100644
+--- a/dist/core.js
++++ b/dist/core.js
+@@ -592,11 +592,11 @@ function getTextContent(node, trim = false) {
+         for (const assignedNode of node.assignedNodes({
+           flatten: true
+         })) {
+-          textContent += getTextContent(assignedNode, trim);
++          textContent += getTextContent(assignedNode);
+         }
+       } else {
+         for (const child of node.childNodes) {
+-          textContent += getTextContent(child, trim);
++          textContent += getTextContent(child);
+         }
+       }
+       break;
+diff --git a/dist/radio-group.js b/dist/radio-group.js
+index 8a7429165e64960edc92c098b16d5aafafe2c584..b5ca3fb86d60c234efd1080220bdd87368346b39 100644
+--- a/dist/radio-group.js
++++ b/dist/radio-group.js
+@@ -251,6 +251,12 @@ let M3eRadioGroupElement = class M3eRadioGroupElement extends Labelled(RequiredC
+   get value() {
+     return this.selected?.value ?? null;
+   }
++  // FormAssociated restores this property during form.reset().
++  set value(value) {
++    this.radios.forEach(radio => {
++      radio.checked = radio.value === value;
++    });
++  }
+   /** @inheritdoc */
+   markAsTouched() {
+     super.markAsTouched();
+diff --git a/dist/src/radio-group/RadioGroupElement.d.ts b/dist/src/radio-group/RadioGroupElement.d.ts
+index 2fdc03bc6bd66af71191fc23c03c3a77ccc05ec4..976e4bf4e7da95aa077b2e55a84b115f54559f9f 100644
+--- a/dist/src/radio-group/RadioGroupElement.d.ts
++++ b/dist/src/radio-group/RadioGroupElement.d.ts
+@@ -51,6 +51,7 @@ export declare class M3eRadioGroupElement extends M3eRadioGroupElement_base {
+     get selected(): M3eRadioElement | null;
+     /** The selected value of the radio group. */
+     get value(): string | null;
++    set value(value: string | null);
+     /** @inheritdoc */
+     markAsTouched(): void;
+     /** @inheritdoc */

@@ -1,16 +1,15 @@
 'use client';
 import type { UseChatHelpers } from '@ai-sdk/react';
-import { Collapsible } from '@base-ui/react/collapsible';
-import { Tooltip } from '@base-ui/react/tooltip';
+import { M3eExpansionPanel } from '@m3e/react/expansion-panel';
+import { M3eTooltip } from '@m3e/react/tooltip';
 import { useTranslations } from '@fuma-translate/react';
 import type { UIMessage } from 'ai';
 import Link from 'fumadocs-core/link';
-import { buttonVariants } from '../../ui/button';
-import { useCopyButton } from 'fumadocs-ui/utils/use-copy-button';
+import { Button, IconButton } from '../../ui/button';
+import { useCopyButton } from '@/lib/use-copy';
 import {
   ArrowUpIcon,
   CheckIcon,
-  ChevronRightIcon,
   CopyIcon,
   MessageCircleIcon,
   RefreshCwIcon,
@@ -18,7 +17,7 @@ import {
   SquareIcon,
   SquarePenIcon,
   XIcon,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import {
   type ComponentProps,
   createContext,
@@ -30,6 +29,7 @@ import {
   use,
   useEffect,
   useEffectEvent,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -216,16 +216,18 @@ export function AIChatMessages({ className }: { className?: string }) {
               ]
             ).map((question) => (
               <li key={question} className="motion-safe:animate-fd-roll-in" style={stagger(100)}>
-                <button
+                <Button
                   type="button"
-                  className="flex h-7 items-center rounded-lg border px-3 text-[13px] text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
+                  variant="outlined"
+                  size="extra-small"
+                  className="docs-chat-suggestion"
                   onClick={() => {
                     send(question);
                     inputRef.current?.focus();
                   }}
                 >
                   {question}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -292,7 +294,7 @@ export function AIChatInput({ className }: { className?: string }) {
   return (
     <form
       className={cn(
-        'flex items-end gap-1 rounded-lg border bg-fd-popover p-1.5 text-fd-popover-foreground shadow-lg shadow-black/5 transition-[border-color,box-shadow] duration-200 focus-within:border-fd-ring/40 focus-within:ring-4 focus-within:ring-fd-primary/5',
+        'flex items-end gap-1 rounded-lg border border-(--docs-control-outline) bg-fd-popover p-1.5 text-fd-popover-foreground shadow-lg shadow-black/5 transition-[border-color,box-shadow] duration-200 focus-within:border-fd-ring focus-within:ring-1 focus-within:ring-fd-ring',
         className,
       )}
       onSubmit={(e) => {
@@ -339,11 +341,12 @@ export function AIChatInput({ className }: { className?: string }) {
           {`${input}\n`}
         </div>
       </div>
-      <button
+      <IconButton
+        variant="filled"
         type={busy ? 'button' : 'submit'}
         aria-label={busy ? t('Stop', { note: 'aria-label' }) : t('Send', { note: 'aria-label' })}
         disabled={!busy && !text}
-        className="flex size-7 shrink-0 items-center justify-center rounded-md bg-fd-primary text-fd-primary-foreground transition-[background-color,color,scale] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring active:scale-90 disabled:bg-fd-accent disabled:text-fd-muted-foreground motion-reduce:transition-none"
+        className="docs-chat-send"
         onClick={
           busy
             ? () => {
@@ -358,7 +361,7 @@ export function AIChatInput({ className }: { className?: string }) {
           from={<ArrowUpIcon className="size-4" strokeWidth={2.25} />}
           to={<SquareIcon className="size-3 fill-current" />}
         />
-      </button>
+      </IconButton>
     </form>
   );
 }
@@ -369,20 +372,20 @@ export function AIChatTrigger({ className }: { className?: string }) {
   const t = useTranslations({ note: 'AI chat' });
 
   return (
-    <button
+    <Button
       type="button"
+      variant="tonal"
       className={cn(
-        buttonVariants({ variant: 'secondary' }),
-        'fixed inset-e-[calc(--spacing(4)+var(--removed-body-scroll-bar-size,0px))] bottom-4 z-20 gap-2 rounded-2xl text-fd-muted-foreground shadow-lg transition-[translate,opacity] motion-reduce:transition-none',
+        'fixed inset-e-4 bottom-4 z-20 shadow-lg transition-[translate,opacity] motion-reduce:transition-none',
         open && 'translate-y-10 opacity-0',
         className,
       )}
       inert={open}
       onClick={() => setOpen(!open)}
     >
-      <MessageCircleIcon className="size-4.5" />
+      <MessageCircleIcon slot="icon" className="size-4.5" />
       {t('Ask AI')}
-    </button>
+    </Button>
   );
 }
 
@@ -450,30 +453,27 @@ export function AIChatSearch({
   }
 
   return (
-    <Collapsible.Root disabled={links.length === 0} className="motion-safe:animate-fd-fade-in">
-      <Collapsible.Trigger className="group/trigger -ms-1 flex max-w-full items-center gap-2 rounded-md py-0.5 ps-1 pe-1.5 text-start text-sm text-fd-muted-foreground transition-colors not-data-disabled:hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring">
+    <M3eExpansionPanel disabled={links.length === 0} hideToggle={links.length === 0} className="docs-ai-search motion-safe:animate-fd-fade-in">
+      <span slot="header" className="flex min-w-0 items-center gap-2 text-sm text-fd-muted-foreground">
         <span className="flex w-4 shrink-0 justify-center [&_svg]:size-3.5">
           {running ? <Spinner /> : <SearchIcon />}
         </span>
         <span className={cn('shrink-0', running && 'motion-safe:animate-pulse')}>{label}</span>
         {part.input?.query && (
-          <span className="truncate text-fd-muted-foreground/75">“{part.input.query}”</span>
+          <span className="truncate text-fd-muted-foreground">“{part.input.query}”</span>
         )}
         {done && (
-          <span className="shrink-0 text-xs text-fd-muted-foreground/75 tabular-nums">
+          <span className="shrink-0 text-xs text-fd-muted-foreground tabular-nums">
             {links.length === 1
               ? t('1 result')
               : t('{count} results', { variables: { count: String(links.length) } })}
           </span>
         )}
-        <ChevronRightIcon className="size-3.5 shrink-0 opacity-50 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-data-disabled/trigger:hidden group-data-panel-open/trigger:rotate-90 rtl:rotate-180 motion-reduce:transition-none" />
-      </Collapsible.Trigger>
-      <Collapsible.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-[height,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0 motion-reduce:transition-none">
+      </span>
         <div className="ms-[7.5px] mt-1.5 flex flex-col gap-1 border-s ps-4 pb-1 text-xs text-fd-muted-foreground">
           {links}
         </div>
-      </Collapsible.Panel>
-    </Collapsible.Root>
+    </M3eExpansionPanel>
   );
 }
 
@@ -573,13 +573,15 @@ function Failure({ reason, onRetry }: { reason: string; onRetry: () => void }) {
         <p>{t('Something went wrong.')}</p>
         <p className="line-clamp-2 text-xs wrap-break-word text-fd-muted-foreground">{reason}</p>
       </div>
-      <button
+      <Button
         type="button"
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0')}
+        variant="outlined"
+        size="extra-small"
+        className="shrink-0"
         onClick={onRetry}
       >
         {t('Try again')}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -588,26 +590,18 @@ function Action({
   label,
   className,
   ...props
-}: Omit<ComponentProps<'button'>, 'aria-label'> & { label: string }) {
+}: Omit<ComponentProps<typeof IconButton>, 'aria-label'> & { label: string }) {
+  const id = useId();
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger
+    <>
+      <IconButton
+        id={id}
         aria-label={label}
-        className={cn(
-          buttonVariants({ variant: 'ghost' }),
-          'size-7 p-0 text-fd-muted-foreground [&_svg]:size-4',
-          className,
-        )}
+        className={cn('docs-chat-action', className)}
         {...props}
       />
-      <Tooltip.Portal>
-        <Tooltip.Positioner side="bottom" sideOffset={6} className="z-50">
-          <Tooltip.Popup className="origin-(--transform-origin) rounded-md border bg-fd-popover px-2 py-1 text-xs text-fd-popover-foreground shadow-md transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0 motion-reduce:transition-none">
-            {label}
-          </Tooltip.Popup>
-        </Tooltip.Positioner>
-      </Tooltip.Portal>
-    </Tooltip.Root>
+      <M3eTooltip htmlFor={id}>{label}</M3eTooltip>
+    </>
   );
 }
 

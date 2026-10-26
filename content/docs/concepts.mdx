@@ -1,0 +1,43 @@
+---
+title: Terminology
+description: Definitions of the tools, CARP components and study terms used throughout the CARP documentation.
+icon: School
+---
+
+These terms are used throughout the CARP documentation and APIs.
+
+## Tooling
+
+| Term | Definition |
+| --- | --- |
+| **Flutter** | Google's free framework for building mobile apps. One codebase runs on both iOS and Android. CARP apps are Flutter apps. |
+| **Dart** | The programming language Flutter apps are written in. |
+| **Package** | A reusable library that you add to your app as a dependency, for example one that counts steps. Flutter packages are published on [pub.dev](https://pub.dev). |
+| **`pubspec.yaml`** | The file in every Flutter app that lists the packages the app depends on. Add a dependency and run `flutter pub get` to download it. |
+
+## CARP components
+
+| Term | Definition |
+| --- | --- |
+| **carp_core** | The platform-independent CARP domain model. |
+| **CAMS (CARP Mobile Sensing)** | The main CARP package, `carp_mobile_sensing`. The runtime inside your app that runs studies and collects the data. |
+| **Sampling package** | A CARP package that adds a new kind of data to CAMS. CAMS collects steps, screen and battery data out of the box. `carp_context_package` adds location and weather; `carp_polar_package` adds support for Polar heart rate straps. |
+| **CAWS (CARP Web Services)** | CARP's own server, where researchers set up studies, invite participants and receive the data. |
+| **CARP web portal** | The web portal where researchers create studies on CAWS, invite participants and download data. |
+
+## Study terms
+
+A protocol combines measures and triggers. The app executes the protocol and produces measurements, and the data endpoint decides where they go.
+
+| Term | Definition | Example | In code |
+| --- | --- | --- | --- |
+| **Study protocol** | What to collect, from which device, and when. | Steps and screen events, all day | `SmartphoneStudyProtocol` |
+| **Measure** | One type of data to collect. | Steps | `Measure(type: SensorSamplingPackage.STEP_EVENT)` |
+| **Trigger** | When to collect. | Immediately, every hour, every morning at 8:00 | `ImmediateTrigger()` |
+| **Task** | A group of measures that start together. | Background sensing, a morning survey | `BackgroundTask(measures: [...])` |
+| **Device** | A source of data. The phone is added to a protocol as the primary device. | The phone, a smartwatch | `Smartphone()` |
+| **Deployment** | One participant's instance of the protocol, running on their phone. | Anna's study on Anna's phone | Identified by `study.studyDeploymentId` |
+| **Measurement** | One piece of collected data, with a timestamp. | 12 steps at 09:14 | Emitted on `client.measurements` |
+| **Data endpoint** | Where measurements are saved or sent. | On the phone, CAWS, your own server | `SQLiteDataEndPoint()`, `FileDataEndPoint()`, `CarpDataEndPoint` |
+
+To see these terms in working code, build the [Quickstart](/docs/quickstart) app. For the complete model of protocols, devices, triggers, tasks and measures, see [Domain model](/docs/mobile-sensing/domain-model).

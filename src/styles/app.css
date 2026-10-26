@@ -1,16 +1,27 @@
 @import 'tailwindcss';
 @import './theme.css';
-@import 'fumadocs-ui/css/preset.css';
+@import './content.css';
+@import './typography.css';
+@import './m3e.css';
+@import './color-roles.css';
+@import './mdx-components.css';
+@import './docs-extensions.css';
+@import './navigation.css';
+@import './component-colors.css';
+@import './tabs.css';
 
 html {
   scrollbar-gutter: stable;
 }
 
-/* the Spacious layout scrolls in its page panel instead of the window, from `md` up */
-@media (width >= 48rem) {
-  html:has(#fd-spacious-layout) {
-    scrollbar-gutter: auto;
-  }
+/* Keep one scroll container for M3E's TOC at every viewport size. */
+html:has(#docs-layout) {
+  scrollbar-gutter: auto;
+}
+
+body:has(#docs-layout) {
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 html > body[data-scroll-locked] {

@@ -1,0 +1,45 @@
+---
+title: iOS
+description: Enable HealthKit and add the Info.plist usage descriptions for the health plugin on iOS.
+---
+
+On iOS, the plugin uses Apple HealthKit. It requires iOS 13.0 or higher.
+
+<Steps>
+<Step title="Enable the HealthKit capability">
+
+In your Xcode project, open **Targets → Runner → Signing & Capabilities** and add **HealthKit**.
+
+</Step>
+<Step title="Add usage descriptions to Info.plist">
+
+Add both keys, each with the user-facing rationale for your app:
+
+```xml title="ios/Runner/Info.plist"
+<!-- ios/Runner/Info.plist -->
+<key>NSHealthShareUsageDescription</key>
+<string>We will sync your data with the Apple Health app to give you better insights</string>
+<key>NSHealthUpdateUsageDescription</key>
+<string>We will sync your data with the Apple Health app to give you better insights</string>
+```
+
+</Step>
+</Steps>
+
+## Permissions
+
+On iOS, certain types support READ only, such as ECG events. The plugin throws if you request WRITE for these types.
+
+- Types that cannot be written include `ELECTROCARDIOGRAM`, the heart-rate event types (high, low and irregular), `WALKING_HEART_RATE` and `ATRIAL_FIBRILLATION_BURDEN`.
+- When you write data, `recordingMethod` must be `manual` or `automatic`.
+
+See [Permissions](/docs/flutter-plugins/health/permissions) for the iOS permission model.
+
+## iOS-only write types
+
+| Type | Constraint |
+| --- | --- |
+| Audiogram | Can be written on iOS only. |
+| Insulin delivery | Can be written on iOS only. Requires a valid reason: basal or bolus. |
+
+See [Writing data](/docs/flutter-plugins/health/writing) for examples.

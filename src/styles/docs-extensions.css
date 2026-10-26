@@ -1,0 +1,179 @@
+/* Material role pairs give supporting components their own hierarchy. */
+:root, .dark {
+  --m3e-expansion-panel-container-color: var(--md-sys-color-surface-container-low);
+  --m3e-expansion-header-font-size: 14px;
+  --m3e-expansion-header-font-weight: 500;
+  --m3e-expansion-header-line-height: 20px;
+  --m3e-expansion-header-collapsed-height: 52px;
+  --m3e-expansion-header-expanded-height: 52px;
+  --m3e-expansion-header-padding-left: 16px;
+  --m3e-expansion-header-padding-right: 16px;
+  --m3e-expansion-panel-content-padding: 4px 16px 18px;
+  --m3e-expansion-panel-shape: 12px;
+  --m3e-expansion-panel-open-shape: 12px;
+  --m3e-expansion-panel-elevation: none;
+  --m3e-expansion-panel-open-elevation: none;
+}
+/* Accordions follow the M3 Expressive grouped-list structure: tonal panels with no
+   outline or elevation, 2dp apart, with 12dp outer and 4dp inner corners. An open
+   panel separates from its neighbours and rounds every corner, and its chevron turns,
+   so the state never relies on colour. M3E paints fill and shape in shadow DOM from
+   these tokens. */
+.docs-accordions { margin-block: 24px; }
+.docs-accordion, .docs-mobile-toc {
+  /* M3E 2.9 uses this token for space inside the expanded panel's host. */
+  --_expansion-panel-open-spacing: 0px;
+  --m3e-expansion-panel-container-color: var(--md-sys-color-surface-container);
+  --m3e-expansion-panel-shape: 12px; --m3e-expansion-panel-open-shape: 12px;
+  --m3e-expansion-panel-elevation: none; --m3e-expansion-panel-open-elevation: none;
+  /* M3E pulls the chevron into the end padding by this spacing, so keep it at 0 and
+     space the header text from the chevron with its own end padding instead. */
+  --m3e-expansion-header-spacing: 0px;
+}
+.docs-mobile-toc > [slot='header'] { padding-inline-end: 8px; }
+.docs-accordion {
+  display: block;
+  /* Headers size to their text so long titles wrap instead of being cut off. */
+  --m3e-expansion-header-collapsed-height: auto;
+  --m3e-expansion-header-expanded-height: auto;
+  --m3e-expansion-header-padding-left: 16px;
+  --m3e-expansion-header-padding-right: 16px;
+  /* Title-medium headline. */
+  --m3e-expansion-header-font-size: 16px;
+  --m3e-expansion-header-font-weight: 500;
+  --m3e-expansion-header-line-height: 24px;
+  --m3e-expansion-header-tracking: 0.15px;
+  --m3e-expansion-panel-content-padding: 0 16px 16px;
+  transition: margin-top 250ms cubic-bezier(0.2, 0, 0, 1);
+}
+.docs-accordion + .docs-accordion { margin-top: 8px; }
+.docs-accordions > .docs-accordion {
+  --docs-accordion-top-shape: 4px;
+  --docs-accordion-bottom-shape: 4px;
+  --m3e-expansion-panel-shape: var(--docs-accordion-top-shape) var(--docs-accordion-top-shape) var(--docs-accordion-bottom-shape) var(--docs-accordion-bottom-shape);
+}
+.docs-accordions > .docs-accordion + .docs-accordion { margin-top: 2px; }
+/* Group ends, and the edges next to an open panel, take the outer corner. */
+.docs-accordions > .docs-accordion:first-child, .docs-accordions > .docs-accordion[open] + .docs-accordion { --docs-accordion-top-shape: 12px; }
+.docs-accordions > .docs-accordion:last-child, .docs-accordions > .docs-accordion:has(+ .docs-accordion[open]) { --docs-accordion-bottom-shape: 12px; }
+.docs-accordions > .docs-accordion[open]:not(:first-child), .docs-accordions > .docs-accordion[open] + .docs-accordion { margin-top: 8px; }
+/* 56dp one-line and 72dp two-line headers, as in Material lists. */
+.docs-accordion-heading { display: flex; align-items: center; gap: 16px; min-width: 0; min-height: 56px; box-sizing: border-box; padding-block: 16px; padding-inline-end: 16px; white-space: normal; }
+.docs-accordion-heading:has(.docs-accordion-description) { padding-block: 14px; }
+.docs-accordion-heading > svg { flex: none; width: 24px; height: 24px; color: var(--md-sys-color-on-surface-variant); }
+.docs-accordion-heading > span { min-width: 0; }
+.docs-accordion-title { display: block; color: var(--md-sys-color-on-surface); }
+/* Body-medium supporting text. */
+.docs-accordion-description { display: block; color: var(--md-sys-color-on-surface-variant); font-size: 14px; font-weight: 400; line-height: 20px; letter-spacing: 0.2px; }
+.docs-accordion > [slot='toggle-icon'] { color: var(--md-sys-color-on-surface-variant); }
+.docs-accordion[disabled] .docs-accordion-heading { opacity: .38; }
+@media (prefers-reduced-motion: reduce) { .docs-accordion { transition: none; } }
+
+.docs-files { display: block; padding: 12px; margin-block: 24px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); --m3e-tree-item-height: 36px; --m3e-tree-item-font-size: 14px; --m3e-tree-item-shape: 8px; --m3e-tree-item-icon-size: 18px; --m3e-tree-item-inset: 18px; }
+.docs-files [slot='icon'] { color: var(--md-sys-color-secondary); }
+.docs-files [slot='label'] { font-family: var(--font-mono); font-size: 13px; }
+/* Announcements share the callout anatomy: tonal container without an outline, 24dp
+   leading icon, body-medium text and a trailing dismiss button. */
+.docs-banner { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border-radius: 12px; margin-block: 20px; color: var(--md-sys-color-on-secondary-container); background: var(--md-sys-color-secondary-container); }
+.docs-banner > div { flex: 1; min-width: 0; }
+.docs-banner > .docs-mdx-icon { width: 24px; height: 24px; margin-top: -2px; color: var(--md-sys-color-primary); }
+.docs-banner .docs-mdx-body { font-size: 14px; line-height: 20px; letter-spacing: 0.2px; }
+/* Centre the 32dp dismiss button on the first text line and keep it 8dp from the end edge. */
+.docs-banner > m3e-icon-button { flex: none; margin-block: -6px; margin-inline-end: -8px; }
+/* Brand spectrum at container tone: blue, purple, then a blush of the accent red. */
+.docs-banner-expressive { background: linear-gradient(110deg, var(--md-sys-color-primary-container), var(--md-sys-color-tertiary-container) 62%, var(--docs-brand-blush)); color: var(--md-sys-color-on-surface); }
+.docs-frame > .docs-banner { flex: none; margin: 0 16px 8px; }
+.docs-inline-toc { margin-block: 24px; }
+.docs-inline-toc ol { list-style: none; margin: 0; padding: 0; }
+.docs-inline-toc a { display: block; padding: 6px 8px; border-radius: 8px; color: var(--md-sys-color-on-surface-variant); text-decoration: none; font-size: 14px; }
+.docs-inline-toc a:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); color: var(--md-sys-color-on-surface); }
+.docs-type-table { background: var(--md-sys-color-surface); }
+.docs-type-table :is(th, td) { padding: 8px 12px; font-size: 13px; line-height: 20px; vertical-align: top; }
+.docs-type-table th[scope='row'] { background: transparent; min-width: 100px; }
+.docs-type-table td { min-width: 100px; }
+.docs-type-table td.docs-mdx-body { min-width: 180px; font-size: 13px; line-height: 20px; }
+.docs-type-table :is(p, pre, ul, ol, .docs-code-block) { margin-block: 0; }
+.docs-type-table :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 4px; }
+.docs-type-table .docs-mdx-body li + li { margin-top: 2px; }
+/* Type signatures match the constant colour in code blocks. */
+.docs-type-signature { font-family: var(--font-mono); font-size: 12px; line-height: 20px; color: var(--docs-code-constant); overflow-wrap: anywhere; }
+.docs-type-table details { margin-top: 2px; font-size: 12px; line-height: 18px; }
+.docs-type-table details[open] { margin-block: 4px; }
+.docs-type-table summary { cursor: pointer; color: var(--md-sys-color-primary); }
+/* Static steps mirror the vertical stepper: a fully rounded numbered indicator, a 1dp
+   connector with 8dp gaps, and step content aligned with the title. */
+.docs-static-steps { list-style: none; padding: 0; margin-block: 24px; counter-reset: guide-step; }
+.docs-static-step { position: relative; padding-block-end: 24px; padding-inline-start: 44px; counter-increment: guide-step; }
+.docs-static-step::before { content: counter(guide-step); position: absolute; inset-inline-start: 0; top: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface); font-size: 14px; font-weight: 700; line-height: 20px; font-variant-numeric: tabular-nums; }
+.docs-static-step:not(:last-child)::after { content: ''; position: absolute; inset-inline-start: 13px; top: 36px; bottom: 8px; width: 1px; background: var(--md-sys-color-outline-variant); }
+/* A 28px line box centres the first title line on the indicator. */
+.docs-static-step h3 { margin: 0 0 8px; font-size: 20px; font-weight: 600; line-height: 28px; color: var(--docs-heading); }
+.docs-preview { display: block; margin-block: 24px; --m3e-card-padding: 0; --m3e-card-shape: 12px; --m3e-outlined-card-container-color: var(--md-sys-color-surface); }
+.docs-preview-shell { min-width: 0; width: 100%; }
+.docs-preview-label { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--docs-border); font-size: 12px; font-weight: 500; line-height: 20px; color: var(--md-sys-color-on-surface-variant); }
+.docs-preview-label svg { width: 16px; height: 16px; color: var(--md-sys-color-on-surface-variant); }
+.docs-preview-canvas { display: flex; align-items: center; justify-content: center; min-height: 160px; padding: 28px; border-radius: 0 0 12px 12px; background: var(--md-sys-color-surface-container-low); }
+.docs-preview-content { min-width: 0; max-width: 100%; }
+.docs-preview[data-align='start'] .docs-preview-content { width: 100%; }
+.docs-preview-content > :is(.docs-mdx-field, .docs-tabs, .docs-component-actions, .docs-mdx-chips) { margin-block: 0; }
+
+.docs-image-zoom { display: block; margin-block: 24px; }
+.docs-image-trigger { position: relative; display: block; width: 100%; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden; cursor: zoom-in; background: var(--md-sys-color-surface-container-low); }
+.docs-image-trigger img { display: block; width: 100%; height: auto; margin: 0; }
+.docs-image-zoom[data-orientation='portrait'] .docs-image-trigger { width: min(100%, 280px); margin-inline: auto; }
+/* Light raster artwork is dimmed slightly so it does not glare on dark surfaces; SVGs theme themselves. */
+.dark :is(.docs-image-trigger, .docs-image-stage) img:not([src$='.svg'], [src^='data:image/svg+xml']) { filter: brightness(0.86); }
+.docs-image-affordance { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-radius: 999px; background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface); font-size: 12px; }
+/* The pill sits on artwork, which stays light in dark mode, so it keeps a dark fill there too. */
+.dark .docs-image-affordance { background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: 0 0 0 1px var(--md-sys-color-outline-variant); }
+.docs-image-dialog { position: fixed; inset: 0; width: 100dvw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--md-sys-color-surface-container-lowest); color: var(--md-sys-color-on-surface); overflow: hidden; }
+.docs-image-dialog[open] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; animation: docs-image-enter 180ms ease-out; }
+.docs-image-dialog::backdrop { background: var(--md-sys-color-scrim); }
+.docs-image-toolbar { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: max(8px, env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid var(--md-sys-color-outline-variant); background: var(--md-sys-color-surface-container); }
+.docs-image-toolbar > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; font-weight: 500; }
+.docs-image-viewport { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0; }
+.docs-image-stage { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; min-width: 100%; min-height: 100%; padding: 16px; }
+.docs-image-stage img { display: block; width: 100%; height: 100%; max-width: none; min-width: 0; min-height: 0; object-fit: contain; cursor: zoom-in; }
+.docs-image-controls { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 64px; padding: 8px 16px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--md-sys-color-outline-variant); background: var(--md-sys-color-surface-container); }
+.docs-image-controls > span { min-width: 44px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+body:has(.docs-image-dialog[open]) { overflow: hidden; }
+@keyframes docs-image-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .docs-image-dialog[open] { animation: none; } }
+.docs-github-info { display: flex; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; color: var(--md-sys-color-on-surface); background: var(--md-sys-color-surface-container-low); text-decoration: none; margin-block: 20px; }
+.docs-github-info:hover { background: var(--md-sys-color-surface-container); }
+.docs-github-info > svg { width: 24px; height: 24px; flex: none; }
+.docs-github-info > span:first-of-type { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.docs-github-description { display: block; font-size: 13px; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
+.docs-github-stats { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
+.docs-graph { padding: 16px; margin-block: 24px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); }
+.docs-graph-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.docs-graph-viewport { overflow: hidden; border-radius: 8px; background: var(--docs-canvas); box-shadow: inset 0 0 0 1px var(--docs-border); }
+.docs-graph-viewport > svg { display: block; width: 100%; min-height: 240px; }
+.docs-graph line { stroke: var(--docs-graph-edge); stroke-width: 1.25; }
+.docs-graph circle { fill: var(--md-sys-color-secondary); stroke: var(--docs-canvas); stroke-width: 3; }
+.docs-graph text { fill: var(--md-sys-color-on-surface-variant); font-size: 11px; font-family: var(--font-sans); }
+.docs-graph a:hover circle, .docs-graph a:focus circle { fill: var(--md-sys-color-primary); }
+.docs-graph a:hover text { fill: var(--md-sys-color-primary); }
+/* "You are here" adds a halo and a bold label, so it does not rely on colour alone. */
+.docs-graph a[aria-current] circle { fill: var(--md-sys-color-primary); stroke: var(--md-sys-color-primary-container); stroke-width: 6; }
+.docs-graph a[aria-current] text { fill: var(--md-sys-color-on-surface); font-weight: 700; }
+/* Keyboard focus uses the site ring, including on the current node. */
+.docs-graph a:focus-visible { outline: 2px solid var(--color-fd-ring); outline-offset: 2px; border-radius: 4px; }
+.docs-graph a:focus-visible text { fill: var(--md-sys-color-primary); font-weight: 700; }
+.docs-graph-caption { font-size: 12px; color: var(--md-sys-color-on-surface-variant); margin-block: 12px; }
+.docs-graph-list summary { cursor: pointer; font-size: 14px; color: var(--md-sys-color-primary); }
+.docs-graph-list ul { padding: 12px 0 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); list-style: none; gap: 8px; font-size: 13px; }
+.docs-graph-list a { color: var(--md-sys-color-primary); }
+.docs-colour-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-block: 24px; }
+.docs-colour-grid > div { display: flex; align-items: end; min-height: 96px; padding: 16px; border-radius: 12px; font-size: 14px; font-weight: 500; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent); }
+@media (width < 640px) {
+  .docs-preview-canvas { padding: 16px; min-height: 144px; }
+  .docs-image-stage { padding: 8px; }
+  .docs-image-toolbar { gap: 8px; padding-inline: 8px; }
+  .docs-colour-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .docs-github-info { flex-wrap: wrap; }
+  .docs-github-stats { width: 100%; padding-inline-start: 36px; }
+  .docs-graph-list ul { grid-template-columns: 1fr; }
+  .docs-graph .docs-component-actions { gap: 4px; }
+  .docs-banner { gap: 12px; }
+}

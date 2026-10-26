@@ -1,13 +1,21 @@
 import { createGetUrl } from 'fumadocs-core/source';
 
-export const appName = 'Tanstack Start';
+export const appName = 'CARP Docs';
+export const siteDescription = 'Technical documentation for the Copenhagen Research Platform (CARP): Flutter packages for mobile sensing, health data and wearables.';
+// The public origin, for canonical URLs, Open Graph, structured data and the sitemap. Set
+// VITE_SITE_URL to serve the docs from another domain. import.meta.env is undefined in plain
+// Node (vite.config), and process is undefined in the browser.
+// An empty value (e.g. an unset Docker build argument) counts as unset.
+const configuredSiteUrl: string | undefined = import.meta.env?.VITE_SITE_URL || (typeof process === 'undefined' ? undefined : process.env.VITE_SITE_URL);
+export const siteUrl = (configuredSiteUrl || 'https://docs.carp.dk').replace(/\/$/, '');
+export const absoluteUrl = (path: string) => new URL(path, siteUrl).href;
 export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 
-// fill this with your actual GitHub info, for example:
+// The repository behind the GitHub links and "Edit on GitHub". Point it at your own repo.
 export const gitConfig = {
-  user: 'fuma-nama',
-  repo: 'fumadocs',
+  user: 'carp-dk',
+  repo: 'carp-docs-fumadocs',
   branch: 'main',
 };
 
@@ -37,7 +45,8 @@ export function decodeMarkdownUrl(segments: string[]) {
 const getImageUrl = createGetUrl(docsImageRoute);
 
 export function getPageImageUrl(page: { slugs: string[]; locale?: string }) {
-  const segments = [...page.slugs, 'image.webp'];
+  // PNG, which every social platform accepts.
+  const segments = [...page.slugs, 'image.png'];
 
   return { segments, url: getImageUrl(segments, page.locale) };
 }

@@ -1,0 +1,612 @@
+---
+title: Data points
+description: Fetch individual health data points with full details using getHealthDataFromTypes.
+---
+
+`getHealthDataFromTypes` returns the individual data points of one or more types in a time range. Use it when you need raw measurements, timelines or exports. For bucketed or summarized data, see [Interval data](/docs/flutter-plugins/health/reading/interval) and [Aggregate data](/docs/flutter-plugins/health/reading/aggregate).
+
+## Signature
+
+```dart
+Future<List<HealthDataPoint>> getHealthDataFromTypes({
+  required List<HealthDataType> types,
+  required DateTime startTime,
+  required DateTime endTime,
+  Map<HealthDataType, HealthDataUnit>? preferredUnits,
+  List<RecordingMethod> recordingMethodsToFilter = const [],
+})
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `types` | `List<HealthDataType>` | Yes | Health data types to query |
+| `startTime` | `DateTime` | Yes | Start of time range (inclusive) |
+| `endTime` | `DateTime` | Yes | End of time range (inclusive) |
+| `preferredUnits` | `Map<HealthDataType, HealthDataUnit>?` | No | Preferred units per type (iOS only) |
+| `recordingMethodsToFilter` | `List<RecordingMethod>` | No | Recording methods to exclude |
+
+## Return value
+
+The method returns a `List<HealthDataPoint>` of raw data points from the native health platform. The list is deduplicated automatically and sorted by date, although the sort order is implementation-dependent.
+
+Each `HealthDataPoint` has these fields:
+
+| Field | Description |
+|-------|-------------|
+| `uuid` | Unique identifier (iOS) |
+| `value` | Health value (numeric, workout, audiogram and so on) |
+| `type` | Data type |
+| `unit` | Measurement unit |
+| `dateFrom`, `dateTo` | Time range |
+| `sourcePlatform` | iOS or Android |
+| `sourceDeviceId` | Device identifier |
+| `sourceId`, `sourceName` | Data source info |
+| `recordingMethod` | How the data was recorded |
+| `metadata` | Platform-specific metadata |
+| `workoutSummary` | Summary for workout data |
+| `deviceModel` | Device name (iOS only) |
+
+For the complete data model, see the [API reference](https://pub.dev/documentation/health/latest/).
+
+## Query a single type
+
+```dart
+final heartRatePoints = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: DateTime.now().subtract(Duration(hours: 24)),
+  endTime: DateTime.now(),
+);
+
+print('Found ${heartRatePoints.length} heart rate measurements');
+
+for (var point in heartRatePoints) {
+  final value = (point.value as NumericHealthValue).numericValue;
+  print('Heart rate: $value ${point.unit.name} at ${point.dateTo}');
+}
+```
+
+## Query multiple types
+
+```dart
+final vitalSigns = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.HEART_RATE,
+    HealthDataType.BLOOD_OXYGEN,
+    HealthDataType.RESPIRATORY_RATE,
+    HealthDataType.BODY_TEMPERATURE,
+  ],
+  startTime: DateTime.now().subtract(Duration(days: 7)),
+  endTime: DateTime.now(),
+);
+
+// Group by type
+final byType = <HealthDataType, List<HealthDataPoint>>{};
+for (var point in vitalSigns) {
+  byType.putIfAbsent(point.type, () => []).add(point);
+}
+
+print('Heart rate: ${byType[HealthDataType.HEART_RATE]?.length ?? 0} points');
+print('Blood oxygen: ${byType[HealthDataType.BLOOD_OXYGEN]?.length ?? 0} points');
+```
+
+## Request preferred units (iOS)
+
+On iOS, you can request data in specific units:
+
+```dart
+final data = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.HEIGHT,
+    HealthDataType.WEIGHT,
+    HealthDataType.DISTANCE_WALKING_RUNNING,
+  ],
+  startTime: start,
+  endTime: end,
+  preferredUnits: {
+    HealthDataType.HEIGHT: HealthDataUnit.CENTIMETER,  // Instead of meters
+    HealthDataType.WEIGHT: HealthDataUnit.POUND,       // Instead of kg
+    HealthDataType.DISTANCE_WALKING_RUNNING: HealthDataUnit.MILE, // Instead of meters
+  },
+);
+```
+
+<Callout type="info">
+
+`preferredUnits` is iOS-only. On Android, data is always returned in default units.
+
+</Callout>
+
+To convert values in your app instead, map between `HealthDataUnit` values:
+
+```dart
+double convertUnit(
+  double value,
+  HealthDataUnit from,
+  HealthDataUnit to,
+) {
+  // Weight conversions
+  if (from == HealthDataUnit.KILOGRAM && to == HealthDataUnit.POUND) {
+    return value * 2.20462;
+  }
+  if (from == HealthDataUnit.POUND && to == HealthDataUnit.KILOGRAM) {
+    return value / 2.20462;
+  }
+  
+  // Length conversions
+  if (from == HealthDataUnit.CENTIMETER && to == HealthDataUnit.INCH) {
+    return value / 2.54;
+  }
+  if (from == HealthDataUnit.INCH && to == HealthDataUnit.CENTIMETER) {
+    return value * 2.54;
+  }
+  
+  // Temperature conversions
+  if (from == HealthDataUnit.DEGREE_CELSIUS && to == HealthDataUnit.DEGREE_FAHRENHEIT) {
+    return (value * 9/5) + 32;
+  }
+  if (from == HealthDataUnit.DEGREE_FAHRENHEIT && to == HealthDataUnit.DEGREE_CELSIUS) {
+    return (value - 32) * 5/9;
+  }
+  
+  return value;
+}
+```
+
+## Filter by recording method
+
+Exclude data based on how it was recorded:
+
+```dart
+// Exclude manual entries
+final autoData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS, HealthDataType.DISTANCE_WALKING_RUNNING],
+  startTime: start,
+  endTime: end,
+  recordingMethodsToFilter: [RecordingMethod.manual],
+);
+
+// Exclude unknown sources
+final knownData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: start,
+  endTime: end,
+  recordingMethodsToFilter: [RecordingMethod.unknown],
+);
+
+// Android: Exclude multiple methods
+final activeOnlyData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startTime: start,
+  endTime: end,
+  recordingMethodsToFilter: [
+    RecordingMethod.manual,
+    RecordingMethod.unknown,
+  ],
+);
+```
+
+For the recording methods each platform reports, see [Recording methods](/docs/flutter-plugins/health/reading#recording-methods).
+
+## Value types
+
+The class of `point.value` depends on the data type. Cast it to the matching `HealthValue` subclass.
+
+### Numeric values
+
+Most health metrics are numeric:
+
+```dart
+final data = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WEIGHT],
+  startTime: start,
+  endTime: end,
+);
+
+for (var point in data) {
+  final numericValue = point.value as NumericHealthValue;
+  print('Weight: ${numericValue.numericValue} ${point.unit.name}');
+}
+```
+
+### Workout values
+
+Workouts carry detailed activity information:
+
+```dart
+final workouts = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startTime: start,
+  endTime: end,
+);
+
+for (var point in workouts) {
+  final workout = point.value as WorkoutHealthValue;
+  
+  print('Activity: ${workout.workoutActivityType.name}');
+  print('Duration: ${point.dateTo.difference(point.dateFrom)}');
+  
+  if (workout.totalEnergyBurned != null) {
+    print('Calories: ${workout.totalEnergyBurned} ${workout.totalEnergyBurnedUnit?.name}');
+  }
+  
+  if (workout.totalDistance != null) {
+    print('Distance: ${workout.totalDistance} ${workout.totalDistanceUnit?.name}');
+  }
+  
+  if (workout.totalSteps != null) {
+    print('Steps: ${workout.totalSteps}');
+  }
+  
+  // Check workout summary
+  if (point.workoutSummary != null) {
+    print('Summary: ${point.workoutSummary}');
+  }
+}
+```
+
+### Nutrition values
+
+Nutrition data includes macronutrients and micronutrients:
+
+```dart
+final meals = await health.getHealthDataFromTypes(
+  types: [HealthDataType.NUTRITION],
+  startTime: start,
+  endTime: end,
+);
+
+for (var point in meals) {
+  final nutrition = point.value as NutritionHealthValue;
+  
+  print('Meal: ${nutrition.name ?? "Unknown"}');
+  print('Type: ${nutrition.mealType ?? "Unknown"}');
+  
+  if (nutrition.calories != null) {
+    print('Calories: ${nutrition.calories} kcal');
+  }
+  if (nutrition.protein != null) {
+    print('Protein: ${nutrition.protein}g');
+  }
+  if (nutrition.carbs != null) {
+    print('Carbs: ${nutrition.carbs}g');
+  }
+  if (nutrition.fat != null) {
+    print('Fat: ${nutrition.fat}g');
+  }
+}
+```
+
+### Audiogram values (iOS)
+
+Hearing test results:
+
+```dart
+final audiograms = await health.getHealthDataFromTypes(
+  types: [HealthDataType.AUDIOGRAM],
+  startTime: start,
+  endTime: end,
+);
+
+for (var point in audiograms) {
+  final audiogram = point.value as AudiogramHealthValue;
+  
+  print('Frequencies: ${audiogram.frequencies}');
+  print('Left ear: ${audiogram.leftEarSensitivities} dB');
+  print('Right ear: ${audiogram.rightEarSensitivities} dB');
+}
+```
+
+### ECG values (iOS)
+
+Electrocardiogram data:
+
+```dart
+final ecgs = await health.getHealthDataFromTypes(
+  types: [HealthDataType.ELECTROCARDIOGRAM],
+  startTime: start,
+  endTime: end,
+);
+
+for (var point in ecgs) {
+  final ecg = point.value as ElectrocardiogramHealthValue;
+  
+  print('Voltage readings: ${ecg.voltageValues.length}');
+  print('Average heart rate: ${ecg.averageHeartRate} BPM');
+  print('Sampling frequency: ${ecg.samplingFrequency} Hz');
+  print('Classification: ${ecg.classification?.name}');
+  
+  // Access individual voltage readings
+  for (var voltage in ecg.voltageValues.take(5)) {
+    print('  ${voltage.timeSinceSampleStart}s: ${voltage.voltage}V');
+  }
+}
+```
+
+## Time ranges
+
+### Recent data
+
+```dart
+// Last hour
+final lastHour = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: DateTime.now().subtract(Duration(hours: 1)),
+  endTime: DateTime.now(),
+);
+
+// Last 24 hours
+final last24h = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startTime: DateTime.now().subtract(Duration(hours: 24)),
+  endTime: DateTime.now(),
+);
+
+// Last 7 days
+final lastWeek = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WEIGHT],
+  startTime: DateTime.now().subtract(Duration(days: 7)),
+  endTime: DateTime.now(),
+);
+```
+
+### Calendar ranges
+
+```dart
+final now = DateTime.now();
+
+// Today (since midnight)
+final today = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startTime: DateTime(now.year, now.month, now.day),
+  endTime: now,
+);
+
+// This week (Monday to now)
+final weekday = now.weekday; // 1 = Monday, 7 = Sunday
+final thisWeekStart = now.subtract(Duration(days: weekday - 1));
+final thisWeek = await health.getHealthDataFromTypes(
+  types: [HealthDataType.ACTIVE_ENERGY_BURNED],
+  startTime: DateTime(thisWeekStart.year, thisWeekStart.month, thisWeekStart.day),
+  endTime: now,
+);
+
+// This month
+final thisMonth = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startTime: DateTime(now.year, now.month, 1),
+  endTime: now,
+);
+
+// This year
+final thisYear = await health.getHealthDataFromTypes(
+  types: [HealthDataType.WEIGHT],
+  startTime: DateTime(now.year, 1, 1),
+  endTime: now,
+);
+```
+
+### Custom ranges
+
+```dart
+// Specific date range
+final custom = await health.getHealthDataFromTypes(
+  types: [HealthDataType.BLOOD_PRESSURE_SYSTOLIC],
+  startTime: DateTime(2024, 1, 1),
+  endTime: DateTime(2024, 12, 31),
+);
+
+// Between two timestamps
+final between = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: DateTime.parse('2024-06-01T00:00:00'),
+  endTime: DateTime.parse('2024-06-30T23:59:59'),
+);
+```
+
+## Process data
+
+### Calculate statistics
+
+```dart
+Future<HealthStats> calculateStats(
+  List<HealthDataPoint> data,
+) async {
+  if (data.isEmpty) {
+    return HealthStats.empty();
+  }
+  
+  final values = data
+      .map((p) => (p.value as NumericHealthValue).numericValue.toDouble())
+      .toList();
+  
+  values.sort();
+  
+  final sum = values.reduce((a, b) => a + b);
+  final mean = sum / values.length;
+  final min = values.first;
+  final max = values.last;
+  final median = values[values.length ~/ 2];
+  
+  return HealthStats(
+    count: values.length,
+    sum: sum,
+    mean: mean,
+    min: min,
+    max: max,
+    median: median,
+  );
+}
+
+// Usage
+final heartRate = await health.getHealthDataFromTypes(
+  types: [HealthDataType.HEART_RATE],
+  startTime: DateTime.now().subtract(Duration(days: 7)),
+  endTime: DateTime.now(),
+);
+
+final stats = await calculateStats(heartRate);
+print('Average heart rate: ${stats.mean.toStringAsFixed(1)} BPM');
+print('Range: ${stats.min} - ${stats.max} BPM');
+```
+
+### Group by date
+
+```dart
+Map<DateTime, List<HealthDataPoint>> groupByDate(
+  List<HealthDataPoint> data,
+) {
+  final grouped = <DateTime, List<HealthDataPoint>>{};
+  
+  for (var point in data) {
+    final date = DateTime(
+      point.dateTo.year,
+      point.dateTo.month,
+      point.dateTo.day,
+    );
+    
+    grouped.putIfAbsent(date, () => []).add(point);
+  }
+  
+  return grouped;
+}
+
+// Usage
+final steps = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startTime: DateTime.now().subtract(Duration(days: 30)),
+  endTime: DateTime.now(),
+);
+
+final byDate = groupByDate(steps);
+
+for (var entry in byDate.entries) {
+  final dailyTotal = entry.value
+      .map((p) => (p.value as NumericHealthValue).numericValue)
+      .reduce((a, b) => a + b);
+  
+  print('${entry.key.toLocal()}: $dailyTotal steps');
+}
+```
+
+### Filter by source
+
+```dart
+List<HealthDataPoint> filterBySource(
+  List<HealthDataPoint> data,
+  String sourceName,
+) {
+  return data.where((p) => p.sourceName == sourceName).toList();
+}
+
+// Get all Apple Watch data
+final allData = await health.getHealthDataFromTypes(...);
+final watchData = filterBySource(allData, 'Apple Watch');
+```
+
+## Platform-specific behavior
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+On Android, the plugin computes BMI from weight and height. Requesting `BODY_MASS_INDEX` fetches weight and height automatically. BMI is calculated from the last observed height and all weight measurements in the range.
+
+```dart
+// Requesting BMI automatically fetches weight and height
+final bmiData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.BODY_MASS_INDEX],
+  startTime: start,
+  endTime: end,
+);
+
+// BMI is calculated using last observed height
+// and all weight measurements in the range
+```
+
+</Tab>
+<Tab value="iOS">
+
+On iOS, sleep types are converted to minutes automatically, based on the time range.
+
+```dart
+final sleep = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.SLEEP_AWAKE,
+    HealthDataType.SLEEP_REM,
+    HealthDataType.SLEEP_DEEP,
+  ],
+  startTime: DateTime.now().subtract(Duration(days: 1)),
+  endTime: DateTime.now(),
+);
+
+for (var point in sleep) {
+  final minutes = (point.value as NumericHealthValue).numericValue;
+  print('${point.type.name}: ${minutes} minutes');
+  print('  From: ${point.dateFrom}');
+  print('  To: ${point.dateTo}');
+}
+```
+
+</Tab>
+</Tabs>
+
+## Error handling
+
+Validate the time range, request missing permissions and rethrow errors after logging them:
+
+```dart
+Future<List<HealthDataPoint>> fetchDataSafely({
+  required List<HealthDataType> types,
+  required DateTime start,
+  required DateTime end,
+}) async {
+  try {
+    // Validate time range
+    if (start.isAfter(end)) {
+      throw ArgumentError('Start time must be before end time');
+    }
+    
+    // Check permissions
+    final hasPerms = await health.hasPermissions(types);
+    if (hasPerms != true) {
+      final granted = await health.requestAuthorization(types);
+      if (!granted) {
+        throw StateError('Permissions denied');
+      }
+    }
+    
+    // Fetch data
+    final data = await health.getHealthDataFromTypes(
+      types: types,
+      startTime: start,
+      endTime: end,
+    );
+    
+    return data;
+  } on HealthException catch (e) {
+    print('Health error for ${e.dataType}: ${e.cause}');
+    rethrow;
+  } on PlatformException catch (e) {
+    print('Platform error: ${e.code} - ${e.message}');
+    rethrow;
+  } catch (e) {
+    print('Unexpected error: $e');
+    rethrow;
+  }
+}
+```
+
+## Performance tips
+
+1. **Limit time ranges.** Smaller ranges make faster queries.
+2. **Request only the types you need.**
+3. **Filter by recording method** to reduce the amount of data.
+4. **Cache results.** Store recent queries in memory.
+5. **Paginate large ranges.** Break queries of a year or more into chunks; see [Paginate](/docs/flutter-plugins/health/reading#paginate).
+
+## Related
+
+- [Interval data](/docs/flutter-plugins/health/reading/interval): time-bucketed data
+- [Aggregate data](/docs/flutter-plugins/health/reading/aggregate): multi-type summaries
+- [Data types](/docs/flutter-plugins/health/data-types): all available health data types
+- [API reference](https://pub.dev/documentation/health/latest/): full `HealthDataPoint` data model

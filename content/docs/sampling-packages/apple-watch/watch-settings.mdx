@@ -1,0 +1,85 @@
+---
+title: Watch settings
+description: The exact keys the phone hands to the watch app, and the AppleWatchDevice properties they come from.
+icon: Settings
+---
+
+When the watch app calls `AWWCSessionManager.shared.applyiPhoneSettings`, the phone answers with the dictionary below. Every value comes from the `AppleWatchDevice` in the deployed study protocol, produced by `AppleWatchDevice.toWatchSettings()`.
+
+Use this page when you write your own watch app, extend the [example watch app](/docs/sampling-packages/apple-watch/watch-app/source-code), or debug why a setting did not take effect.
+
+## Settings dictionary
+
+| Key | Type | Applied automatically by AWARE | From `AppleWatchDevice` |
+|---|---|---|---|
+| `label` | String | ✓ `sensor.set(label:)` | `label` |
+| `db_host` | String | ✓ `dbEngine.config.host` | `awareServerUrl` |
+| `debug` | Bool | ✓ `syncConfig.debug` | `enableNativeLogging` |
+| `motion_sensor_hz` | Int | — | `motionSamplingRate` |
+| `watch_motion_enabled` | Bool | — | `motionEnabled` |
+| `watch_motion_accelerometer_enabled` | Bool | — | `accelerometerEnabled` |
+| `watch_motion_device_motion_enabled` | Bool | — | `deviceMotionEnabled` |
+| `watch_battery_enabled` | Bool | — | `batteryEnabled` |
+| `watch_device_enabled` | Bool | — | `deviceInfoEnabled` |
+| `watch_healthkit_enabled` | Bool | — | `heartRateEnabled` |
+| `watch_location_enabled` | Bool | — | `locationEnabled` |
+| `watch_heading_enabled` | Bool | — | `headingEnabled` |
+| `watch_bluetooth_enabled` | Bool | — | `bluetoothEnabled` |
+| `watch_audio_enabled` | Bool | — | `audioEnabled` |
+| `watch_audio_ambient_noise_enabled` | Bool | — | `ambientNoiseEnabled` |
+| `watch_audio_classification_enabled` | Bool | — | `audioClassificationEnabled` |
+| `watch_audio_duty_cycle_enabled` | Bool | — | `audioDutyCycleEnabled` |
+| `watch_audio_active_duration` | Double (seconds) | — | `audioActiveDuration` |
+| `watch_audio_rest_duration` | Double (seconds) | — | `audioRestDuration` |
+| `file_transfer_interval_seconds` | Double (seconds) | — | `fileTransferInterval` |
+| `watch_background_session_type` | String | — | `backgroundSessionType` |
+| `watch_transfer_mode` | String | — | `transferMode` |
+| `watch_delete_after_transfer` | Bool | — | `deleteAfterTransfer` |
+
+**Applied automatically by AWARE** means the framework applies the value to every registered sensor on its own. The watch app has to read and apply everything else, because only the watch app knows which sensors exist. That is what `apply(settings:)` does in [the example controller](/docs/sampling-packages/apple-watch/watch-app/source-code).
+
+<Callout type="info">
+
+The last two keys, `watch_transfer_mode` and `watch_delete_after_transfer`, are added by `carp_aware_package`. The plain AWARE framework does not know about them, so they are forwarded to the watch verbatim.
+
+</Callout>
+
+## Phone-side only
+
+One setting never reaches the watch:
+
+| Key | From `AppleWatchDevice` | Effect |
+|---|---|---|
+| `save_to_local_aware_database` | `saveToLocalAwareDatabase` | Whether the phone also writes received records into its own AWARE database |
+
+## Adding a setting of your own
+
+A custom setting takes two small changes, one on each side:
+
+<Steps>
+<Step title="Send it from Dart">
+
+Add the key to `AppleWatchDevice.toWatchSettings()`. Keys the native `AppleWatchSensor.Config` does not recognize are forwarded to the watch unchanged, so no native change is needed on the phone.
+
+</Step>
+<Step title="Read it on the watch">
+
+Pick it up in `apply(settings:)` in your watch controller and apply it to the sensor configuration it belongs to.
+
+```swift
+if let threshold = settings["my_custom_threshold"] as? Double {
+    mySensor.CONFIG.threshold = threshold
+}
+```
+
+</Step>
+</Steps>
+
+## When settings take effect
+
+Settings are **pulled** by the watch, not pushed to it. The watch app requests them:
+
+- on startup;
+- whenever it calls `applyiPhoneSettings()`, for example from the **Reload settings** button in the example app.
+
+After applying them, the controller restarts the sensors, so a changed configuration takes effect as soon as it has been fetched. A protocol update therefore reaches the watch within one watch-app launch, not instantly.

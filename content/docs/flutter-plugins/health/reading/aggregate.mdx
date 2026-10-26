@@ -1,0 +1,240 @@
+---
+title: Aggregate data
+description: Fetch pre-aggregated health data summaries across multiple types using getHealthAggregateDataFromTypes.
+---
+
+`getHealthAggregateDataFromTypes` returns aggregate summaries across multiple types in one call. It is optimized for workout and activity data. You control whether manual entries are included and the activity segment duration.
+
+## Signature
+
+```dart
+Future<List<HealthDataPoint>> getHealthAggregateDataFromTypes({
+  required List<HealthDataType> types,
+  required DateTime startDate,
+  required DateTime endDate,
+  int activitySegmentDuration = 1,
+  bool includeManualEntry = true,
+})
+```
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `types` | `List<HealthDataType>` | Yes | - | Health data types to query |
+| `startDate` | `DateTime` | Yes | - | Start of time range |
+| `endDate` | `DateTime` | Yes | - | End of time range |
+| `activitySegmentDuration` | `int` | No | 1 | Activity segment duration in **minutes** |
+| `includeManualEntry` | `bool` | No | `true` | Include manually entered data |
+
+## Read workout summaries
+
+```dart
+final workoutSummaries = await health.getHealthAggregateDataFromTypes(
+  types: [
+    HealthDataType.WORKOUT,
+    HealthDataType.TOTAL_CALORIES_BURNED,
+    HealthDataType.DISTANCE_WALKING_RUNNING,
+  ],
+  startDate: DateTime.now().subtract(Duration(days: 7)),
+  endDate: DateTime.now(),
+  activitySegmentDuration: 1,
+  includeManualEntry: true,
+);
+
+for (var point in workoutSummaries) {
+  if (point.type == HealthDataType.WORKOUT) {
+    final workout = point.value as WorkoutHealthValue;
+    print('Workout: ${workout.workoutActivityType.name}');
+    print('Duration: ${point.dateTo.difference(point.dateFrom)}');
+    
+    if (workout.totalEnergyBurned != null) {
+      print('Calories: ${workout.totalEnergyBurned}');
+    }
+  }
+}
+```
+
+## Set the activity segment duration
+
+`activitySegmentDuration` controls the granularity of the activity aggregation:
+
+```dart
+// 1-minute segments (most detailed)
+final detailed = await health.getHealthAggregateDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startDate: start,
+  endDate: end,
+  activitySegmentDuration: 1,
+);
+
+// 5-minute segments (balanced)
+final balanced = await health.getHealthAggregateDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startDate: start,
+  endDate: end,
+  activitySegmentDuration: 5,
+);
+
+// 15-minute segments (coarse)
+final coarse = await health.getHealthAggregateDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startDate: start,
+  endDate: end,
+  activitySegmentDuration: 15,
+);
+```
+
+## Filter manual entries
+
+```dart
+// Exclude manual entries
+final autoOnly = await health.getHealthAggregateDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startDate: start,
+  endDate: end,
+  includeManualEntry: false,
+);
+
+// Include manual entries (default)
+final all = await health.getHealthAggregateDataFromTypes(
+  types: [HealthDataType.WORKOUT],
+  startDate: start,
+  endDate: end,
+  includeManualEntry: true,
+);
+```
+
+## Query multiple types
+
+Query several related metrics at once:
+
+```dart
+final activityData = await health.getHealthAggregateDataFromTypes(
+  types: [
+    HealthDataType.WORKOUT,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.DISTANCE_WALKING_RUNNING,
+    HealthDataType.STEPS,
+    HealthDataType.HEART_RATE,
+  ],
+  startDate: DateTime.now().subtract(Duration(days: 30)),
+  endDate: DateTime.now(),
+);
+
+// Group by type
+final byType = <HealthDataType, List<HealthDataPoint>>{};
+for (var point in activityData) {
+  byType.putIfAbsent(point.type, () => []).add(point);
+}
+
+print('Workouts: ${byType[HealthDataType.WORKOUT]?.length ?? 0}');
+print('Energy data points: ${byType[HealthDataType.ACTIVE_ENERGY_BURNED]?.length ?? 0}');
+```
+
+## Examples
+
+### Workout dashboard
+
+```dart
+class WorkoutStats {
+  final int totalWorkouts;
+  final Duration totalDuration;
+  final double totalCalories;
+  final double totalDistance;
+  
+  WorkoutStats({
+    required this.totalWorkouts,
+    required this.totalDuration,
+    required this.totalCalories,
+    required this.totalDistance,
+  });
+}
+
+Future<WorkoutStats> getWorkoutStats(DateTime start, DateTime end) async {
+  final data = await health.getHealthAggregateDataFromTypes(
+    types: [HealthDataType.WORKOUT],
+    startDate: start,
+    endDate: end,
+  );
+  
+  int workoutCount = 0;
+  Duration totalDuration = Duration.zero;
+  double totalCalories = 0;
+  double totalDistance = 0;
+  
+  for (var point in data) {
+    if (point.type == HealthDataType.WORKOUT) {
+      workoutCount++;
+      totalDuration += point.dateTo.difference(point.dateFrom);
+      
+      final workout = point.value as WorkoutHealthValue;
+      totalCalories += workout.totalEnergyBurned ?? 0;
+      totalDistance += workout.totalDistance ?? 0;
+    }
+  }
+  
+  return WorkoutStats(
+    totalWorkouts: workoutCount,
+    totalDuration: totalDuration,
+    totalCalories: totalCalories,
+    totalDistance: totalDistance,
+  );
+}
+```
+
+### Activity type breakdown
+
+```dart
+Future<Map<HealthWorkoutActivityType, int>> getWorkoutTypeBreakdown(
+  DateTime start,
+  DateTime end,
+) async {
+  final workouts = await health.getHealthAggregateDataFromTypes(
+    types: [HealthDataType.WORKOUT],
+    startDate: start,
+    endDate: end,
+  );
+  
+  final breakdown = <HealthWorkoutActivityType, int>{};
+  
+  for (var point in workouts) {
+    final workout = point.value as WorkoutHealthValue;
+    breakdown[workout.workoutActivityType] = 
+        (breakdown[workout.workoutActivityType] ?? 0) + 1;
+  }
+  
+  return breakdown;
+}
+
+// Usage
+final breakdown = await getWorkoutTypeBreakdown(
+  DateTime.now().subtract(Duration(days: 30)),
+  DateTime.now(),
+);
+
+breakdown.forEach((type, count) {
+  print('${type.name}: $count workouts');
+});
+```
+
+## Platform differences
+
+The data structure may vary between platforms.
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+Returns aggregate workout data from Health Connect.
+
+</Tab>
+<Tab value="iOS">
+
+Returns workout sessions with summary data.
+
+</Tab>
+</Tabs>
+
+## Related
+
+- [Data points](/docs/flutter-plugins/health/reading/basic): individual data points
+- [Interval data](/docs/flutter-plugins/health/reading/interval): time-bucketed data
+- [Writing workouts](/docs/flutter-plugins/health/writing/workouts): create workout data

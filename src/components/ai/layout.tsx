@@ -1,8 +1,8 @@
 'use client';
-import { DocsLayout as Layout, type DocsLayoutProps } from '@/layouts/spacious';
+import { DocsLayout as Layout, type DocsLayoutProps } from '@/components/m3e/layout';
 import { AIChat, AIChatPanel, useAIChat } from './search';
 
-// the Spacious layout has its own "Ask AI" buttons, in place of the floating `AIChatTrigger`
+// The docs shell provides desktop and mobile controls for the shared assistant.
 export function DocsLayout(props: DocsLayoutProps) {
   return (
     <AIChat>

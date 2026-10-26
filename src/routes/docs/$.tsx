@@ -1,20 +1,23 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { DocsLayout } from '@/components/ai/layout';
 import { createServerFn } from '@tanstack/react-start';
-import { docs, source } from '@/lib/source';
+import { docs, getPageSection, source } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
   DocsPage,
   DocsTitle,
-  MarkdownCopyButton,
-  ViewOptionsPopover,
-} from '@/layouts/spacious/page';
+} from '@/components/m3e/page';
+import { MarkdownCopyButton, ViewOptionsPopover } from '@/components/ai/page-actions';
+import { ChangelogContext, changelogToc, useChangelog } from '@/components/m3e/changelog';
 import { baseOptions } from '@/lib/layout.shared';
-import { getPageImageUrl, getPageMarkdownUrl, gitConfig } from '@/lib/shared';
+import { changelogKey } from '@/lib/changelog';
+import { absoluteUrl, appName, getPageImageUrl, getPageMarkdownUrl, gitConfig, siteDescription } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
 import { Suspense, use } from 'react';
 import { useMDXComponents } from '@/components/mdx';
+import { getSearchPages } from '@/components/m3e/search-results';
+import { buildDocsGraph } from '@/lib/docs-graph';
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
@@ -24,9 +27,30 @@ export const Route = createFileRoute('/docs/$')({
     await docs.getPage(data.path)?.preload();
     return data;
   },
-  head: ({ loaderData }) => ({
-    meta: loaderData ? [{ property: 'og:image', content: loaderData.imageUrl }] : [],
-  }),
+  head: ({ loaderData }) => {
+    if (!loaderData) return {};
+    const { seo } = loaderData;
+    return {
+      meta: [
+        { title: seo.documentTitle },
+        { name: 'description', content: seo.description },
+        { property: 'og:type', content: seo.type },
+        { property: 'og:url', content: seo.url },
+        { property: 'og:title', content: seo.title },
+        { property: 'og:description', content: seo.description },
+        { property: 'og:image', content: seo.image },
+        { property: 'og:image:type', content: 'image/png' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { property: 'og:image:alt', content: seo.title },
+        { name: 'twitter:title', content: seo.title },
+        { name: 'twitter:description', content: seo.description },
+        { name: 'twitter:image', content: seo.image },
+      ],
+      links: [{ rel: 'canonical', href: seo.url }],
+      scripts: [{ type: 'application/ld+json', children: JSON.stringify(seo.jsonLd) }],
+    };
+  },
 });
 
 const serverLoader = createServerFn({
@@ -36,27 +60,75 @@ const serverLoader = createServerFn({
   .handler(async ({ data: slugs }) => {
     const page = source.getPage(slugs);
     if (!page) throw notFound();
+    const tree = source.getPageTree();
 
     return {
       path: page.path,
       markdownUrl: getPageMarkdownUrl(page).url,
-      imageUrl: getPageImageUrl(page).url,
-      pageTree: await source.serializePageTree(source.getPageTree()),
+      pageTree: await source.serializePageTree(tree),
+      searchPages: getSearchPages(tree),
+      graph: buildDocsGraph(),
+      // Changelog pages fetch their release notes in the browser on every visit.
+      changelog: changelogKey(page.slugs),
+      seo: pageSeo(page),
     };
   });
 
-function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
+/** Title, description, URLs and structured data for a page's head. */
+function pageSeo(page: NonNullable<ReturnType<typeof source.getPage>>) {
+  const url = absoluteUrl(page.url);
+  const image = absoluteUrl(getPageImageUrl(page).url);
+  const description = page.data.description ?? siteDescription;
+  // A package section's pages repeat names like "Installation", so their titles name the section.
+  const section = getPageSection(page.url);
+  const title = section && !section.isOverview ? `${page.data.title} – ${section.name}` : page.data.title;
+  // The docs home is the site itself; every other page is an article in it.
+  const home = source.getPage([]);
+  const isHome = page.url === home?.url;
+  const documentTitle = isHome ? page.data.title : `${title} | ${appName}`;
+  // Breadcrumbs follow the URL: the docs home, each parent page, then the page itself.
+  const parents = page.slugs.slice(0, -1).flatMap((_, index) => source.getPage(page.slugs.slice(0, index + 1)) ?? []);
+  const trail = isHome || !home ? [page] : [home, ...parents, page];
+  const breadcrumbs = trail.map(item => ({ name: item.url === home?.url ? appName : item.data.title, url: absoluteUrl(item.url) }));
+  const publisher = { '@type': 'Organization', name: 'Copenhagen Research Platform (CARP)', url: 'https://carp.dk' };
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': isHome ? [{ '@type': 'WebSite', name: appName, url, description, inLanguage: 'en', publisher }] : [
+      {
+        '@type': 'TechArticle',
+        headline: page.data.title,
+        description,
+        url,
+        image,
+        inLanguage: 'en',
+        isPartOf: { '@type': 'WebSite', name: appName, url: absoluteUrl('/docs') },
+        publisher,
+      },
+      ...breadcrumbs.length > 1 ? [{
+        '@type': 'BreadcrumbList',
+        itemListElement: breadcrumbs.map((item, index) => ({ '@type': 'ListItem', position: index + 1, name: item.name, item: item.url })),
+      }] : [],
+    ],
+  };
+  return { type: isHome ? 'website' : 'article', title, documentTitle, description, url, image, jsonLd };
+}
+
+// Until the release notes arrive, a placeholder entry keeps the table of contents in place.
+const loadingToc = [{ title: 'Releases', url: '#releases', depth: 2 }];
+
+function Content({ path, markdownUrl, changelogKey }: { path: string; markdownUrl: string; changelogKey?: string }) {
   const page = docs.getPage(path);
   if (!page) throw new Error(`unknown page: ${path}`);
 
   const { toc } = use(page.load());
+  const changelog = useChangelog(changelogKey);
   const MDX = page.body;
 
   return (
-    <DocsPage toc={toc}>
+    <DocsPage toc={!changelog ? toc : changelog.status === 'ready' ? [...toc, ...changelogToc(changelog.data.entries)] : [...toc, ...loadingToc]}>
       <DocsTitle>{page.title}</DocsTitle>
       <DocsDescription>{page.description}</DocsDescription>
-      <div className="flex flex-row gap-2 items-center border-b -mt-4 pb-6">
+      <div className="flex flex-row flex-wrap gap-2 items-center border-b -mt-4 pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
@@ -64,19 +136,21 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
         />
       </div>
       <DocsBody>
-        <MDX components={useMDXComponents()} />
+        <ChangelogContext value={changelog}>
+          <MDX components={useMDXComponents()} />
+        </ChangelogContext>
       </DocsBody>
     </DocsPage>
   );
 }
 
 function Page() {
-  const { path, pageTree, markdownUrl } = useFumadocsLoader(Route.useLoaderData());
+  const { path, pageTree, searchPages, markdownUrl, graph, changelog } = useFumadocsLoader(Route.useLoaderData());
 
   return (
-    <DocsLayout {...baseOptions()} tree={pageTree}>
+    <DocsLayout {...baseOptions()} tree={pageTree} searchPages={searchPages} graph={graph}>
       <Suspense>
-        <Content path={path} markdownUrl={markdownUrl} />
+        <Content path={path} markdownUrl={markdownUrl} changelogKey={changelog} />
       </Suspense>
     </DocsLayout>
   );

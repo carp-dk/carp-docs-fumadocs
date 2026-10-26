@@ -1,0 +1,178 @@
+---
+title: Configuration
+description: Configure sensors, sampling, background runtime and data transfer on AppleWatchDevice.
+icon: Tune
+---
+
+`AppleWatchDevice` is a device configuration in the study protocol. Its settings are handed to the watch app over `WatchConnectivity`.
+
+```dart
+final watch = AppleWatchDevice(
+  motionSamplingRate: 10,
+  heartRateEnabled: true,
+  locationEnabled: false,
+  fileTransferInterval: const Duration(minutes: 15),
+);
+
+protocol.addConnectedDevice(watch, phone);
+```
+
+## Sensors
+
+| Property | Default | What it collects |
+|---|---|---|
+| `motionEnabled` | `true` | Switch for the motion sensor |
+| `accelerometerEnabled` | `true` | Raw acceleration, including gravity |
+| `deviceMotionEnabled` | `true` | Attitude, gravity, rotation rate, user acceleration |
+| `heartRateEnabled` | `true` | Heart rate via HealthKit |
+| `batteryEnabled` | `true` | Battery level and charging state of the watch |
+| `deviceInfoEnabled` | `true` | Watch model, watchOS version, paired phone |
+| `locationEnabled` | `false` | Location, altitude, speed, course |
+| `headingEnabled` | `false` | Compass heading and geomagnetic field |
+| `bluetoothEnabled` | `false` | Nearby Bluetooth devices |
+| `audioEnabled` | `false` | Switch for the microphone |
+
+## Motion
+
+```dart
+AppleWatchDevice(
+  motionEnabled: true,
+  motionSamplingRate: 10,       // Hz
+  accelerometerEnabled: true,
+  deviceMotionEnabled: true,
+)
+```
+
+| Property | Default | Notes |
+|---|---|---|
+| `motionSamplingRate` | `10` | Sampling rate in Hz |
+
+`motionSamplingRate` is the setting with the largest effect on both battery life and data volume, and the two scale together.
+
+## Sound
+
+Sound sensing is off by default and needs two switches: the microphone itself, and what to do with it.
+
+```dart
+AppleWatchDevice(
+  audioEnabled: true,                 // switch
+  ambientNoiseEnabled: true,          // decibel level
+  audioClassificationEnabled: true,   // sound labels
+  audioDutyCycleEnabled: true,
+  audioActiveDuration: const Duration(minutes: 1),
+  audioRestDuration: const Duration(minutes: 3),
+)
+```
+
+| Property | Default | Notes |
+|---|---|---|
+| `audioEnabled` | `false` | Switch — the two below do nothing without it |
+| `ambientNoiseEnabled` | `true` | Sound pressure level in decibel |
+| `audioClassificationEnabled` | `true` | Sound labels via Apple's SoundAnalysis |
+| `audioDutyCycleEnabled` | `true` | Alternate between analyzing and resting |
+| `audioActiveDuration` | 1 minute | Length of the active phase |
+| `audioRestDuration` | 3 minutes | Length of the resting phase |
+
+## Background runtime
+
+`backgroundSessionType` lets the watch app keep running in the background when the wrist is lowered.
+
+```dart
+AppleWatchDevice(
+  backgroundSessionType: WatchBackgroundSessionType.microphone,
+)
+```
+
+| Value | Background runtime | Trade-off |
+|---|---|---|
+| `microphone` (default) | Good | A silent capture session. Needs microphone permission and the `audio` background mode. No audio is stored. |
+| `workout` | Best | An `HKWorkoutSession`. The longest and most reliable runtime, but it appears as a workout in the participant's fitness apps and affects their activity rings. |
+| `none` | None | Collects only in the foreground. For short, supervised sessions. |
+
+Using `workout` can also result in App Store rejection.
+
+<Callout type="warning">
+
+The watch target needs the background mode that matches this value: `microphone` needs `audio`, and `workout` needs `workout-processing`. See [Background modes](/docs/sampling-packages/apple-watch/watch-app/permissions#background-modes).
+
+</Callout>
+
+## Transferring data to the phone
+
+```dart
+AppleWatchDevice(
+  fileTransferInterval: const Duration(minutes: 15),
+  transferMode: WatchTransferMode.incremental,
+  deleteAfterTransfer: true,
+)
+```
+
+| Property | Default | Notes |
+|---|---|---|
+| `fileTransferInterval` | 15 minutes | How often the watch hands data over |
+| `transferMode` | `incremental` | Which records are included |
+| `deleteAfterTransfer` | `true` | Delete transferred records from the watch |
+
+### `fileTransferInterval`
+
+Sets how fresh the data is. A shorter interval means less delay but more radio wake-ups on both devices.
+
+### `transferMode`
+
+| Value | Behavior | When to use it |
+|---|---|---|
+| `incremental` (default) | Only records collected since the last successful transfer | Long-running studies. Bounded radio time and storage. |
+| `all` | Every record in the database, every time | Recovery and debugging. Safe (duplicates are discarded by record id) but grows more expensive as the database grows. |
+
+### `deleteAfterTransfer`
+
+Keeps storage on the watch bounded. Setting it to `false` keeps a local backup on the watch, at the cost of ever-growing disk use.
+
+<Callout type="warning">
+
+With `deleteAfterTransfer: false` combined with `transferMode: all`, transfer cost grows without limit.
+
+</Callout>
+
+## Phone-side and advanced settings
+
+| Property | Default | Notes |
+|---|---|---|
+| `saveToLocalAwareDatabase` | `false` | Also write received records to the AWARE database on the phone |
+| `enableNativeLogging` | `false` | Verbose logging from the native AWARE framework |
+| `awareServerUrl` | `null` | Let the watch upload directly to an AWARE server |
+
+- `saveToLocalAwareDatabase` is a *phone-side* setting and is not forwarded to the watch.
+- `awareServerUrl` points the watch at an AWARE server of your own, bypassing the phone and CARP entirely. Leave it `null` in a normal CARP study.
+- `enableNativeLogging` is useful while bringing a study up: it makes the native AWARE framework print what it is doing to the Xcode console.
+
+## All properties
+
+| Property | Default |
+|---|---|
+| `label` | `null` |
+| `awareServerUrl` | `null` |
+| `motionSamplingRate` | `10` |
+| `accelerometerEnabled` | `true` |
+| `deviceMotionEnabled` | `true` |
+| `motionEnabled` | `true` |
+| `batteryEnabled` | `true` |
+| `deviceInfoEnabled` | `true` |
+| `heartRateEnabled` | `true` |
+| `locationEnabled` | `false` |
+| `headingEnabled` | `false` |
+| `bluetoothEnabled` | `false` |
+| `audioEnabled` | `false` |
+| `ambientNoiseEnabled` | `true` |
+| `audioClassificationEnabled` | `true` |
+| `audioDutyCycleEnabled` | `true` |
+| `audioActiveDuration` | `Duration(minutes: 1)` |
+| `audioRestDuration` | `Duration(minutes: 3)` |
+| `fileTransferInterval` | `Duration(minutes: 15)` |
+| `transferMode` | `WatchTransferMode.incremental` |
+| `deleteAfterTransfer` | `true` |
+| `backgroundSessionType` | `WatchBackgroundSessionType.microphone` |
+| `saveToLocalAwareDatabase` | `false` |
+| `enableNativeLogging` | `false` |
+
+[Watch settings](/docs/sampling-packages/apple-watch/watch-settings) maps each property to the key the phone sends to the watch.

@@ -1,0 +1,255 @@
+---
+title: Quickstart
+description: Build a Flutter app that collects step, battery and app lifecycle data with CARP Mobile Sensing.
+icon: Bolt
+---
+
+Build a Flutter app that collects **step events**, **battery state** and **app lifecycle events** (the app being opened or closed), and lists each measurement as it arrives. The data stays on the phone; to store it elsewhere, see [Storing data](/docs/data-storage).
+
+## Prerequisites
+
+- **Flutter**, installed with Google's [Install Flutter](https://docs.flutter.dev/get-started/install) guide for your system. Run `flutter doctor` and confirm that it shows green checkmarks for Android or iOS.
+- **A phone set up for development:**
+  - Android: [turn on USB debugging](https://developer.android.com/studio/debug/dev-options).
+  - iOS: [set up Xcode and your device](https://docs.flutter.dev/get-started/install/macos/mobile-ios). iOS apps can only be built on a Mac.
+
+<Callout type="tip" title="Use a physical device">
+
+Simulators have no step counter or real battery, so they produce very little data.
+
+</Callout>
+
+## Build the app
+
+<Steps>
+
+<Step title="Create a Flutter app">
+
+```bash
+flutter create my_first_carp_app
+cd my_first_carp_app
+```
+
+</Step>
+
+<Step title="Add the CARP packages">
+
+This downloads the packages from pub.dev and adds them to `pubspec.yaml`:
+
+```bash
+flutter pub add carp_core carp_mobile_sensing
+```
+
+</Step>
+
+<Step title="Configure Android and iOS">
+
+CARP uses platform features that need configuration on each platform.
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+
+<Tab value="Android">
+
+To allow the app to count steps, add the activity recognition permission to `android/app/src/main/AndroidManifest.xml`, directly above `<application`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+```
+
+Then enable core library desugaring in `android/app/build.gradle.kts` by adding the marked lines:
+
+```kotlin title="android/app/build.gradle.kts"
+android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true // [!code ++]
+        // ...leave the existing lines as they are
+    }
+    // ...
+}
+
+dependencies { // [!code ++]
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4") // [!code ++]
+} // [!code ++]
+```
+
+</Tab>
+
+<Tab value="iOS">
+
+CARP requires iOS 15 or newer. Open `ios/Runner.xcworkspace` in Xcode, select **Runner → General**, and set **Minimum Deployments** to **15.0**.
+
+To allow the app to count steps, add a motion usage description to `ios/Runner/Info.plist`, inside the `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSMotionUsageDescription</key>
+<string>This app counts your steps for a research study.</string>
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+<Step title="Replace the app code">
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+
+void main() => runApp(const MaterialApp(home: StepsPage()));
+
+class StepsPage extends StatefulWidget {
+  const StepsPage({super.key});
+
+  @override
+  State<StepsPage> createState() => _StepsPageState();
+}
+
+class _StepsPageState extends State<StepsPage> {
+  final List<String> _log = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _startSensing();
+  }
+
+  Future<void> _startSensing() async {
+    // 1. The study protocol: WHAT to collect.
+    final protocol = SmartphoneStudyProtocol.local(
+      name: 'My first study',
+      measures: [
+        Measure(type: SensorSamplingPackage.STEP_EVENT),
+        Measure(type: DeviceSamplingPackage.APP_LIFECYCLE_EVENT),
+        Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+      ],
+    );
+
+    // 2. The client: the engine that runs studies on this phone.
+    final client = SmartPhoneClientManager();
+    await client.configure();
+
+    // 3. Add the study, deploy it and start collecting.
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+    client.resume();
+
+    // 4. Every piece of data arrives here as a "measurement".
+    client.measurements.listen((measurement) {
+      setState(() => _log.insert(0, measurement.data.dataType.name));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('My first CARP app')),
+    body: ListView(children: [for (final line in _log) ListTile(title: Text(line))]),
+  );
+}
+```
+
+</Step>
+
+<Step title="Run the app">
+
+Connect your phone with a cable and run:
+
+```bash
+flutter run
+```
+
+The app requests permissions for notifications and physical activity. Allow them. Walk around, switch to another app and back, and `stepevent`, `applifecycleevent` and `batterystate` appear in the list.
+
+</Step>
+
+</Steps>
+
+## How it works
+
+The four numbered comments in `lib/main.dart` map to the core CARP workflow:
+
+| Step in the code | What it does |
+| --- | --- |
+| **1. Protocol** | Defines what to collect. `SmartphoneStudyProtocol.local(...)` is a shortcut for a protocol with only this phone, one participant, and data saved on the phone. |
+| **2. Client** | `SmartPhoneClientManager` is the CAMS runtime. `configure()` starts it with default settings. |
+| **3. Add, deploy, resume** | `addStudyFromProtocol()` hands the protocol to the client, `tryDeployment()` prepares the sensors, and `resume()` starts collecting. |
+| **4. Measurements** | `client.measurements` is a live stream of everything collected. You can display, store or forward each measurement. |
+
+Every measurement is also saved in a database on the phone, and no data leaves the device. To store data elsewhere, see [Storing data](/docs/data-storage).
+
+## Add more data types
+
+To collect other kinds of data, add a **sampling package**. For example, `carp_context_package` adds location and activity (walking, cycling and so on):
+
+```bash
+flutter pub add carp_context_package
+```
+
+```dart
+import 'package:carp_context_package/carp_context_package.dart';
+
+// At the top of _startSensing(), before creating the protocol:
+SamplingPackageRegistry().register(ContextSamplingPackage());
+
+// ...then add measures like:
+Measure(type: ContextSamplingPackage.LOCATION),
+Measure(type: ContextSamplingPackage.ACTIVITY),
+```
+
+<Callout type="info" title="Package permissions">
+
+Each sampling package may need its own permissions, for example for location. The package's page on pub.dev lists the configuration to add for Android and iOS.
+
+</Callout>
+
+[Measure types](/docs/mobile-sensing/measure-types) lists every available measure, and the [API reference](/docs/api-reference) lists all packages.
+
+## Next steps
+
+<Cards>
+<Card title="Choose where data goes" icon="Database" href="/docs/data-storage">
+
+Keep data on the phone, upload it to CAWS, or send it to your own server.
+
+</Card>
+<Card title="Collect more kinds of data" icon="Sensors" href="/docs/mobile-sensing/measure-types">
+
+All measures, and the sampling packages that add them.
+
+</Card>
+<Card title="Schedule data collection" icon="Schedule" href="/docs/mobile-sensing/domain-model">
+
+Triggers: every hour, at 8:00, when the participant is walking…
+
+</Card>
+<Card title="Ask the participant questions" icon="Quiz" href="/docs/mobile-sensing/app-task-model">
+
+Surveys and tasks the user is notified about.
+
+</Card>
+<Card title="Keep collecting in the background" icon="Battery" href="/docs/mobile-sensing/best-practices">
+
+Battery, background mode and notifications on Android and iOS.
+
+</Card>
+<Card title="Apple Watch" icon="Watch" href="/docs/sampling-packages/apple-watch">
+
+Collect sensor data from an Apple Watch. Packages for Polar, Movesense and other wearables are listed in the API reference.
+
+</Card>
+<Card title="How CARP fits together" icon="Hub" href="/docs/architecture">
+
+The components and the study lifecycle, with diagrams.
+
+</Card>
+</Cards>
+
+### Get help
+
+- Ask questions on [Discord](https://discord.gg/sswpqGvnf5).
+- Report problems on [GitHub](https://github.com/carp-dk/carp.sensing-flutter/issues).
+- Email [support@carp.dk](mailto:support@carp.dk).

@@ -1,0 +1,7 @@
+{
+  "title": "Debug Toolkit",
+  "description": "carp_debug_flutter",
+  "icon": "Bug",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "production", "---Guides---", "environment", "data-sources", "built-in-tools", "custom-tools", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_debug_flutter)", "[API reference](https://pub.dev/documentation/carp_debug_flutter/latest/)", "[GitHub](https://github.com/carp-dk/carp_debug_flutter)"]
+}

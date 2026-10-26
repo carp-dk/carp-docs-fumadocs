@@ -1,0 +1,57 @@
+---
+title: Built-in tools
+description: Reference for the tools that ship with carp_debug_flutter.
+icon: Build
+---
+
+A tool appears only when it has something to show: the Environment tool needs registered launch arguments, and one Shared Preferences or Database tool is added per configured data source. An empty `DebugToolkitConfig` still shows the **Device & App** and **Logs & Errors** tools.
+
+| Tool | Shown when |
+| --- | --- |
+| [Environment & Servers](#environment-and-servers) | Launch arguments are registered |
+| [Shared Preferences](#shared-preferences) | One per configured [key/value store](/docs/flutter-plugins/debug-toolkit/data-sources#keyvalue-stores) |
+| [Database](#database) | One per configured [database](/docs/flutter-plugins/debug-toolkit/data-sources#databases) |
+| [Device & App](#device-and-app) | By default, even with an empty config |
+| [Logs & Errors](#logs-and-errors) | By default, even with an empty config |
+
+## Environment and servers
+
+Edits launch-argument overrides, grouped by `group`. Each row shows the effective value, the underlying key, and an **overridden** badge when the value differs from the compile-time default.
+
+- **Revert** clears a single override.
+- **Reset all** in the app bar clears all overrides.
+- **Apply** in the bottom bar runs your `onApply` hook to reconfigure the app live.
+- **Restart app** in the bottom bar relaunches the app.
+
+See [Environment and servers](/docs/flutter-plugins/debug-toolkit/environment) for the full guide.
+
+## Shared preferences
+
+- **Inspect and search:** lists every visible key with its runtime type and value; filter by key.
+- **Edit and add:** type-aware editor for `String`, `bool`, `int`, `double` and `List<String>`.
+- **Delete:** per-key delete (with confirmation) and "clear all".
+- **CARP session data:** the CARP user, participant and study are stored here, so you can inspect or wipe them.
+
+## Database
+
+Browses the configured `sembast` stores, each with a live record count. Open a store to list its records, tap a record to view its full value, and delete individual records or clear a whole store.
+
+## Device and app
+
+Read-only metadata:
+
+| Group | Fields |
+| --- | --- |
+| **Application** | Name, package ID, version, build number |
+| **Device** | Platform, OS version, model, device name, physical device or simulator |
+| **Display** | Screen size, pixel ratio, text scale, brightness |
+
+## Logs and errors
+
+A ring buffer that captures `debugPrint` output, framework errors (`FlutterError.onError`) and uncaught async errors (`PlatformDispatcher.onError`), so you can review what happened even after a screen has crashed.
+
+<Callout type="info">
+
+Capture is **non-destructive**: the previously installed `debugPrint` and error handlers are always invoked, so console logging and crash reporting keep working. Disable capture with `DebugToolkitConfig(captureLogs: false)`.
+
+</Callout>

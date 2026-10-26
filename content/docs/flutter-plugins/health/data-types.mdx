@@ -1,0 +1,240 @@
+---
+title: Data types
+description: Every HealthDataType with its default unit and its availability on Apple Health and Google Health Connect, plus the supported workout types.
+icon: Dataset
+---
+
+Data types are defined in the `HealthDataType` enum, and each type has a default `HealthDataUnit`.
+
+- **iOS** supports HealthKit-specific types such as workouts, ECG, sleep stages, nutrition, and many biometrics.
+- **Android** supports Health Connect types including steps, heart rate, sleep, speed and distance, nutrition, hydration, menstruation flow, and more.
+
+## Platform type lists
+
+The plugin exposes a list of the supported types for each platform:
+
+```dart
+// iOS
+const List<HealthDataType> dataTypesIOS = [...];
+
+// Android
+const List<HealthDataType> dataTypesAndroid = [...];
+```
+
+Use them for quick testing or to build permission requests.
+
+## Health data types
+
+All supported health data types, their units, and their platform availability. In the platform columns, `(yes)` marks a type that is mapped to, or must be replaced by, another type on that platform; the comments give the details.
+
+| Data type | Unit | Apple Health | Google Health Connect | Comments |
+| --- | --- | --- | --- | --- |
+| `ACTIVE_ENERGY_BURNED` | `CALORIES` | yes | yes | |
+| `ATRIAL_FIBRILLATION_BURDEN` | `PERCENTAGE` | yes | |  |
+| `BASAL_ENERGY_BURNED` | `CALORIES` | yes | yes | |
+| `BLOOD_GLUCOSE` | `MILLIGRAM_PER_DECILITER` | yes | yes | |
+| `BLOOD_OXYGEN` | `PERCENTAGE` | yes | yes | |
+| `BLOOD_PRESSURE_DIASTOLIC` | `MILLIMETER_OF_MERCURY` | yes | yes | |
+| `BLOOD_PRESSURE_SYSTOLIC` | `MILLIMETER_OF_MERCURY` | yes | yes | |
+| `BODY_FAT_PERCENTAGE` | `PERCENTAGE` | yes | yes | |
+| `BODY_MASS_INDEX` | `NO_UNIT` | yes | yes | |
+| `BODY_TEMPERATURE` | `DEGREE_CELSIUS` | yes | yes | |
+| `BODY_WATER_MASS` | `KILOGRAMS` | | yes | |
+| `ELECTRODERMAL_ACTIVITY` | `SIEMENS` | yes | |  |
+| `HEART_RATE` | `BEATS_PER_MINUTE` | yes | yes | |
+| `HEIGHT` | `METERS` | yes | yes | |
+| `RESTING_HEART_RATE` | `BEATS_PER_MINUTE` | yes | yes | |
+| `RESPIRATORY_RATE` | `RESPIRATIONS_PER_MINUTE` | yes | yes | |
+| `PERIPHERAL_PERFUSION_INDEX` | `PERCENTAGE` | yes | |  |
+| `STEPS` | `COUNT` | yes | yes | |
+| `WAIST_CIRCUMFERENCE` | `METERS` | yes | |  |
+| `WALKING_HEART_RATE` | `BEATS_PER_MINUTE` | yes | |  |
+| `WEIGHT` | `KILOGRAMS` | yes | yes | |
+| `DISTANCE_WALKING_RUNNING` | `METERS` | yes | |  |
+| `FLIGHTS_CLIMBED` | `COUNT` | yes | yes | |
+| `DISTANCE_DELTA` | `METERS` | | yes | |
+| `MINDFULNESS` | `MINUTES` | yes | |  |
+| `SLEEP_ASLEEP` | `MINUTES` | yes | yes | On iOS, this refers to asleepUnspecified, and on Android this refers to STAGE_TYPE_SLEEPING (asleep but specific stage is unknown) |
+| `SLEEP_AWAKE` | `MINUTES` | yes | yes | |
+| `SLEEP_AWAKE_IN_BED` | `MINUTES` | | yes | |
+| `SLEEP_DEEP` | `MINUTES` | yes | yes | |
+| `SLEEP_IN_BED` | `MINUTES` | yes | |  |
+| `SLEEP_LIGHT` | `MINUTES` | yes | yes | On iOS, this refers to asleepCore |
+| `SLEEP_OUT_OF_BED` | `MINUTES` | | yes | |
+| `SLEEP_REM` | `MINUTES` | yes | yes | |
+| `SLEEP_UNKNOWN` | `MINUTES` | | yes | |
+| `SLEEP_SESSION` | `MINUTES` | | yes | |
+| `WATER` | `LITER` | yes | yes | |
+| `EXERCISE_TIME` | `MINUTES` | yes | |  |
+| `WORKOUT` | `NO_UNIT` | yes | yes | See workout types table below |
+| `HIGH_HEART_RATE_EVENT` | `NO_UNIT` | yes | | Requires Apple Watch to write the data |
+| `LOW_HEART_RATE_EVENT` | `NO_UNIT` | yes | | Requires Apple Watch to write the data |
+| `IRREGULAR_HEART_RATE_EVENT` | `NO_UNIT` | yes | | Requires Apple Watch to write the data |
+| `HEART_RATE_VARIABILITY_RMSSD` | `MILLISECONDS` | | yes | |
+| `HEART_RATE_VARIABILITY_SDNN` | `MILLISECONDS` | yes | | Requires Apple Watch to write the data |
+| `HEADACHE_NOT_PRESENT` | `MINUTES` | yes | |  |
+| `HEADACHE_MILD` | `MINUTES` | yes | |  |
+| `HEADACHE_MODERATE` | `MINUTES` | yes | |  |
+| `HEADACHE_SEVERE` | `MINUTES` | yes | |  |
+| `HEADACHE_UNSPECIFIED` | `MINUTES` | yes | |  |
+| `AUDIOGRAM` | `DECIBEL_HEARING_LEVEL` | yes | |  |
+| `ELECTROCARDIOGRAM` | `VOLT` | yes | | Requires Apple Watch to write the data |
+| `NUTRITION` | `NO_UNIT` | yes | yes | |
+| `INSULIN_DELIVERY` | `INTERNATIONAL_UNIT` | yes | |  |
+| `MENSTRUATION_FLOW` | `NO_UNIT` | yes | yes | |
+| `WATER_TEMPERATURE` | `DEGREE_CELSIUS` | yes | | Related to/Requires Apple Watch Ultra's Underwater Diving Workout |
+| `UNDERWATER_DEPTH` | `METER` | yes | | Related to/Requires Apple Watch Ultra's Underwater Diving Workout |
+| `UV_INDEX` | `COUNT` | yes | |  |
+| `LEAN_BODY_MASS` | `KILOGRAMS` | yes | yes | |
+| `WALKING_SPEED` | `METER_PER_SECOND` | yes | (yes) | On Android this will be recorded as `SPEED` with similar unit |
+| `APPLE_MOVE_TIME` | `SECOND` | yes | | READ Only |
+| `APPLE_STAND_HOUR` | `HOUR` | yes | | READ Only |
+
+## Workout types
+
+All supported workout activity types (`HealthWorkoutActivityType`) and their platform availability. Workouts are represented as `HealthDataType.WORKOUT`; see [Workouts](#workouts) for the value they carry.
+
+| Workout type | Apple Health | Google Health Connect | Comments |
+| --- | --- | --- | --- |
+| `AMERICAN_FOOTBALL` | yes | yes | |
+| `ARCHERY` | yes | |  |
+| `AUSTRALIAN_FOOTBALL` | yes | yes | |
+| `BADMINTON` | yes | yes | |
+| `BARRE` | yes | |  |
+| `BASEBALL` | yes | yes | |
+| `BASKETBALL` | yes | yes | |
+| `BIKING` | yes | yes | On iOS this is CYCLING, but name changed here to fit with Android |
+| `BOWLING` | yes | |  |
+| `BOXING` | yes | yes | |
+| `CALISTHENICS` | | yes | |
+| `CARDIO_DANCE` | yes | (yes) | On Android this will be stored as DANCING |
+| `CLIMBING` | yes | |  |
+| `COOLDOWN` | yes | |  |
+| `CORE_TRAINING` | yes | |  |
+| `CRICKET` | yes | yes | |
+| `CROSS_COUNTRY_SKIING` | yes | (yes) | On Android this will be stored as SKIING |
+| `CROSS_TRAINING` | yes | |  |
+| `CURLING` | yes | |  |
+| `DANCING` | yes | yes | On iOS this is DANCE, but name changed here to fit with Android |
+| `DISC_SPORTS` | yes | |  |
+| `DOWNHILL_SKIING` | yes | (yes) | On Android this will be stored as SKIING |
+| `ELLIPTICAL` | yes | yes | |
+| `EQUESTRIAN_SPORTS` | yes | |  |
+| `FENCING` | yes | yes | |
+| `FISHING` | yes | |  |
+| `FITNESS_GAMING` | yes | |  |
+| `FLEXIBILITY` | yes | |  |
+| `FRISBEE_DISC` | | yes | |
+| `FUNCTIONAL_STRENGTH_TRAINING` | yes | (yes) | On Android this will be stored as STRENGTH_TRAINING |
+| `GOLF` | yes | yes | |
+| `GUIDED_BREATHING` | | yes | |
+| `GYMNASTICS` | yes | yes | |
+| `HAND_CYCLING` | yes | |  |
+| `HANDBALL` | yes | yes | |
+| `HIGH_INTENSITY_INTERVAL_TRAINING` | yes | yes | |
+| `HIKING` | yes | yes | |
+| `HOCKEY` | yes | |  |
+| `HUNTING` | yes | |  |
+| `JUMP_ROPE` | yes | |  |
+| `KICKBOXING` | yes | |  |
+| `LACROSSE` | yes | |  |
+| `MARTIAL_ARTS` | yes | yes | |
+| `MIND_AND_BODY` | yes | |  |
+| `MIXED_CARDIO` | yes | |  |
+| `PADDLE_SPORTS` | yes | |  |
+| `PARAGLIDING` | | yes | |
+| `PICKLEBALL` | yes | |  |
+| `PILATES` | yes | yes | |
+| `PLAY` | yes | |  |
+| `PREPARATION_AND_RECOVERY` | yes | |  |
+| `RACQUETBALL` | yes | yes | |
+| `ROCK_CLIMBING` | (yes) | yes | On iOS this will be stored as CLIMBING |
+| `ROWING` | yes | yes | |
+| `RUGBY` | yes | yes | |
+| `RUNNING` | yes | yes | |
+| `RUNNING_TREADMILL` | (yes) | yes | On iOS this will be stored as RUNNING |
+| `SAILING` | yes | yes | |
+| `SCUBA_DIVING` | | yes | |
+| `SKATING` | yes | yes | On iOS this will be stored as SKATING_SPORTS |
+| `SKIING` | (yes) | yes | On iOS you have to choose between CROSS_COUNTRY_SKIING and DOWNHILL_SKIING |
+| `SNOW_SPORTS` | yes | |  |
+| `SNOWBOARDING` | yes | yes | |
+| `SOCCER` | yes | |  |
+| `SOCIAL_DANCE` | yes | (yes) | On Android this will be stored as DANCING |
+| `SOFTBALL` | yes | yes | |
+| `SQUASH` | yes | yes | |
+| `STAIR_CLIMBING` | yes | yes | |
+| `STAIR_CLIMBING_MACHINE` | | yes | |
+| `STAIRS` | yes | |  |
+| `STEP_TRAINING` | yes | |  |
+| `STRENGTH_TRAINING` | (yes) | yes | On iOS you have to choose between FUNCTIONAL_STRENGTH_TRAINING or TRADITIONAL_STRENGTH_TRAINING |
+| `SURFING` | yes | yes | On iOS this is SURFING_SPORTS, but name changed here to fit with Android |
+| `SWIMMING` | yes | (yes) | On Android you have to choose between SWIMMING_OPEN_WATER and SWIMMING_POOL |
+| `SWIMMING_OPEN_WATER` | (yes) | yes | On iOS this will be stored as SWIMMING |
+| `SWIMMING_POOL` | (yes) | yes | On iOS this will be stored as SWIMMING |
+| `TABLE_TENNIS` | yes | yes | |
+| `TAI_CHI` | yes | |  |
+| `TENNIS` | yes | yes | |
+| `TRACK_AND_FIELD` | yes | |  |
+| `TRADITIONAL_STRENGTH_TRAINING` | yes | (yes) | On Android this will be stored as STRENGTH_TRAINING |
+| `UNDERWATER_DIVING` | yes | |  |
+| `VOLLEYBALL` | yes | yes | |
+| `WALKING` | yes | yes | |
+| `WATER_FITNESS` | yes | |  |
+| `WATER_POLO` | yes | yes | |
+| `WATER_SPORTS` | yes | |  |
+| `WEIGHTLIFTING` | | yes | |
+| `WHEELCHAIR` | (yes) | yes | On iOS you have to choose between WHEELCHAIR_RUN_PACE or WHEELCHAIR_WALK_PACE |
+| `WHEELCHAIR_RUN_PACE` | yes | (yes) | On Android this will be stored as WHEELCHAIR |
+| `WHEELCHAIR_WALK_PACE` | yes | (yes) | On Android this will be stored as WHEELCHAIR |
+| `WRESTLING` | yes | |  |
+| `YOGA` | yes | yes | |
+| `OTHER` | yes | yes | |
+
+## Units
+
+Each type maps to a default unit through `dataTypeToUnit`, for example `HEART_RATE` → `BEATS_PER_MINUTE` and `WEIGHT` → `KILOGRAM`. When you read data, you can optionally request a preferred unit per type.
+
+```dart
+final unit = dataTypeToUnit[HealthDataType.HEART_RATE]; // BEATS_PER_MINUTE
+```
+
+## Sleep and headache categories
+
+For the categorical sleep and headache types, values are converted to minutes based on the `dateFrom`/`dateTo` interval.
+
+## Workouts
+
+A workout is a `HealthDataType.WORKOUT` data point with a `WorkoutHealthValue`, which may include:
+
+- `workoutActivityType`
+- `totalEnergyBurned` (+ unit)
+- `totalDistance` (+ unit)
+- `totalSteps` (+ unit)
+
+An additional `workoutSummary` is attached when available.
+
+## Special data
+
+| Type | Handling |
+| --- | --- |
+| ECG (`ELECTROCARDIOGRAM`) | Parses the voltage series, average heart rate, sampling frequency, and classification. |
+| Nutrition (`NUTRITION`) | Supports a wide set of macro- and micronutrients. |
+| Menstruation flow (`MENSTRUATION_FLOW`) | Normalizes platform-specific values. |
+
+## Full enums
+
+The complete enums and mappings are defined in the plugin source, in the [GitHub repository](https://github.com/carp-dk/carp-health-flutter):
+
+- `lib/src/health_value_types.dart`
+- `lib/src/heath_data_types.dart`
+
+The generated enum reference is in the [API reference on pub.dev](https://pub.dev/documentation/health/latest/).
+
+## See also
+
+<Cards>
+<Card title="Basic reading" href="/docs/flutter-plugins/health/reading/basic" icon="Download">Read health data.</Card>
+<Card title="Basic writing" href="/docs/flutter-plugins/health/writing/basic" icon="Upload">Write health data.</Card>
+<Card title="Permissions" href="/docs/flutter-plugins/health/permissions" icon="Lock">Request access to these data types.</Card>
+</Cards>

@@ -1,0 +1,19 @@
+# Dependencies and build output are recreated inside the image.
+node_modules
+.output
+.vercel
+.nitro
+.tanstack
+.source
+dist
+
+# Secrets and local files never go into the image.
+.env
+.env*.local
+.git
+.github
+.DS_Store
+*.log
+Dockerfile
+.dockerignore
+deploy

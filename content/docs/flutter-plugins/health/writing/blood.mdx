@@ -1,0 +1,325 @@
+---
+title: Blood pressure and oxygen
+description: Write blood pressure readings with writeBloodPressure and blood oxygen saturation with writeBloodOxygen.
+---
+
+Blood pressure and blood oxygen have dedicated write methods. Write heart rate and other numeric vitals with [`writeHealthData`](/docs/flutter-plugins/health/writing/basic).
+
+## Blood pressure
+
+`writeBloodPressure` writes systolic and diastolic readings together.
+
+```dart
+Future<bool> writeBloodPressure({
+  required double systolic,
+  required double diastolic,
+  required DateTime startTime,
+  DateTime? endTime,
+})
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `systolic` | `double` | Yes | Systolic pressure (mmHg) |
+| `diastolic` | `double` | Yes | Diastolic pressure (mmHg) |
+| `startTime` | `DateTime` | Yes | Measurement time |
+| `endTime` | `DateTime` | No | End time (optional) |
+
+### Write a reading
+
+```dart
+// Normal blood pressure reading
+await health.writeBloodPressure(
+  systolic: 120.0,
+  diastolic: 80.0,
+  startTime: DateTime.now(),
+);
+
+// Elevated reading
+await health.writeBloodPressure(
+  systolic: 135.0,
+  diastolic: 85.0,
+  startTime: DateTime.now(),
+);
+```
+
+### Categorize readings
+
+```dart
+enum BPCategory {
+  normal,        // <120 and <80
+  elevated,      // 120-129 and <80
+  hypertension1, // 130-139 or 80-89
+  hypertension2, // 140-179 or 90-119
+  crisis,        // ≥180 or ≥120
+}
+
+BPCategory categorizeBloodPressure(double systolic, double diastolic) {
+  if (systolic >= 180 || diastolic >= 120) {
+    return BPCategory.crisis;
+  } else if (systolic >= 140 || diastolic >= 90) {
+    return BPCategory.hypertension2;
+  } else if (systolic >= 130 || diastolic >= 80) {
+    return BPCategory.hypertension1;
+  } else if (systolic >= 120) {
+    return BPCategory.elevated;
+  }
+  return BPCategory.normal;
+}
+
+// Usage with categorization
+Future<void> logBloodPressure(double sys, double dia) async {
+  final category = categorizeBloodPressure(sys, dia);
+  print('BP: $sys/$dia - ${category.name}');
+  
+  await health.writeBloodPressure(
+    systolic: sys,
+    diastolic: dia,
+    startTime: DateTime.now(),
+  );
+}
+```
+
+### Validate readings
+
+```dart
+class BloodPressureTracker {
+  final Health health;
+  
+  BloodPressureTracker(this.health);
+  
+  Future<bool> logReading({
+    required double systolic,
+    required double diastolic,
+    DateTime? measurementTime,
+  }) async {
+    // Validate readings
+    if (!_isValidReading(systolic, diastolic)) {
+      print('Invalid BP reading');
+      return false;
+    }
+    
+    return await health.writeBloodPressure(
+      systolic: systolic,
+      diastolic: diastolic,
+      startTime: measurementTime ?? DateTime.now(),
+    );
+  }
+  
+  bool _isValidReading(double systolic, double diastolic) {
+    return systolic >= 70 && systolic <= 250 &&
+           diastolic >= 40 && diastolic <= 150 &&
+           systolic > diastolic;
+  }
+}
+
+// Usage
+final tracker = BloodPressureTracker(health);
+await tracker.logReading(systolic: 120, diastolic: 80);
+```
+
+## Blood oxygen
+
+`writeBloodOxygen` writes blood oxygen saturation (SpO2).
+
+```dart
+Future<bool> writeBloodOxygen({
+  required double saturation,
+  required DateTime startTime,
+  DateTime? endTime,
+  double? flowRate,
+})
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `saturation` | `double` | Yes | SpO2 percentage (0-100) |
+| `startTime` | `DateTime` | Yes | Measurement time |
+| `endTime` | `DateTime` | No | End time (optional) |
+| `flowRate` | `double` | No | Oxygen flow rate (L/min) |
+
+### Write a reading
+
+```dart
+// Normal oxygen saturation
+await health.writeBloodOxygen(
+  saturation: 98.0,
+  startTime: DateTime.now(),
+);
+
+// Lower saturation with oxygen therapy
+await health.writeBloodOxygen(
+  saturation: 92.0,
+  flowRate: 2.0, // 2 L/min supplemental oxygen
+  startTime: DateTime.now(),
+);
+```
+
+### Interpret oxygen levels
+
+```dart
+String interpretSpO2(double saturation) {
+  if (saturation >= 95) {
+    return 'Normal';
+  } else if (saturation >= 90) {
+    return 'Mildly Low';
+  } else if (saturation >= 85) {
+    return 'Moderately Low';
+  } else {
+    return 'Severely Low';
+  }
+}
+
+// Usage
+Future<void> logOxygenLevel(double saturation) async {
+  final interpretation = interpretSpO2(saturation);
+  print('SpO2: $saturation% - $interpretation');
+  
+  if (saturation < 90) {
+    print('⚠️ Low oxygen - consider medical attention');
+  }
+  
+  await health.writeBloodOxygen(
+    saturation: saturation,
+    startTime: DateTime.now(),
+  );
+}
+```
+
+### Validate readings
+
+```dart
+class BloodOxygenTracker {
+  final Health health;
+  
+  BloodOxygenTracker(this.health);
+  
+  Future<bool> logReading({
+    required double saturation,
+    double? flowRate,
+    DateTime? measurementTime,
+  }) async {
+    // Validate saturation
+    if (saturation < 0 || saturation > 100) {
+      print('Invalid SpO2: must be between 0-100%');
+      return false;
+    }
+    
+    // Validate flow rate if provided
+    if (flowRate != null && (flowRate < 0 || flowRate > 15)) {
+      print('Invalid flow rate');
+      return false;
+    }
+    
+    return await health.writeBloodOxygen(
+      saturation: saturation,
+      flowRate: flowRate,
+      startTime: measurementTime ?? DateTime.now(),
+    );
+  }
+}
+
+// Usage
+final tracker = BloodOxygenTracker(health);
+await tracker.logReading(saturation: 98.0);
+```
+
+## Write a full set of vital signs
+
+This example writes blood pressure, heart rate and blood oxygen with the same timestamp:
+
+```dart
+class CardiovascularMonitor {
+  final Health health;
+  
+  CardiovascularMonitor(this.health);
+  
+  Future<void> logVitalSigns({
+    required double systolic,
+    required double diastolic,
+    required double heartRate,
+    required double spO2,
+  }) async {
+    final now = DateTime.now();
+    
+    // Blood pressure
+    await health.writeBloodPressure(
+      systolic: systolic,
+      diastolic: diastolic,
+      startTime: now,
+    );
+    
+    // Heart rate
+    await health.writeHealthData(
+      value: heartRate,
+      type: HealthDataType.HEART_RATE,
+      startTime: now,
+    );
+    
+    // Blood oxygen
+    await health.writeBloodOxygen(
+      saturation: spO2,
+      startTime: now,
+    );
+    
+    print('Vital signs logged:');
+    print('  BP: $systolic/$diastolic mmHg');
+    print('  HR: $heartRate bpm');
+    print('  SpO2: $spO2%');
+  }
+}
+
+// Usage
+final monitor = CardiovascularMonitor(health);
+await monitor.logVitalSigns(
+  systolic: 120,
+  diastolic: 80,
+  heartRate: 72,
+  spO2: 98,
+);
+```
+
+## Permissions
+
+Request WRITE permission for every type you write. Blood pressure uses two data types, `BLOOD_PRESSURE_SYSTOLIC` and `BLOOD_PRESSURE_DIASTOLIC`, so request both:
+
+```dart
+// Request cardiovascular permissions
+final types = [
+  HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+  HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+  HealthDataType.BLOOD_OXYGEN,
+  HealthDataType.HEART_RATE,
+];
+
+final granted = await health.requestAuthorization(
+  types,
+  permissions: List.filled(types.length, HealthDataAccess.WRITE),
+);
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Blood pressure is stored as a combined record.
+- Requires the Health Connect SDK.
+- Flow rate support may vary.
+- Compatible with connected health apps.
+
+</Tab>
+<Tab value="iOS">
+
+- Blood pressure is stored as separate systolic and diastolic entries, linked together automatically.
+- Supports flow rate for blood oxygen.
+- Data appears in the Apple Health app.
+
+</Tab>
+</Tabs>
+
+## Related
+
+- [Numeric data](/docs/flutter-plugins/health/writing/basic): general health data
+- [Data points](/docs/flutter-plugins/health/reading/basic): read cardiovascular data
+- [Data types](/docs/flutter-plugins/health/data-types): available health metrics

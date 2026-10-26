@@ -1,0 +1,53 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --animate-fd-fade-in: docs-fade-in 180ms ease-out;
+  --animate-fd-roll-in: docs-roll-in 220ms ease-out;
+  --animate-fd-popover-in: docs-roll-in 180ms ease-out;
+  @keyframes docs-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes docs-roll-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@layer base {
+  * { border-color: var(--color-fd-border); }
+  body { background: var(--color-fd-background); color: var(--color-fd-foreground); }
+  /* M3E draws a shape-aware focus ring in its shadow root. A universal
+     :focus-visible rule also outlines its host, producing a second, square ring. */
+  :where(a, button, input, select, textarea, summary, [contenteditable='true'], div[tabindex], span[tabindex], article[tabindex], section[tabindex], pre[tabindex]):focus-visible {
+    outline: 2px solid var(--color-fd-ring);
+    outline-offset: 3px;
+  }
+}
+
+@layer utilities {
+  .prose { color: var(--tw-prose-body, var(--docs-body)); overflow-wrap: break-word; }
+  .prose :where(p, ul, ol, blockquote):not(:where(.not-prose, .not-prose *)) { margin-block: 1.25em; }
+  .prose :where(h1, h2, h3, h4, h5, h6):not(:where(.not-prose, .not-prose *)) { color: var(--tw-prose-headings, var(--color-fd-foreground)); margin-block: 1.75em 0.75em; }
+  .prose :where(a):not(:where(.not-prose, .not-prose *)) { color: var(--tw-prose-links, var(--color-fd-primary)); text-decoration: underline 1px color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 0.2em; }
+  .prose :where(a):not(:where(.not-prose, .not-prose *)):hover { text-decoration-color: currentColor; text-decoration-thickness: 2px; }
+  .prose :where(strong):not(:where(.not-prose, .not-prose *)) { color: var(--tw-prose-bold, var(--color-fd-foreground)); font-weight: 700; }
+  .prose :where(ul, ol):not(:where(.not-prose, .not-prose *)) { padding-inline-start: 1.5em; }
+  .prose :where(ul):not(:where(.not-prose, .not-prose *)) { list-style-type: disc; }
+  .prose :where(ol):not(:where(.not-prose, .not-prose *)) { list-style-type: decimal; }
+  .prose :where(li):not(:where(.not-prose, .not-prose *)) { margin-block: 0.5em; padding-inline-start: 0.25em; }
+  .prose :where(li > ul, li > ol):not(:where(.not-prose, .not-prose *)) { margin-block: 0.5em; }
+  .prose :where(blockquote):not(:where(.not-prose, .not-prose *)) { border-inline-start: 3px solid var(--md-sys-color-outline-variant); padding-inline-start: 1em; color: var(--color-fd-muted-foreground); }
+  .prose :where(hr):not(:where(.not-prose, .not-prose *)) { margin-block: 2em; border-color: var(--color-fd-border); }
+  .prose :where(code):not(:where(pre *, .not-prose, .not-prose *)) { border-radius: 4px; padding: 2px 4px; background: var(--color-fd-muted); color: var(--color-fd-foreground); box-shadow: inset 0 0 0 1px var(--docs-border); font-size: 0.875em; }
+  .prose :where(img, video):not(:where(.not-prose, .not-prose *)) { border-radius: 8px; margin-block: 1.5em; }
+  .prose > :first-child, .prose-no-margin > :first-child { margin-top: 0; }
+  .prose > :last-child, .prose-no-margin > :last-child { margin-bottom: 0; }
+}
+
+.shiki, .shiki span { color: var(--shiki-light); font-style: var(--shiki-light-font-style); font-weight: var(--shiki-light-font-weight); text-decoration: var(--shiki-light-text-decoration); }
+.dark .shiki, .dark .shiki span { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style); font-weight: var(--shiki-dark-font-weight); text-decoration: var(--shiki-dark-text-decoration); }
+.shiki .highlighted { background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); box-shadow: inset 2px 0 var(--md-sys-color-primary); }
+.shiki .highlighted-word { background: color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent); border-radius: 3px; }
+.shiki .diff.add { background: color-mix(in srgb, var(--docs-code-inserted) 12%, transparent); }
+.shiki .diff.remove { background: color-mix(in srgb, var(--docs-code-deleted) 12%, transparent); }

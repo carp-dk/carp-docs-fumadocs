@@ -1,0 +1,1 @@
+{ "title": "The watch app", "icon": "Watch", "pages": ["xcode-setup", "permissions", "source-code", "build-and-verify"] }

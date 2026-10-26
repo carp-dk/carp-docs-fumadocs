@@ -1,0 +1,66 @@
+---
+title: Custom backend
+description: Send CARP measurements to a server you already run, by forwarding each measurement or with a data manager.
+---
+
+If you already store data elsewhere, such as a hospital system, a company cloud or a web API, CARP can send measurements there instead.
+
+## Forward each measurement
+
+`client.measurements` (see the [quickstart](/docs/quickstart)) emits every measurement as soon as it is collected. You can post each one to your server as JSON.
+
+This is a sketch of the approach, not production code. You need a server address that accepts the data, and usually some form of authentication.
+
+```bash
+flutter pub add http
+```
+
+```dart
+// At the top of lib/main.dart:
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+// In _startSensing(), after client.resume():
+client.measurements.listen((measurement) {
+  http.post(
+    Uri.parse('https://my-server.example.com/data'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode(measurement),
+  );
+});
+```
+
+Each request body is one measurement:
+
+```json
+{
+  "sensorStartTime": 1790603452877534,
+  "data": {
+    "__type": "dk.cachet.carp.stepevent",
+    "steps": 4213
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `sensorStartTime` | When the data was measured, in microseconds since 1970 (Unix epoch). |
+| `data.__type` | The kind of data. |
+
+<Callout type="warning" title="Data loss">
+
+This approach **loses data** whenever sending fails, for example when the phone is offline or the server is down. Keep the default on-phone database as a backup, or use a data manager.
+
+</Callout>
+
+## Use a data manager
+
+For a study, write a **data manager**: a class that CARP calls for every measurement. In it you can buffer data, retry when the network is back, and batch uploads. A data manager plugs into CARP exactly like the built-in on-device and CAWS options, so the protocol's data endpoint simply points to your server.
+
+See [Extending CAMS: adding a new data manager](/docs/mobile-sensing/extending#adding-a-new-data-manager) for a step-by-step guide.
+
+<Callout type="tip" title="Run your own CAWS">
+
+Alternatively, run your own instance of CAWS. It is open source, and includes study management and participant invitations. See [CARP Web Services](/docs/data-storage/caws).
+
+</Callout>

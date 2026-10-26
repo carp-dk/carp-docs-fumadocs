@@ -1,0 +1,121 @@
+---
+title: Installation
+description: Add carp_aware_package to a Flutter app and prepare the iOS project.
+icon: Download
+---
+
+Setting up the package has two parts. This page covers the first: the Dart dependency and the iOS project settings. The second part is the [companion watch app](/docs/sampling-packages/apple-watch/watch-app).
+
+<Callout type="info">
+
+The package supports iOS and watchOS only. Android is not supported.
+
+</Callout>
+
+## Add the dependency
+
+```yaml title="pubspec.yaml"
+dependencies:
+  flutter:
+    sdk: flutter
+  carp_core: ^latest
+  carp_mobile_sensing: ^latest
+  carp_aware_package: ^latest
+```
+
+```bash
+flutter pub get
+```
+
+## Register the sampling package
+
+```dart
+import 'package:carp_core/carp_core.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_aware_package/carp_aware_package.dart';
+
+void main() {
+  SamplingPackageRegistry().register(AppleWatchSamplingPackage());
+  // ... the rest of your app
+}
+```
+
+Registering the package:
+
+- makes the nine watch measure types available;
+- registers `AppleWatchDevice`, so protocols that contain one can be deserialized;
+- hands CAMS the `AppleWatchDeviceManager` that communicates with the watch.
+
+## Enable Swift Package Manager
+
+The AWARE watchOS framework is distributed only through Swift Package Manager. There is no CocoaPods podspec, so enable SwiftPM:
+
+```bash
+flutter config --enable-swift-package-manager
+```
+
+Verify that it took effect:
+
+```bash
+flutter config --list | grep swift-package-manager
+# enable-swift-package-manager: true
+```
+
+## Set the iOS deployment target to 16.0
+
+The AWARE framework requires iOS 16 or later. Set the deployment target in three places, then re-resolve the pods.
+
+<Steps>
+<Step title="Set it in the Xcode project">
+
+Open `ios/Runner.xcworkspace` and select the **Runner** project → **Runner** target → **General** → **Minimum Deployments** → **iOS 16.0**. If the *project* and the target differ, set it on both.
+
+</Step>
+<Step title="Set it in the Podfile">
+
+In `ios/Podfile`, uncomment and set the platform line:
+
+```ruby title="ios/Podfile"
+platform :ios, '16.0'
+```
+
+</Step>
+<Step title="Set it in the Flutter framework plist">
+
+In `ios/Flutter/AppFrameworkInfo.plist`:
+
+```xml title="ios/Flutter/AppFrameworkInfo.plist"
+<key>MinimumOSVersion</key>
+<string>16.0</string>
+```
+
+</Step>
+<Step title="Re-resolve the pods">
+
+```bash
+cd ios && pod install && cd ..
+```
+
+</Step>
+</Steps>
+
+## Generate the Swift package and verify it
+
+```bash
+flutter build ios --config-only
+open ios/Runner.xcworkspace
+```
+
+In the Xcode Project navigator, **Package Dependencies** → `FlutterGeneratedPluginSwiftPackage` now lists `carp_aware_package`.
+
+The AWARE framework itself is **not** listed as a package. It currently ships with the plugin as pre-compiled binaries.
+
+## Next step
+
+<Cards>
+<Card title="Add the companion watch app" href="/docs/sampling-packages/apple-watch/watch-app" icon="Watch">
+
+Add the companion watchOS app. This step is required.
+
+</Card>
+</Cards>

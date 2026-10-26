@@ -1,0 +1,250 @@
+---
+title: CARP Mobile Sensing
+description: CARP Mobile Sensing (CAMS) is a Flutter framework for adding digital phenotyping and mobile sensing to health apps.
+icon: Sensors
+---
+
+<Callout type="warning">
+
+This documentation is for CARP Mobile Sensing API level 2.x.
+
+</Callout>
+
+The CARP Mobile Sensing (CAMS) Flutter package [`carp_mobile_sensing`](https://pub.dev/packages/carp_mobile_sensing) is a framework for adding digital phenotyping capabilities to mobile health apps. Use it to build custom mobile sensing apps that you can adapt to very different health domains.
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_mobile_sensing" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_mobile_sensing/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp.sensing-flutter" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+## Features
+
+CAMS is built on a flexible engineering architecture that supports:
+
+- cross-platform (Android and iOS) support
+- persistent sampling state management
+- multiple wearable and device integrations
+- configurable data sampling and transformation
+- pluggable data management and upload strategies
+
+## What you can collect
+
+<Cards>
+<Card title="Onboard phone sensors" icon="Smartphone">
+
+Movement data (IMU), location, nearby devices, steps, screen events and many other **measures**.
+
+</Card>
+<Card title="Wearable devices" icon="Watch">
+
+Smartwatches (for example Apple Watch), heart rate monitors (for example Polar), ECG monitors, glucose monitors, iBeacons and other **devices**.
+
+</Card>
+<Card title="User-generated data" icon="Quiz">
+
+Surveys, questionnaires, ecological momentary assessments (EMAs), audio, video and sound from participants.
+
+</Card>
+<Card title="Cognitive assessment" icon="Science">
+
+14 predefined cognitive assessment tools, such as trail-making, reaction time, recall, flanker and object tracking tests.
+
+</Card>
+</Cards>
+
+See [Measure types](/docs/mobile-sensing/measure-types) for the full list of measures and the sampling packages that provide them.
+
+## Requirements
+
+CAMS runs on Android and iOS.
+
+| Component | Requirement |
+| --- | --- |
+| Dart SDK | `>=3.10.0 <4.0.0` |
+| Flutter | `>=3.38.1` |
+| iOS | Minimum deployment target 15.0 |
+| Android | Core library desugaring enabled in Gradle |
+
+[Installation](/docs/mobile-sensing/installation) covers the full Android and iOS setup.
+
+## How it works
+
+Adding sampling to a Flutter app takes three steps:
+
+<Steps>
+<Step title="Define a study protocol">
+
+Create a `SmartphoneStudyProtocol` that defines which **measures** to collect from which **devices**.
+
+</Step>
+<Step title="Create and configure the runtime">
+
+Configure the `SmartPhoneClientManager` and add the study protocol to it.
+
+</Step>
+<Step title="Start data sampling">
+
+Access the stream of collected **measurements**, use them in the app and control the execution of data sampling.
+
+</Step>
+</Steps>
+
+### Example
+
+This protocol samples step counts, ambient light, screen events and battery events, and stores the measurements in a local SQLite database:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+
+// Create a protocol collecting steps, light, and screen and battery events
+// from the phone and store collected measurements in a local SQLite database
+final phone = Smartphone();
+final protocol =
+    SmartphoneStudyProtocol(
+        ownerId: 'AB',
+        name: 'Tracking steps, light, screen, and battery',
+        dataEndPoint: SQLiteDataEndPoint(),
+      )
+      ..addPrimaryDevice(phone)
+      ..addTaskControl(
+        DelayedTrigger(delay: const Duration(seconds: 10)),
+        BackgroundTask(
+          measures: [
+            Measure(type: SensorSamplingPackage.STEP_EVENT),
+            Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+            Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+            Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+          ],
+        ),
+        phone,
+      );
+
+// Create and configure a client manager for this phone.
+await SmartPhoneClientManager().configure();
+
+// Create a study based on the protocol.
+var study = await SmartPhoneClientManager().addStudyFromProtocol(protocol);
+
+// Deploy the study.
+await SmartPhoneClientManager().tryDeployment(
+  study.studyDeploymentId,
+  study.deviceRoleName,
+);
+
+// Resume sampling.
+SmartPhoneClientManager().resume();
+
+// Listening on the measurements stream.
+SmartPhoneClientManager().measurements.listen((measurement) {
+  // Do something with the measurement, e.g. print the json.
+  print(toJsonString(measurement));
+});
+
+// Pause sampling.
+SmartPhoneClientManager().pause();
+
+// Resume sampling again.
+SmartPhoneClientManager().resume();
+
+// Dispose the client. Can not be used anymore.
+SmartPhoneClientManager().dispose();
+```
+
+### Minimal example
+
+You can configure the client manager, add the protocol and start sampling in a single statement:
+
+```dart
+SmartPhoneClientManager().configure().then(
+  (_) => SmartPhoneClientManager()
+      .addStudyFromProtocol(
+        SmartphoneStudyProtocol.local(
+          name: 'Tracking steps, light, screen, and battery',
+          measures: [
+            Measure(type: SensorSamplingPackage.STEP_EVENT),
+            Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+            Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+            Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+          ],
+        ),
+      )
+      .then(
+        (study) => SmartPhoneClientManager()
+            .tryDeployment(study.studyDeploymentId, study.deviceRoleName)
+            .then((_) => SmartPhoneClientManager().resume()),
+      ),
+);
+```
+
+<Callout type="tip" title="Persistent sampling">
+
+Once a study is defined (through a protocol), added, deployed and resumed, CAMS saves its entire state persistently across app restarts. You do not need to restore studies or restart data sampling when the app is closed and restarted, even when the OS kills it. See [background sensing](/docs/mobile-sensing/best-practices#background-sensing).
+
+</Callout>
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/mobile-sensing/installation" icon="Download">
+
+Add the package and configure Android and iOS.
+
+</Card>
+<Card title="Quickstart" href="/docs/quickstart" icon="Rocket">
+
+Build a Flutter app that collects step, battery and app lifecycle data.
+
+</Card>
+<Card title="Using CAMS" href="/docs/mobile-sensing/usage" icon="Code">
+
+End-to-end flow from protocol definition to runtime data streams.
+
+</Card>
+</Cards>
+
+## Documentation map
+
+<Cards>
+<Card title="Software architecture" href="/docs/mobile-sensing/software-architecture" icon="Layers">
+
+Runtime, infrastructure and plugin layers, and how a study is executed.
+
+</Card>
+<Card title="Domain model" href="/docs/mobile-sensing/domain-model" icon="AccountTree">
+
+Study protocols, triggers, tasks, measures, devices and measurements.
+
+</Card>
+<Card title="Measure types" href="/docs/mobile-sensing/measure-types" icon="Dataset">
+
+Supported measure types across built-in and external sampling packages.
+
+</Card>
+<Card title="Data managers" href="/docs/mobile-sensing/data-managers" icon="Storage">
+
+File, SQLite, Firebase and CAWS storage and upload options.
+
+</Card>
+<Card title="App task model" href="/docs/mobile-sensing/app-task-model" icon="Checklist">
+
+User-facing tasks, queueing, notifications and execution lifecycle.
+
+</Card>
+<Card title="Data transformation and privacy" href="/docs/mobile-sensing/privacy" icon="Shield">
+
+Output transformations and privacy schemas for collected data.
+
+</Card>
+<Card title="Extending CAMS" href="/docs/mobile-sensing/extending" icon="Extension">
+
+Add custom triggers, probes, data managers and transformer schemas.
+
+</Card>
+<Card title="Best practices" href="/docs/mobile-sensing/best-practices" icon="Star">
+
+Android and iOS setup recommendations, permissions and troubleshooting.
+
+</Card>
+</Cards>

@@ -1,0 +1,292 @@
+---
+title: Writing data
+description: Write health and fitness data to Apple HealthKit on iOS and Health Connect on Android, with the write method that matches each data type.
+---
+
+The `Health` class provides a write method per kind of data. All write methods require WRITE permission for the types you write; see [Permissions](/docs/flutter-plugins/health/permissions). For the full API, see the [API reference on pub.dev](https://pub.dev/documentation/health/latest/).
+
+## Write methods
+
+| Method | Data types | Use case | Guide |
+|--------|------------|----------|-------|
+| `writeHealthData` | Most numeric types | General health metrics (weight, height, heart rate, blood glucose and so on) | [Numeric data](/docs/flutter-plugins/health/writing/basic) |
+| `writeWorkoutData` | `WORKOUT` | Exercise sessions with activity types | [Workouts](/docs/flutter-plugins/health/writing/workouts) |
+| `writeBloodPressure` | `BLOOD_PRESSURE_*` | Systolic and diastolic readings | [Blood pressure and oxygen](/docs/flutter-plugins/health/writing/blood) |
+| `writeBloodOxygen` | `BLOOD_OXYGEN` | Blood oxygen saturation | [Blood pressure and oxygen](/docs/flutter-plugins/health/writing/blood) |
+| `writeMeal` | `NUTRITION` | Meals with macronutrients and micronutrients | [Nutrition](/docs/flutter-plugins/health/writing/nutrition) |
+| `writeMenstruationFlow` | `MENSTRUATION_FLOW` | Menstrual cycle tracking | [Specialized types](/docs/flutter-plugins/health/writing/specialized) |
+| `writeAudiogram` | `AUDIOGRAM` | Hearing test results | [Specialized types](/docs/flutter-plugins/health/writing/specialized) |
+| `writeInsulinDelivery` | `INSULIN_DELIVERY` | Insulin doses | [Specialized types](/docs/flutter-plugins/health/writing/specialized) |
+
+To remove data, see [Deleting data](/docs/flutter-plugins/health/deleting).
+
+## Write flow
+
+Request WRITE permission, then write the value. Each write method returns `true` on success.
+
+```dart
+// 1. Request write permissions
+final types = [HealthDataType.WEIGHT];
+final permissions = [HealthDataAccess.WRITE];
+
+await health.requestAuthorization(types, permissions: permissions);
+
+// 2. Write the data
+final success = await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+);
+
+if (success) {
+  print('Weight saved successfully');
+} else {
+  print('Failed to save weight');
+}
+```
+
+## Request write permission
+
+Always request WRITE permission before you write. Pass one `HealthDataAccess` value per type:
+
+```dart
+final writeTypes = [
+  HealthDataType.WEIGHT,
+  HealthDataType.HEIGHT,
+  HealthDataType.STEPS,
+];
+
+final granted = await health.requestAuthorization(
+  writeTypes,
+  permissions: List.filled(writeTypes.length, HealthDataAccess.WRITE),
+);
+```
+
+## Constraints and errors
+
+- The start time must be less than or equal to the end time. Otherwise, the plugin throws an `ArgumentError`.
+- WRITE is not allowed for ECG and event types: `ELECTROCARDIOGRAM`, `HIGH_HEART_RATE_EVENT`, `LOW_HEART_RATE_EVENT`, `IRREGULAR_HEART_RATE_EVENT`, `WALKING_HEART_RATE` and `ATRIAL_FIBRILLATION_BURDEN`. Requesting WRITE permission for these types throws.
+- On iOS, `recordingMethod` must be `manual` or `automatic`.
+- If the data type is not supported on the current platform, the plugin throws a `HealthException`.
+- Workout activity types are platform-specific. The plugin validates the activity type and throws if it is not supported on the current platform.
+- For sleep and headache types, the plugin ignores the value you pass and sets the correct categorical value automatically, based on the type.
+
+### Data validation
+
+The plugin performs basic validation. The platform may also reject values:
+
+```dart
+// ✅ Valid
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+);
+
+// ❌ Invalid - negative weight
+await health.writeHealthData(
+  value: -70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+); // May fail or be rejected by platform
+
+// ❌ Invalid - future timestamp
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now().add(Duration(days: 1)),
+); // May fail or be rejected by platform
+```
+
+## Common patterns
+
+### Set the timestamp
+
+```dart
+// Current time (most common)
+await health.writeHealthData(
+  value: 72,
+  type: HealthDataType.HEART_RATE,
+  startTime: DateTime.now(),
+);
+
+// Specific past time
+await health.writeHealthData(
+  value: 98.6,
+  type: HealthDataType.BODY_TEMPERATURE,
+  startTime: DateTime(2024, 1, 15, 8, 30),
+);
+```
+
+### Handle a failed write
+
+A write returns `false` when it fails, for example because permission is missing:
+
+```dart
+try {
+  final success = await health.writeHealthData(
+    value: 120,
+    type: HealthDataType.BLOOD_GLUCOSE,
+    startTime: DateTime.now(),
+  );
+  
+  if (success) {
+    print('Data saved');
+  } else {
+    print('Write failed - check permissions');
+  }
+} catch (e) {
+  print('Error: $e');
+}
+```
+
+### Write several values
+
+```dart
+Future<void> saveMultipleReadings() async {
+  final readings = [
+    {'type': HealthDataType.WEIGHT, 'value': 70.5},
+    {'type': HealthDataType.HEIGHT, 'value': 175.0},
+    {'type': HealthDataType.BODY_FAT_PERCENTAGE, 'value': 18.5},
+  ];
+  
+  for (var reading in readings) {
+    await health.writeHealthData(
+      value: reading['value'] as double,
+      type: reading['type'] as HealthDataType,
+      startTime: DateTime.now(),
+    );
+  }
+}
+```
+
+## Quick reference
+
+One call per write method. For details, follow the guide links in the [Write methods](#write-methods) table.
+
+### Generic write
+
+Use `writeHealthData` for most numeric types. Units default per type, but you can provide one on iOS.
+
+```dart
+final ok = await health.writeHealthData(
+  value: 70,
+  type: HealthDataType.HEART_RATE,
+  startTime: start,
+  endTime: end,
+  recordingMethod: RecordingMethod.manual, // iOS: only manual/automatic
+);
+```
+
+### Workout
+
+```dart
+final ok = await health.writeWorkoutData(
+  activityType: HealthWorkoutActivityType.RUNNING,
+  start: start,
+  end: end,
+  totalEnergyBurned: 400, // kcal (iOS)
+  totalDistance: 3000,    // meter (iOS)
+  title: 'Evening run',    // used on Android Health Connect
+  recordingMethod: RecordingMethod.automatic,
+);
+```
+
+### Blood pressure
+
+```dart
+await health.writeBloodPressure(
+  systolic: 120,
+  diastolic: 80,
+  startTime: time,
+  clientRecordId: 'my-id-1', // optional
+  clientRecordVersion: 1.0,  // optional
+);
+```
+
+### Blood oxygen
+
+```dart
+await health.writeBloodOxygen(
+  saturation: 98.0,
+  startTime: time,
+  recordingMethod: RecordingMethod.automatic,
+);
+```
+
+### Meal
+
+`writeMeal` supports many micronutrients; pass the values you have.
+
+```dart
+await health.writeMeal(
+  mealType: MealType.DINNER,
+  startTime: start,
+  endTime: end,
+  name: 'Pasta',
+  caloriesConsumed: 850,
+  protein: 32,
+  fatTotal: 28,
+  carbohydrates: 110,
+  // ...many micronutrients supported; pass what you have
+);
+```
+
+### Menstruation flow
+
+```dart
+await health.writeMenstruationFlow(
+  flow: MenstrualFlow.medium,
+  isStartOfCycle: true,
+  startTime: start,
+  endTime: end,
+);
+```
+
+### Audiogram (iOS only)
+
+```dart
+await health.writeAudiogram(
+  frequencies: [125, 500, 1000, 2000, 4000, 8000],
+  leftEarSensitivities:  [49, 54, 89, 52, 77, 35],
+  rightEarSensitivities: [76, 66, 90, 22, 85, 45],
+  startTime: start,
+  endTime: end,
+  metadata: {
+    'HKExternalUUID': 'your-id',
+    'HKDeviceName': 'device name',
+  },
+);
+```
+
+### Insulin delivery (iOS only)
+
+```dart
+await health.writeInsulinDelivery(
+  5.0,
+  InsulinDeliveryReason.BOLUS,
+  start,
+  end,
+);
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Requires the Health Connect SDK to be available.
+- Write operations may return `false` if Health Connect is not installed.
+- Data syncs across connected apps.
+- Some specialized types may have limited support.
+
+</Tab>
+<Tab value="iOS">
+
+- Your app cannot read data it wrote without READ permission.
+- Write operations return `true` on success.
+- Data appears immediately in the Apple Health app.
+- All value types are supported.
+
+</Tab>
+</Tabs>

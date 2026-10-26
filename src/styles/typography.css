@@ -1,0 +1,143 @@
+@import '@fontsource-variable/roboto';
+@import '@fontsource-variable/roboto/wght-italic.css';
+
+/*
+ * Material 3 Expressive type roles, in rem so they respect the reader's text size.
+ * Emphasized display/headline/title-large styles use 500; smaller emphasized
+ * titles and labels use 700. Body copy keeps the regular 16/24 reading style.
+ * https://m3.material.io/styles/typography/type-scale-tokens
+ */
+@theme {
+  --font-sans: 'Roboto Variable', Roboto, system-ui, sans-serif;
+
+  --text-m3-display-medium: 2.8125rem;
+  --text-m3-display-medium--line-height: 3.25rem;
+  --text-m3-display-medium--letter-spacing: 0;
+  --text-m3-display-medium--font-weight: 500;
+  --text-m3-display-small: 2.25rem;
+  --text-m3-display-small--line-height: 2.75rem;
+  --text-m3-display-small--letter-spacing: 0;
+  --text-m3-display-small--font-weight: 500;
+  --text-m3-headline-large: 2rem;
+  --text-m3-headline-large--line-height: 2.5rem;
+  --text-m3-headline-large--letter-spacing: 0;
+  --text-m3-headline-large--font-weight: 500;
+  --text-m3-headline-small: 1.5rem;
+  --text-m3-headline-small--line-height: 2rem;
+  --text-m3-headline-small--letter-spacing: 0;
+  --text-m3-headline-small--font-weight: 500;
+  --text-m3-title-large: 1.375rem;
+  --text-m3-title-large--line-height: 1.75rem;
+  --text-m3-title-large--letter-spacing: 0;
+  --text-m3-title-large--font-weight: 500;
+  --text-m3-title-medium: 1rem;
+  --text-m3-title-medium--line-height: 1.5rem;
+  --text-m3-title-medium--letter-spacing: 0.009375rem;
+  --text-m3-title-medium--font-weight: 700;
+  --text-m3-title-small: 0.875rem;
+  --text-m3-title-small--line-height: 1.25rem;
+  --text-m3-title-small--letter-spacing: 0.00625rem;
+  --text-m3-title-small--font-weight: 700;
+
+  --text-m3-body-large: 1rem;
+  --text-m3-body-large--line-height: 1.5rem;
+  --text-m3-body-large--letter-spacing: 0.03125rem;
+  --text-m3-body-large--font-weight: 400;
+  --text-m3-body-medium: 0.875rem;
+  --text-m3-body-medium--line-height: 1.25rem;
+  --text-m3-body-medium--letter-spacing: 0.0125rem;
+  --text-m3-body-medium--font-weight: 400;
+  --text-m3-body-small: 0.75rem;
+  --text-m3-body-small--line-height: 1rem;
+  --text-m3-body-small--letter-spacing: 0.025rem;
+  --text-m3-body-small--font-weight: 400;
+  --text-m3-label-large: 0.875rem;
+  --text-m3-label-large--line-height: 1.25rem;
+  --text-m3-label-large--letter-spacing: 0.00625rem;
+  --text-m3-label-large--font-weight: 500;
+  --text-m3-label-medium: 0.75rem;
+  --text-m3-label-medium--line-height: 1rem;
+  --text-m3-label-medium--letter-spacing: 0.03125rem;
+  --text-m3-label-medium--font-weight: 500;
+
+  /* Compact controls use the equivalent body-role tracking. */
+  --text-sm--letter-spacing: 0.0125rem;
+  --text-xs--letter-spacing: 0.025rem;
+}
+
+/* A distinct prefix keeps class merging from mistaking type roles for colours. */
+@utility m3-display-medium { @apply text-m3-display-medium; }
+@utility m3-display-small { @apply text-m3-display-small; }
+@utility m3-headline-large { @apply text-m3-headline-large; }
+@utility m3-headline-small { @apply text-m3-headline-small; }
+@utility m3-title-large { @apply text-m3-title-large; }
+@utility m3-title-medium { @apply text-m3-title-medium; }
+@utility m3-title-small { @apply text-m3-title-small; }
+@utility m3-body-large { @apply text-m3-body-large; }
+@utility m3-body-medium { @apply text-m3-body-medium; }
+@utility m3-body-small { @apply text-m3-body-small; }
+@utility m3-label-large { @apply text-m3-label-large; }
+@utility m3-label-medium { @apply text-m3-label-medium; }
+
+@layer base {
+  body {
+    @apply text-m3-body-large;
+    font-optical-sizing: auto;
+  }
+
+  pre,
+  code,
+  kbd,
+  samp {
+    letter-spacing: 0;
+  }
+}
+
+/* Type roles are shared by MDX content and streamed answers. */
+@layer utilities {
+  .prose.m3-prose {
+    @apply text-m3-body-large;
+    --tw-prose-body: var(--docs-body);
+    --tw-prose-headings: var(--docs-heading);
+    --tw-prose-links: var(--md-sys-color-primary);
+    --tw-prose-bold: var(--color-fd-foreground);
+  }
+
+  .prose.m3-prose :where(h1):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-display-small;
+  }
+
+  .prose.m3-prose :where(h2):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-headline-large;
+  }
+
+  .prose.m3-prose :where(h3):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-headline-small;
+  }
+
+  .prose.m3-prose :where(h4):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-title-large;
+  }
+
+  .prose.m3-prose :where(h5):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-title-medium;
+  }
+
+  .prose.m3-prose :where(h6):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-title-small;
+  }
+
+  .prose.m3-prose :where(table):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-body-medium;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prose.m3-prose :where(th):not(:where(.not-prose, .not-prose *)) {
+    @apply text-m3-title-small;
+  }
+
+  .prose.m3-prose :where(a:not([data-card])):not(:where(.not-prose, .not-prose *)) {
+    text-decoration-line: underline;
+    text-underline-offset: 0.2em;
+  }
+}

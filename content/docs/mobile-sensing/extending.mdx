@@ -1,0 +1,1008 @@
+---
+title: Extending CAMS
+description: Extend CARP Mobile Sensing with custom triggers, sampling packages, data managers and data or privacy transformers.
+icon: Extension
+---
+
+CARP Mobile Sensing (CAMS) is designed to be extended with domain-specific studies, triggers, tasks, measures, probes and data types. You extend it by implementing classes that inherit from the abstract classes in the library and registering them with CAMS.
+
+| Extension | What you implement | Where you register it |
+| --- | --- | --- |
+| [Trigger](#adding-new-triggers) | `TriggerConfiguration`, `TriggerExecutor`, `TriggerFactory` | `ExecutorFactory().registerTriggerFactory()` |
+| [Sampling package](#adding-new-sampling-capabilities) | `SamplingPackage`, `SamplingSchema`, `Data`, `Probe`, optionally `DeviceManager` | `SamplingPackageRegistry().register()` |
+| [Data manager](#adding-a-new-data-manager) | `DataEndPoint`, `DataManager`, `DataManagerFactory` | `DataManagerRegistry().register()` |
+| [Data transformer](#adding-data-and-privacy-transformers) | `DataTransformerSchema`, `DataTransformer` functions | `DataTransformerSchemaRegistry().register()` |
+| [Privacy transformer](#adding-privacy-transformers) | Transformer functions that privacy-protect `Data` properties | The `PrivacySchema.DEFAULT` schema in the `DataTransformerSchemaRegistry` |
+| [User task](/docs/mobile-sensing/app-task-model#extending-the-app-task-model) | `UserTask`, `UserTaskFactory` | `AppTaskController().registerUserTaskFactory()` |
+
+## JSON serialization
+
+Most extensions rely on serialization to and from JSON. This applies to triggers, measures, sampling schemas, data and more. CAMS uses **polymorphic** serialization as supported by the [`carp_serializable`](https://pub.dev/packages/carp_serializable) package, an extension of the standard [`json_serializable`](https://pub.dev/packages/json_serializable) package.
+
+Polymorphic JSON serialization requires four steps when you design your classes:
+
+<Steps>
+<Step title="Define a serializable class">
+
+Extend from `Serializable` and annotate the class:
+
+```dart
+@JsonSerializable(includeIfNull: false, explicitToJson: true)
+class FreeMemory extends Data {
+  ...
+}
+```
+
+</Step>
+<Step title="Implement the JSON methods">
+
+Implement the three JSON serialization methods:
+
+```dart
+  @override
+  Function get fromJsonFunction => _$FreeMemoryFromJson;
+  factory FreeMemory.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson<FreeMemory>(json);
+  @override
+  Map<String, dynamic> toJson() => _$FreeMemoryToJson(this);
+```
+
+</Step>
+<Step title="Register the class">
+
+Register the class's `fromJsonFunction` in the `FromJsonFactory`, for example in the `onRegister()` callback of a sampling package:
+
+```dart
+  @override
+  void onRegister() {
+    FromJsonFactory()
+        .register(FreeMemory()));
+  } 
+```
+
+</Step>
+<Step title="Run the code generator">
+
+When all JSON classes are implemented, generate the JSON serialization helper classes [using `build_runner`](https://pub.dev/packages/json_serializable#running-the-code-generator). Run this command in the root of your Flutter project:
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+This generates the necessary `.g.dart` files.
+
+</Step>
+</Steps>
+
+For details, see the [`carp_serializable`](https://pub.dev/packages/carp_serializable) and [`json_serializable`](https://pub.dev/packages/json_serializable) packages.
+
+## Adding new triggers
+
+Triggers are a central part of a `StudyProtocol`, and you can create your own triggers and add them to CAMS:
+
+1. Define one or more new triggers.
+2. Define a `TriggerExecutor` for each new trigger.
+3. Define and register a `TriggerFactory` that creates the correct `TriggerExecutor` for a specific trigger.
+
+### Define a trigger
+
+A trigger extends the `TriggerConfiguration` class and adds the domain-specific fields that configure it. The `RemoteTrigger` below listens to a resource on a server identified by a URI and triggers when this resource is available.
+
+```dart
+/// A trigger that triggers based on event from a remote server.
+@JsonSerializable(includeIfNull: false, explicitToJson: true)
+class RemoteTrigger extends TriggerConfiguration {
+  RemoteTrigger({
+    required this.uri,
+    this.interval = const Duration(minutes: 10),
+  }) : super();
+
+  /// The URI of the resource to listen to.
+  String uri;
+
+  /// How often should we check the server?
+  Duration interval;
+
+  @override
+  Function get fromJsonFunction => _$RemoteTriggerFromJson;
+  factory RemoteTrigger.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson<RemoteTrigger>(json);
+  @override
+  Map<String, dynamic> toJson() => _$RemoteTriggerToJson(this);
+}
+```
+
+Trigger configurations are part of a study protocol, so they must support [JSON serialization](#json-serialization).
+
+### Define a trigger executor
+
+Each trigger needs a corresponding `TriggerExecutor` that executes the trigger at sampling runtime.
+
+- Every [`Executor`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/Executor-class.html) in CAMS can implement runtime behavior on init, start, stop, restart and dispose.
+- The abstract [`TriggerExecutor`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/TriggerExecutor-class.html) class has default implementations of all these methods, so you only override the lifecycle methods where something needs to happen.
+- Typically you override `onStart()`, which is called when sensing starts, and implement the trigger logic there. Call the `onTrigger()` callback to fire the trigger.
+
+The `RemoteTriggerExecutor` starts a periodic timer that checks the resource at the URI in the trigger configuration. If the resource is available, it calls `onTrigger()`.
+
+```dart
+/// Executes a [RemoteTrigger], i.e. check if there is a resource on
+/// the server and triggers if so.
+class RemoteTriggerExecutor extends TriggerExecutor<RemoteTrigger> {
+  final client = Client();
+
+  @override
+  Future<bool> onStart() async {
+    // Set up a periodic timer to look for a resource at the specified URI
+    timer = Timer.periodic(configuration!.interval, (_) async {
+      var response = await client.get(
+        Uri.parse(Uri.encodeFull(configuration!.uri)),
+      );
+
+      if (response.statusCode == HttpStatus.ok) {
+        // If there is a resource at the specified URI, then trigger this executor
+        onTrigger();
+      }
+    });
+    return true;
+  }
+}
+```
+
+<Callout type="warning">
+
+This trigger executor is very simplistic and does not cover any edge cases, such as exceptions from network errors.
+
+</Callout>
+
+### Define and register a trigger factory
+
+A [`TriggerFactory`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/TriggerFactory-class.html) maps triggers to their executors at runtime.
+
+- A factory can handle multiple triggers, as listed in the set of trigger `types` it supports.
+- The `create()` method creates the correct trigger executor for the specified trigger.
+- The `onRegister()` callback adds the trigger configurations to the `FromJsonFactory()`, so trigger configurations in a study protocol can be serialized to and from JSON.
+
+```dart
+/// A [TriggerFactory] for remote triggers.
+class RemoteTriggerFactory implements TriggerFactory {
+  @override
+  Set<Type> types = {
+    // Note that this factory might support several types of remote triggers
+    RemoteTrigger,
+  };
+
+  @override
+  void onRegister() {
+    // When registering this factory add the triggers to the JSON serialization
+    FromJsonFactory().registerAll([RemoteTrigger(uri: 'uri')]);
+  }
+
+  @override
+  TriggerExecutor<TriggerConfiguration> create(TriggerConfiguration trigger) =>
+      switch (trigger) {
+        RemoteTrigger _ => RemoteTriggerExecutor(),
+        _ => ImmediateTriggerExecutor(),
+      };
+}
+```
+
+Register the trigger factory with CAMS:
+
+```dart
+ExecutorFactory().registerTriggerFactory(RemoteTriggerFactory());
+```
+
+Do this when you initialize CAMS, before any protocol is created or loaded.
+
+## Adding new sampling capabilities
+
+To add new sensing capabilities, create a new [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html). A sampling package implements these classes:
+
+| Class | Role |
+| --- | --- |
+| `SamplingPackage` | The overall specification of which measures the package can collect. |
+| `SamplingSchema` | Specifies sampling configurations. |
+| `Data` | Specifies the data model of the collected measures. |
+| `Probe` | Implements the runtime data collection. |
+| `DeviceManager` | Specifies how an external device is managed, if any. |
+
+Sampling packages that do not use an external device are simpler to implement, because they can extend the default [`SmartphoneDeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneDeviceManager-class.html). The examples below use the [`DeviceSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html), which does not use an external device.
+
+### Sampling package
+
+Your sampling package implements the [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html) interface:
+
+```dart
+class DeviceSamplingPackage extends SmartphoneSamplingPackage {
+  /// Measure type for collection of basic device information 
+  static const String DEVICE_INFORMATION =
+      '${CarpDataTypes.CARP_NAMESPACE}.deviceinformation';
+
+  /// Measure type for collection of free physical and virtual memory.
+  static const String FREE_MEMORY =
+      '${CarpDataTypes.CARP_NAMESPACE}.freememory';
+
+  /// Measure type for collection of battery level and charging status.
+  static const String BATTERY_STATE =
+      '${CarpDataTypes.CARP_NAMESPACE}.batterystate';
+
+  /// Measure type for collection of screen events (on/off/unlocked).
+  static const String SCREEN_EVENT =
+      '${CarpDataTypes.CARP_NAMESPACE}.screenevent';
+
+  /// Measure type for collection of the time zone of the device.
+  static const String TIMEZONE = '${CarpDataTypes.CARP_NAMESPACE}.timezone';
+
+  @override
+  DataTypeSamplingSchemeMap get samplingSchemes =>
+      DataTypeSamplingSchemeMap.from([
+        DataTypeSamplingScheme(CamsDataTypeMetaData(
+          type: DEVICE_INFORMATION,
+          displayName: "Device Information",
+          timeType: DataTimeType.POINT,
+          dataEventType: DataEventType.ONE_TIME,
+        )),
+        DataTypeSamplingScheme(
+            CamsDataTypeMetaData(
+              type: FREE_MEMORY,
+              displayName: "Free Memory",
+              timeType: DataTimeType.POINT,
+            ),
+            IntervalSamplingConfiguration(
+              interval: const Duration(minutes: 1),
+            )),
+        DataTypeSamplingScheme(CamsDataTypeMetaData(
+          type: BATTERY_STATE,
+          displayName: "Battery State",
+          timeType: DataTimeType.POINT,
+        )),
+        DataTypeSamplingScheme(CamsDataTypeMetaData(
+          type: SCREEN_EVENT,
+          displayName: "Screen Events",
+          timeType: DataTimeType.POINT,
+        )),
+        DataTypeSamplingScheme(CamsDataTypeMetaData(
+          type: TIMEZONE,
+          displayName: "Device Timezone",
+          timeType: DataTimeType.POINT,
+          dataEventType: DataEventType.ONE_TIME,
+        )),
+      ]);
+
+  @override
+  void onRegister() {
+    FromJsonFactory().registerAll([
+      DeviceInformation(),
+      BatteryState(),
+      FreeMemory(),
+      ScreenEvent(),
+      Timezone(''),
+    ]);
+  }
+
+  @override
+  Probe? create(String type) => switch (type) {
+        DEVICE_INFORMATION => DeviceProbe(),
+        FREE_MEMORY => MemoryProbe(),
+        BATTERY_STATE => BatteryProbe(),
+        TIMEZONE => TimezoneProbe(),
+        SCREEN_EVENT => (Platform.isAndroid) ? ScreenProbe() : null,
+        _ => null,
+      };
+}
+```
+
+| Member | Purpose |
+| --- | --- |
+| Static measure type strings | List the measures the package supports. For example, `FREE_MEMORY` defines the type `dk.cachet.carp.freememory`. |
+| `samplingSchemes` | A `DataTypeSamplingSchemeMap` that configures each measure with its [`CamsDataTypeMetaData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDataTypeMetaData-class.html) and, if needed, its sampling configuration. |
+| `onRegister()` | Called when the package is registered. Here it registers the data classes for JSON serialization. |
+| `create()` | Called when a probe is to be created. Returns the right probe for the measure type. |
+
+<Callout type="info" title="Permissions">
+
+[`CamsDataTypeMetaData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDataTypeMetaData-class.html) lets you specify which OS-specific permissions a measure needs. The measures above need no permissions. In the [`SensorSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html), the `activityRecognition` permission is required to collect step counts, as shown in the [`samplingSchemes`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage/samplingSchemes.html) of that package.
+
+</Callout>
+
+### Sampling configurations
+
+You can specify default sampling configurations in `samplingSchemes`, like the `IntervalSamplingConfiguration` for the `FREE_MEMORY` measure type above. CAMS has these built-in sampling configurations:
+
+| Sampling configuration | Description |
+| --- | --- |
+| [`PersistentSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PersistentSamplingConfiguration-class.html) | Persistently saves the state of data sampling for continuous long-running sampling across app restarts. |
+| [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html) | Configures retrospective or backfilled collection of historical data. |
+| [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html) | Samples at a fixed interval (delay) between measurements. |
+| [`PeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicSamplingConfiguration-class.html) | Samples in periodic windows using both interval and duration settings. |
+
+You can also write your own sampling configuration, tailored to how a specific measure should be collected in a probe. For example, this is the [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html):
+
+```dart
+/// A sampling configuration that allows configuring the time [interval] in
+/// between subsequent measurements.
+@JsonSerializable(includeIfNull: false, explicitToJson: true)
+class IntervalSamplingConfiguration extends PersistentSamplingConfiguration {
+  /// Sampling interval (i.e., delay between sampling).
+  Duration interval;
+
+  IntervalSamplingConfiguration({required this.interval}) : super();
+
+  @override
+  Function get fromJsonFunction => _$IntervalSamplingConfigurationFromJson;
+  @override
+  Map<String, dynamic> toJson() => _$IntervalSamplingConfigurationToJson(this);
+  factory IntervalSamplingConfiguration.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson(json) as IntervalSamplingConfiguration;
+}
+```
+
+- A sampling configuration must extend one of the sampling configuration types, such as `SamplingConfiguration` or `PersistentSamplingConfiguration`.
+- Sampling configurations can be part of a study protocol, where you can [override](https://pub.dev/documentation/carp_core/latest/common/Measure/overrideSamplingConfiguration.html) the sampling configuration of a measure.
+
+### Data
+
+Define the package-specific [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) classes that the package collects. This is the `FreeMemory` data item:
+
+```dart
+/// Holds information about free memory on the phone.
+@JsonSerializable(includeIfNull: false, explicitToJson: true)
+class FreeMemory extends Data {
+  static const dataType = DeviceSamplingPackage.FREE_MEMORY;
+
+  /// Amount of free physical memory in bytes.
+  int? freePhysicalMemory;
+
+  /// Amount of free virtual memory in bytes.
+  int? freeVirtualMemory;
+
+  FreeMemory([this.freePhysicalMemory, this.freeVirtualMemory]) : super();
+
+  @override
+  Function get fromJsonFunction => _$FreeMemoryFromJson;
+  factory FreeMemory.fromJson(Map<String, dynamic> json) => FromJsonFactory().fromJson(json) as FreeMemory;
+  @override
+  Map<String, dynamic> toJson() => _$FreeMemoryToJson(this);
+}
+```
+
+<Callout type="tip">
+
+You can add privacy protection of collected data to the package. See [Adding privacy transformers](#adding-privacy-transformers).
+
+</Callout>
+
+### Probes
+
+Implement a probe for each measure type. A probe collects the data and returns it as a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html).
+
+The abstract [`Probe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/Probe-class.html) interface defines a probe. To create your own probes, extend one of the predefined abstract probes in CAMS:
+
+| Probe base class | Description |
+| --- | --- |
+| [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) | Collects one measurement and then stops. |
+| [`IntervalProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/IntervalProbe-class.html) | Collects measurements at a regular interval. |
+| [`StreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/StreamProbe-class.html) | Listens continuously to a stream of measurements. |
+| [`PeriodicStreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/PeriodicStreamProbe-class.html) | Listens to a stream during periodic windows defined by interval and duration. |
+| [`BufferingPeriodicProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BufferingPeriodicProbe-class.html) | Buffers data for a period and emits a derived measurement. |
+| [`BufferingIntervalStreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BufferingIntervalStreamProbe-class.html) | Buffers an underlying stream and emits a measurement on regular intervals. |
+| [`BufferingPeriodicStreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BufferingPeriodicStreamProbe-class.html) | Buffers an underlying stream for a fixed period and then emits a measurement. |
+
+The [`DeviceProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceProbe-class.html) is a simple `MeasurementProbe`. It collects information about the phone with the [`device_info_plus`](https://pub.dev/packages/device_info_plus) plugin, maps it to a [`DeviceInformation`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceInformation-class.html) data item and returns a `Measurement` with this data. Because it extends `MeasurementProbe`, it only implements `getMeasurement()`:
+
+```dart
+/// A probe that collects the device info about this device.
+class DeviceProbe extends MeasurementProbe {
+  @override
+  Future<Measurement?> getMeasurement() async =>
+      Measurement.fromData(DeviceInformation(
+        deviceData: DeviceInfo().deviceData,
+        platform: DeviceInfo().platform,
+        deviceId: DeviceInfo().deviceID,
+        deviceName: DeviceInfo().deviceName,
+        deviceModel: DeviceInfo().deviceModel,
+        deviceManufacturer: DeviceInfo().deviceManufacturer,
+        operatingSystem: DeviceInfo().operatingSystemName,
+        hardware: DeviceInfo().hardware,
+      ));
+}
+```
+
+The [`ScreenProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/ScreenProbe-class.html) is a [`StreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/StreamProbe-class.html) that collects screen activity. It implements the `stream` property, which maps screen events from the [`screen_state`](https://pub.dev/packages/screen_state) plugin to `ScreenEvent` data objects and wraps each one in a measurement with the `Measurement.fromData` factory:
+
+```dart
+/// A probe collecting screen events:
+///  - SCREEN ON
+///  - SCREEN OFF
+///  - SCREEN UNLOCK
+/// which are stored as a [ScreenEvent].
+class ScreenProbe extends StreamProbe {
+  Screen screen = Screen();
+
+  @override
+  Stream<Measurement> get stream => screen.screenStateStream.map(
+    (event) => Measurement.fromData(ScreenEvent.fromScreenStateEvent(event)),
+  );
+}
+```
+
+### External devices
+
+A sampling package that collects data from an external device or service specifies which device type it supports and provides a corresponding [`DeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceManager-class.html) and [`DeviceConfiguration`](https://pub.dev/documentation/carp_core/latest/common/DeviceConfiguration-class.html). The examples in this section come from the eSense sampling package.
+
+The [`ESenseSamplingPackage`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseSamplingPackage-class.html) implements the device-related members:
+
+```dart
+class ESenseSamplingPackage implements SamplingPackage {
+  final DeviceManager _deviceManager =
+      ESenseDeviceManager(ESenseDevice.DEVICE_TYPE);
+
+  // other parts of the package omitted
+
+  @override
+  List<Permission> get permissions => [];
+
+  @override
+  String get deviceType => ESenseDevice.DEVICE_TYPE;
+
+  @override
+  DeviceManager get deviceManager => _deviceManager;
+}
+```
+
+The [`ESenseDevice`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseDevice-class.html) device configuration describes how an eSense device is configured. Because a device configuration can be part of a study protocol, it must support [JSON serialization](#json-serialization).
+
+```dart
+/// A [DeviceConfiguration] for an eSense device used in a [StudyProtocol].
+@JsonSerializable(fieldRename: FieldRename.none, includeIfNull: false)
+class ESenseDevice extends BLEDevice<BLEDeviceRegistration> {
+  /// The type of an eSense device.
+  static const String DEVICE_TYPE =
+      '${CamsDevice.CAMS_DEVICE_NAMESPACE}.ESenseDevice';
+
+  /// The default role name for an eSense device.
+  static const String DEFAULT_ROLE_NAME = 'eSense';
+
+  /// The sampling rate in Hz of getting sensor data from the device.
+  int samplingRate;
+
+  ESenseDevice({
+    super.roleName = ESenseDevice.DEFAULT_ROLE_NAME,
+    super.isOptional = true,
+    this.samplingRate = 10,
+  });
+
+  @override
+  Function get fromJsonFunction => _$ESenseDeviceFromJson;
+  factory ESenseDevice.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson(json) as ESenseDevice;
+  @override
+  Map<String, dynamic> toJson() => _$ESenseDeviceToJson(this);
+}
+```
+
+### Device managers
+
+A device manager implements the [`DeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceManager-class.html) interface. CAMS has predefined device managers that you can extend: `SmartphoneDeviceManager`, `ServiceManager`, `HardwareDeviceManager` and `BLEDeviceManager`. The eSense sensor is a BLE device, so the [`ESenseDeviceManager`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseDeviceManager-class.html) extends [`BLEDeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BLEDeviceManager-class.html):
+
+```dart
+/// A [DeviceManager] for the eSense device.
+///
+/// Note that eSense use the [bleName] (and not the BLE address) for connecting to it.
+/// Typically of the form `eSense-xxxx`.
+class ESenseDeviceManager
+    extends BLEDeviceManager<ESenseDevice, BLEDeviceRegistration> {
+  Timer? _batteryTimer;
+  StreamSubscription<ESenseEvent>? _batterySubscription;
+  double? _voltageLevel;
+  final StreamController<int> _batteryEventController =
+      StreamController.broadcast();
+
+  ESenseManager? _manager;
+
+  /// The eSense device handler.
+  /// Only available after [bleName] has been set.
+  ESenseManager? get manager =>
+      bleName != null ? _manager ??= ESenseManager(bleName!) : _manager = null;
+
+  @override
+  String? get displayName => bleName;
+
+  /// An estimate of the battery level based on the voltage level.
+  @override
+  int? get batteryLevel => (_voltageLevel != null)
+      ? ((1.19 * _voltageLevel! - 3.91) * 100).toInt()
+      : null;
+
+  @override
+  Stream<int> get batteryEvents => _batteryEventController.stream;
+
+  ESenseDeviceManager(super.type, {super.configuration});
+
+  @override
+  bool get canConnect => bleName != null;
+
+  @override
+  BLEDeviceRegistration createRegistration() => BLEDeviceRegistration(
+    deviceDisplayName: bleName,
+    isConnected: isConnected,
+    batteryChargingState: batteryLevel != null
+        ? HardwareDeviceRegistration.parseBatteryLevel(batteryLevel!)
+        : BatteryChargingState.unknown,
+    bleAddress: bleName ?? 'Unknown eSense Device',
+    bleName: bleName,
+  );
+
+  @override
+  Future<DeviceStatus> onConnect() async {
+    try {
+      // listen for connection events
+      manager?.connectionEvents.listen((event) async {
+        switch (event.type) {
+          case ConnectionType.connected:
+            status = DeviceStatus.connected;
+
+            await manager?.setSamplingRate(configuration?.samplingRate ?? 10);
+
+            // when connected, listen for battery events
+            _batterySubscription = manager!.eSenseEvents.listen((event) {
+              if (event is BatteryRead) {
+                _voltageLevel = event.voltage;
+                if (batteryLevel != null) {
+                  _batteryEventController.add(batteryLevel!);
+                }
+              }
+            });
+
+            // set up a timer that asks for the voltage level
+            _batteryTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+              if (status == DeviceStatus.connected) {
+                manager?.getBatteryVoltage();
+              }
+            });
+            break;
+          case ConnectionType.unknown:
+            status = DeviceStatus.unknown;
+            break;
+          case ConnectionType.device_found:
+            status = DeviceStatus.connecting;
+            break;
+          case ConnectionType.device_not_found:
+          case ConnectionType.disconnected:
+            status = DeviceStatus.disconnected;
+            _voltageLevel = null;
+            _batteryTimer?.cancel();
+            _batterySubscription?.cancel();
+            break;
+        }
+      });
+
+      // try to connect to the manager with the [bleName]
+      manager?.connect();
+    } catch (error) {
+      warning(
+        '$runtimeType - Error connecting to eSense device: $bleName - $error',
+      );
+      return DeviceStatus.disconnected;
+    }
+
+    return DeviceStatus.connecting;
+  }
+
+  @override
+  Future<bool> onDisconnect() async => await manager?.disconnect() ?? false;
+}
+```
+
+With the device manager in place, the eSense probes for the button and the IMU sensor are implemented as stream probes:
+
+<Tabs items={['ESenseButtonProbe', 'ESenseSensorProbe']}>
+<Tab value="ESenseButtonProbe">
+
+```dart
+/// Collects eSense button pressed events. It generates an [ESenseButton]
+/// every time the button is pressed or released.
+class ESenseButtonProbe extends StreamProbe {
+  @override
+  ESenseDeviceManager get deviceManager =>
+      super.deviceManager as ESenseDeviceManager;
+
+  @override
+  Stream<Measurement>? get stream => (deviceManager.isConnected)
+      ? deviceManager.manager!.eSenseEvents
+            .where((event) => event.runtimeType == ButtonEventChanged)
+            .map(
+              (event) => Measurement.fromData(
+                ESenseButton(
+                  deviceName: deviceManager.manager!.deviceName,
+                  pressed: (event as ButtonEventChanged).pressed,
+                ),
+              ),
+            )
+            .asBroadcastStream()
+      : null;
+}
+```
+
+</Tab>
+<Tab value="ESenseSensorProbe">
+
+```dart
+/// Collects eSense sensor events.
+/// It generates an [ESenseSensor] for each sensor event.
+class ESenseSensorProbe extends StreamProbe {
+  Stream<Measurement>? _stream;
+
+  @override
+  ESenseDeviceManager get deviceManager =>
+      super.deviceManager as ESenseDeviceManager;
+
+  @override
+  Stream<Measurement>? get stream => _stream ??= (deviceManager.isConnected)
+      ? deviceManager.manager!.sensorEvents
+            .map(
+              (event) => Measurement.fromData(
+                ESenseSensor.fromSensorEvent(
+                  deviceName: deviceManager.manager!.deviceName,
+                  event: event,
+                ),
+                event.timestamp.microsecondsSinceEpoch,
+              ),
+            )
+            .asBroadcastStream()
+      : null;
+}
+```
+
+</Tab>
+</Tabs>
+
+Both the device manager and the probes use the [`ESenseManager`](https://pub.dev/documentation/esense_flutter/latest/esense/ESenseManager-class.html) from the [`esense_flutter`](https://pub.dev/packages/esense_flutter) Flutter plugin.
+
+### Packaging and registering
+
+Bundle all files in a Dart library. For example, the `carp_esense_package` library looks like this:
+
+```dart
+import 'dart:async';
+import 'package:json_annotation/json_annotation.dart';
+import 'package:esense_flutter/esense.dart';
+
+import 'package:carp_serializable/carp_serializable.dart';
+import 'package:carp_core/carp_core.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+
+part 'esense_package.dart';
+part 'esense_domain.dart';
+part 'esense_probes.dart';
+part 'esense_device_manager.dart';
+part 'esense.g.dart';
+```
+
+To use a sampling package, import it into your app together with [`carp_mobile_sensing`](https://pub.dev/packages/carp_mobile_sensing):
+
+```dart
+import 'package:carp_core/carp_core.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_esense_package/esense.dart';
+```
+
+Before you create and run a study, register the package in the [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html):
+
+```dart
+SamplingPackageRegistry().register(ESenseSamplingPackage());
+```
+
+You can release a sampling package as a Dart package on [pub.dev](https://pub.dev). See the [list of existing sampling packages](https://github.com/carp-dk/carp.sensing-flutter?tab=readme-ov-file#software-components), which covers onboard phone sensors, external wearable devices and online services.
+
+## Adding a new data manager
+
+CAMS comes with a set of built-in and external data managers. See [Data managers](/docs/mobile-sensing/data-managers) for an overview.
+
+To save or upload data to a custom data backend, implement three interfaces:
+
+<Steps>
+<Step title="Create a data endpoint">
+
+Implement the [`DataEndPoint`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataEndPoint-class.html) interface, which is used in the study protocol.
+
+</Step>
+<Step title="Create a data manager">
+
+Implement the [`DataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManager-class.html) interface, which saves or uploads measurements as they are sampled.
+
+</Step>
+<Step title="Create a data manager factory">
+
+Create a [`DataManagerFactory`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManagerFactory-class.html) that creates a data manager based on the data endpoint configuration.
+
+</Step>
+</Steps>
+
+### Data endpoint
+
+A data endpoint is part of the study protocol. It specifies which data manager stores or forwards data, and how that data manager is configured. Every new data manager needs a corresponding data endpoint that extends the [`DataEndPoint`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataEndPoint-class.html) class.
+
+For example, the [`FileDataEndPoint`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/FileDataEndPoint-class.html) specifies that data is saved to a file with the [`FileDataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/infrastructure/FileDataManager-class.html). It configures the data manager with a buffer size and whether the file is zipped or encrypted.
+
+<Callout type="warning">
+
+A `DataEndPoint` must support [JSON serialization](#json-serialization) to be part of a study protocol.
+
+</Callout>
+
+### Data manager
+
+A data manager stores or forwards the collected measurements. Every new data manager implements the [`DataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManager-class.html) interface:
+
+```dart
+/// The [DataManager] interface is used to upload [Measurement] objects to any
+/// data manager that implements this interface.
+abstract class DataManager {
+  /// The deployment using this data manager.
+  PrimaryDeviceDeployment get deployment;
+
+  /// The ID of the study deployment that this manager is handling.
+  String get studyDeploymentId;
+
+  /// The type of this data manager as enumerated in [DataEndPointTypes].
+  String get type;
+
+  /// Configure the data manager by specifying the study [deployment], the
+  /// [dataEndPoint], and the stream of [measurements] events to handle.
+  Future<void> configure({
+    required DataEndPoint dataEndPoint,
+    required SmartphoneDeployment deployment,
+    required Stream<Measurement> measurements,
+  });
+
+  /// Flush any buffered data and close this data manager.
+  /// After calling [close] the data manager can no longer be used.
+  Future<void> close();
+
+  /// Stream of data manager events.
+  Stream<DataManagerEvent> get events;
+
+  /// On each measurement collected, the [onMeasurement] handler is called.
+  ///
+  /// Implementations of this interface should handle how to save
+  /// or upload the [measurement].
+  Future<void> onMeasurement(Measurement measurement);
+
+  /// When the data stream closes, the [onDone] handler is called.
+  Future<void> onDone();
+
+  /// When an error event is send on the stream, the [onError] handler is called.
+  Future<void> onError(Object error);
+}
+```
+
+All of these methods must be implemented. The [`AbstractDataManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AbstractDataManager-class.html) class is a useful starting point. For example, the `ConsoleDataManager` is a minimal data manager that prints a JSON-encoded version of the data to the console:
+
+```dart
+/// A very simple data manager that just "uploads" the data to the
+/// console (i.e., prints it). Used mainly for testing and debugging purposes.
+class ConsoleDataManager extends AbstractDataManager {
+  @override
+  String get type => DataEndPointTypes.PRINT;
+
+  @override
+  Future<void> onMeasurement(Measurement measurement) async =>
+      debugPrint(jsonEncode(measurement));
+}
+```
+
+### Data manager factory
+
+Each new data manager needs a corresponding [`DataManagerFactory`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManagerFactory-class.html), which creates a data manager of a specific type when the study protocol is loaded. The interface:
+
+```dart
+/// A factory which can create a [DataManager] based on the `type` of an
+/// [DataEndPoint].
+abstract class DataManagerFactory {
+  /// The [DataEndPoint] type.
+  String get type;
+
+  /// Create a [DataManager].
+  DataManager create();
+}
+```
+
+The factory for the `ConsoleDataManager`:
+
+```dart
+class ConsoleDataManagerFactory implements DataManagerFactory {
+  @override
+  String get type => DataEndPointTypes.PRINT;
+
+  @override
+  DataManager create() => ConsoleDataManager();
+}
+```
+
+Register the factory in the [`DataManagerRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataManagerRegistry-class.html) singleton:
+
+```dart
+DataManagerRegistry().register(ConsoleDataManagerFactory());
+```
+
+Do this at app start-up, before the protocol is loaded and sensing is started.
+
+## Adding data and privacy transformers
+
+For how to use transformers and privacy schemas in a study protocol, see [Data transformation and privacy](/docs/mobile-sensing/privacy).
+
+### Creating data transformer schemas
+
+To create a [`DataTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchema-class.html), implement the `namespace` getter and the `onRegister()` callback. This is the [Open mHealth](http://www.openmhealth.org) transformer schema:
+
+```dart
+/// A default [DataTransformerSchema] for Open mHealth (OMH) transformers
+class OMHTransformerSchema extends DataTransformerSchema {
+  @override
+  String get namespace => NameSpace.OMH;
+  @override
+  void onRegister() {}
+}
+```
+
+Register each transformer schema in the [`DataTransformerSchemaRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchemaRegistry-class.html) singleton as part of your app setup:
+
+```dart
+DataTransformerSchemaRegistry().register(OMHTransformerSchema());
+```
+
+Once the schema is registered, you can create transformers for each data type. A data transformer transforms one type of data into another, as defined by the [`DataTransformer`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformer.html) typedef:
+
+```dart
+typedef DataTransformer = Data Function(Data);
+```
+
+For each `Data` type you want to transform, define a new class that also extends `Data`. For example, the `OMHGeopositionDataPoint` class represents an OMH [`Geoposition`](https://pub.dev/documentation/openmhealth_schemas/latest/openmhealth_schemas/Geoposition-class.html) data point:
+
+```dart
+/// Holds an OMH [Geoposition] data point.
+class OMHGeopositionDataPoint extends OMHContextDataPoint
+    implements DataTransformerFactory {
+  OMHGeopositionDataPoint(DataPoint datapoint) : super(datapoint);
+
+  factory OMHGeopositionDataPoint.fromLocationData(Location location) {
+    var pos = Geoposition(
+        latitude: PlaneAngleUnitValue(
+            unit: PlaneAngleUnit.DEGREE_OF_ARC, value: location.latitude),
+        longitude: PlaneAngleUnitValue(
+            unit: PlaneAngleUnit.DEGREE_OF_ARC, value: location.longitude),
+        positioningSystem: PositioningSystem.GPS);
+
+    return OMHGeopositionDataPoint(
+        DataPoint(body: pos, provenance: OMHContextDataPoint.provenance));
+  }
+
+  factory OMHGeopositionDataPoint.fromJson(Map<String, dynamic> json) =>
+      OMHGeopositionDataPoint(DataPoint.fromJson(json));
+
+  static DataTransformer get transformer =>
+      ((data) => OMHGeopositionDataPoint.fromLocationData(data as Location));
+}
+```
+
+- The most important member is `transformer`, a function that transforms one type of `Data` into another. The mapping between the two data types happens in the `fromLocationData` factory.
+- The class must support JSON serialization. Here the superclass `OMHContextDataPoint` handles it. The `toJson` method is needed to serialize and store the data.
+- The namespace of the [`DataFormat`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataFormat-class.html) of `OMHGeopositionDataPoint` is `OMH`.
+
+Add the transformer to the schema:
+
+```dart
+DataTransformerSchemaRegistry().lookup(NameSpace.OMH)!
+  ..add(LOCATION, OMHGeopositionDataPoint.transformer);
+```
+
+In `carp_context_package`, this happens in the [`onRegister()`](https://pub.dev/documentation/carp_context_package/latest/context/ContextSamplingPackage/onRegister.html) method of the [`ContextSamplingPackage`](https://pub.dev/documentation/carp_context_package/latest/context/ContextSamplingPackage-class.html).
+
+### Using data transformer schemas
+
+You can transform data manually by looking up a transformer schema and applying its transformer. This code transforms a `Location` into an `OMHGeopositionDatum`:
+
+```dart
+    Location loc = Location()
+      ..longitude = 12.23342
+      ..latitude = 3.34224
+      ..altitude = 124.2134235;
+    OMHGeopositionDatum geo = TransformerSchemaRegistry().lookup(NameSpace.OMH).transform(loc);
+```
+
+More commonly, you set the data format of the [`DataEndPoint`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataEndPoint-class.html) with its [`dataFormat`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataEndPoint/dataFormat.html) property, which specifies the namespace, such as `NameSpace.OMH`. This data endpoint saves measurements to a file in the Open mHealth (OMH) data format:
+
+```dart
+  // Create a study protocol storing data in files using the OMH data format
+  var protocol = SmartphoneStudyProtocol(
+    ownerId: 'AB',
+    name: 'Track patient movement',
+    dataEndPoint: FileDataEndPoint(
+      bufferSize: 500 * 1000,
+      zip: true,
+      encrypt: false,
+      dataFormat: NameSpace.OMH,
+    ),
+  );
+```
+
+<Callout type="info">
+
+Not all data types in CAMS have an OMH data format. If no OMH transformer is found, the data is stored in the original CARP data format.
+
+</Callout>
+
+### Adding privacy transformers
+
+A [`PrivacySchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PrivacySchema-class.html) is a special data transformer schema that takes a piece of data and protects its relevant properties. CAMS has a built-in privacy schema with the transformer namespace `PrivacySchema.DEFAULT`. To add privacy protection:
+
+1. Write a transformer function that transforms a `Data` object so that its properties are privacy-protected.
+2. Register this function in the [`DataTransformerSchemaRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchemaRegistry-class.html) as part of the `PrivacySchema.DEFAULT` schema.
+
+These privacy functions anonymize text messages and phone calls:
+
+<Tabs items={['textMessageAnonymizer', 'phoneCallAnonymizer']}>
+<Tab value="textMessageAnonymizer">
+
+```dart
+/// A [TextMessage] anonymizer function. Anonymizes:
+///  - address
+///  - body
+TextMessage textMessageAnonymizer(Data data) {
+  assert(data is TextMessage);
+  var msg = data as TextMessage;
+  if (msg.address != null) {
+    msg.address = sha1.convert(utf8.encode(msg.address!)).toString();
+  }
+  if (msg.body != null) {
+    msg.body = sha1.convert(utf8.encode(msg.body!)).toString();
+  }
+
+  return msg;
+}
+```
+
+</Tab>
+<Tab value="phoneCallAnonymizer">
+
+```dart
+/// A [PhoneCall] anonymizer function. Anonymizes:
+///  - formattedNumber
+///  - number
+///  - name
+PhoneCall phoneCallAnonymizer(PhoneCall call) {
+  if (call.formattedNumber != null) {
+    call.formattedNumber = sha1
+        .convert(utf8.encode(call.formattedNumber!))
+        .toString();
+  }
+  if (call.number != null) {
+    call.number = sha1.convert(utf8.encode(call.number!)).toString();
+  }
+  if (call.name != null) {
+    call.name = sha1.convert(utf8.encode(call.name!)).toString();
+  }
+
+  return call;
+}
+```
+
+</Tab>
+</Tabs>
+
+You can put these functions anywhere in the sampling package. Typically you put them in a separate file if you have many, or in the package Dart file if you have only a few.
+
+Register the anonymizer functions in the `PrivacySchema.DEFAULT` schema, typically in the package's `onRegister()` callback:
+
+```dart
+TransformerSchemaRegistry().lookup(PrivacySchema.DEFAULT)!.add(TEXT_MESSAGE, textMessageAnoymizer);
+```
+
+This example is implemented in the [`carp_communication_package`](https://pub.dev/packages/carp_communication_package).
+
+<Callout type="tip">
+
+Consider whether your sampling package needs to supply privacy-protecting functions, and if so, add them to the default privacy schema.
+
+</Callout>

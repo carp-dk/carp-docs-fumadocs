@@ -1,0 +1,712 @@
+---
+title: Permissions
+description: Request, check and revoke health data permissions on iOS and Android, including the Android runtime permissions.
+icon: Lock
+---
+
+Health data is sensitive. Both iOS and Android require explicit user consent before your app can read or write health data, and the user grants that consent separately for each data type.
+
+Each type is requested with one of these access levels (`HealthDataAccess`):
+
+| Access level | Can read | Can write |
+| --- | --- | --- |
+| `READ` | Yes | No |
+| `WRITE` | No | Yes |
+| `READ_WRITE` | Yes | Yes |
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+Health Connect uses an explicit permission system and reports whether each permission is granted or denied.
+
+- The permission status is a clear yes or no.
+- Users can grant or revoke permissions at any time in the Health Connect settings.
+- Both READ and WRITE permissions can be verified.
+- Permissions persist until they are explicitly revoked.
+
+</Tab>
+<Tab value="iOS">
+
+HealthKit follows a privacy-first approach.
+
+- Users grant or deny each data type individually.
+- Once a permission is denied, the user must change it in the Settings app.
+- Your app never knows whether READ was granted. `hasPermissions()` returns `null` for READ checks.
+- WRITE permissions can be verified.
+
+</Tab>
+</Tabs>
+
+## Request permissions
+
+`requestAuthorization()` asks the user to grant access to specific health data types.
+
+```dart
+Future<bool> requestAuthorization(
+  List<HealthDataType> types, {
+  List<HealthDataAccess>? permissions,
+})
+```
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `types` | `List<HealthDataType>` | Yes | - | Data types to request |
+| `permissions` | `List<HealthDataAccess>?` | No | All READ | Access level for each type |
+
+It returns:
+
+- `true` when authorization succeeded. On iOS, this means the dialog was shown; on Android, that access was granted.
+- `false` when authorization failed or was denied.
+
+### Request read access
+
+By default, `requestAuthorization()` requests READ access.
+
+<Steps>
+<Step title="Choose the data types">
+
+```dart
+final types = [
+  HealthDataType.STEPS,
+  HealthDataType.HEART_RATE,
+];
+```
+
+</Step>
+<Step title="Show the system permission dialog">
+
+```dart
+final granted = await health.requestAuthorization(types);
+```
+
+</Step>
+<Step title="Handle the response">
+
+```dart
+if (granted) {
+  // Start reading data
+  await fetchHealthData();
+} else {
+  // Show error message
+  showPermissionError();
+}
+```
+
+</Step>
+</Steps>
+
+The same flow as a complete function:
+
+```dart
+import 'package:health/health.dart';
+
+Future<void> requestStepsPermission() async {
+  final health = Health();
+  await health.configure();
+  
+  // Request permission to read steps
+  final types = [HealthDataType.STEPS];
+  final granted = await health.requestAuthorization(types);
+  
+  if (granted) {
+    print('✓ Can now read step data!');
+  } else {
+    print('✗ User denied permission');
+  }
+}
+```
+
+### Request read and write access
+
+Pass `permissions` to set the access level for each type. The list has one entry per type, in the same order:
+
+```dart
+final types = [
+  HealthDataType.STEPS,       // Just read
+  HealthDataType.WEIGHT,      // Read and write
+  HealthDataType.WORKOUT,     // Read and write
+];
+
+final permissions = [
+  HealthDataAccess.READ,        // Steps: read only
+  HealthDataAccess.READ_WRITE,  // Weight: read and write
+  HealthDataAccess.READ_WRITE,  // Workout: read and write
+];
+
+final granted = await health.requestAuthorization(
+  types,
+  permissions: permissions,
+);
+```
+
+<Callout type="warning">
+
+Request WRITE permission only if you actually need to write data. Users are more likely to grant READ-only access.
+
+</Callout>
+
+### Handle errors
+
+```dart
+try {
+  bool authorized = await health.requestAuthorization(types, permissions: perms);
+  
+  if (!authorized) {
+    // User denied or error occurred
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permissions Required'),
+        content: Text('Please grant health data permissions to continue.'),
+      ),
+    );
+  }
+} catch (e) {
+  print('Error requesting authorization: $e');
+}
+```
+
+## Check permissions
+
+`hasPermissions()` checks whether your app already has permission, before you request or read data:
+
+```dart
+// Check if we can read steps
+final types = [HealthDataType.STEPS];
+final hasPermission = await health.hasPermissions(types);
+
+if (hasPermission == true) {
+  print('✓ We have permission!');
+} else {
+  print('Need to request permission');
+  await health.requestAuthorization(types);
+}
+```
+
+Check several types in one call:
+
+```dart
+// Check multiple data types
+final types = [
+  HealthDataType.STEPS,
+  HealthDataType.HEART_RATE,
+  HealthDataType.WEIGHT,
+];
+
+final hasPermission = await health.hasPermissions(types);
+```
+
+| Return value | Meaning |
+| --- | --- |
+| `true` | All permissions are granted. |
+| `false` | At least one permission is denied or not granted. |
+| `null` | Cannot be determined (iOS READ permissions). |
+
+<Callout type="info">
+
+On iOS, checking READ permissions always returns `null` for privacy reasons. When you get `null`, assume that you need to request the permission.
+
+</Callout>
+
+## Revoke permissions
+
+`revokePermissions()` revokes all Health Connect permissions.
+
+```dart
+Future<void> revokePermissions()
+```
+
+<Callout type="warning" title="Android only">
+
+This method has no effect on iOS.
+
+</Callout>
+
+| Platform | Behavior |
+| --- | --- |
+| Android | Revokes all Health Connect permissions. The app must be completely killed and restarted for the change to take effect. |
+| iOS | No-op. iOS does not support programmatic permission revocation; users change permissions in the Settings app, under your app's Health section. |
+
+```dart
+// Revoke all permissions (Android only)
+await health.revokePermissions();
+```
+
+Revoke and ask the user to restart the app:
+
+```dart
+if (Platform.isAndroid) {
+  await health.revokePermissions();
+  
+  // Inform user to restart app
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Permissions Revoked'),
+      content: Text('Please restart the app for changes to take effect.'),
+      actions: [
+        TextButton(
+          onPressed: () => SystemNavigator.pop(),
+          child: Text('Exit App'),
+        ),
+      ],
+    ),
+  );
+}
+```
+
+## Android runtime permissions
+
+<Callout type="warning">
+
+Android requires additional runtime permissions for certain health data types. These are separate from the Health Connect permissions. Request them with the [permission_handler](https://pub.dev/packages/permission_handler) package before you request health authorization.
+
+</Callout>
+
+| Runtime permission | Required for |
+| --- | --- |
+| Activity recognition | STEPS, DISTANCE and WORKOUT data |
+| Location | WORKOUT with distance tracking |
+
+### Activity recognition
+
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+Future<bool> requestActivityRecognition() async {
+  final status = await Permission.activityRecognition.request();
+  return status.isGranted;
+}
+
+// Use before requesting health data
+await requestActivityRecognition();
+await health.requestAuthorization([HealthDataType.STEPS]);
+```
+
+### Location
+
+```dart
+Future<bool> requestLocationPermission() async {
+  final status = await Permission.location.request();
+  return status.isGranted;
+}
+
+// Use before requesting workout data
+await requestLocationPermission();
+await health.requestAuthorization([HealthDataType.WORKOUT]);
+```
+
+To request `locationWhenInUse` as well:
+
+```dart
+await Permission.location.request();
+await Permission.locationWhenInUse.request();
+
+// Then request workout permissions
+await health.requestAuthorization([HealthDataType.WORKOUT]);
+```
+
+### Complete Android flow
+
+Check Health Connect, request the runtime permissions, then request the health data permissions:
+
+```dart
+Future<bool> setupAndroidPermissions() async {
+  // 1. Check Health Connect availability
+  final available = await health.isHealthConnectAvailable();
+  if (!available) {
+    await health.installHealthConnect();
+    return false;
+  }
+  
+  // 2. Request runtime permissions
+  await Permission.activityRecognition.request();
+  await Permission.location.request();
+  
+  // 3. Request health data permissions
+  final types = [
+    HealthDataType.STEPS,
+    HealthDataType.WORKOUT,
+    HealthDataType.HEART_RATE,
+  ];
+  
+  return await health.requestAuthorization(types);
+}
+```
+
+## Platform-specific types
+
+### Read-only types on iOS
+
+Apps can read, but not write, some iOS health data. Always request READ for these types:
+
+```dart
+final readOnlyTypes = [
+  HealthDataType.ELECTROCARDIOGRAM,         // Apple Watch only
+  HealthDataType.HIGH_HEART_RATE_EVENT,     // Apple Watch only  
+  HealthDataType.LOW_HEART_RATE_EVENT,      // Apple Watch only
+  HealthDataType.IRREGULAR_HEART_RATE_EVENT, // Apple Watch only
+  HealthDataType.WALKING_HEART_RATE,        // Calculated by iOS
+  HealthDataType.GENDER,                    // User profile data
+  HealthDataType.BLOOD_TYPE,                // User profile data
+  HealthDataType.BIRTH_DATE,                // User profile data
+];
+
+// Always use READ for these types
+await health.requestAuthorization(
+  readOnlyTypes,
+  permissions: readOnlyTypes.map((t) => HealthDataAccess.READ).toList(),
+);
+```
+
+<Callout type="warning">
+
+Requesting WRITE access for read-only types throws an `ArgumentError`.
+
+</Callout>
+
+### BMI on Android
+
+On Android, BMI requires weight and height data. When you request `BODY_MASS_INDEX`, Android automatically includes the WEIGHT and HEIGHT permissions in the request:
+
+```dart
+final types = [HealthDataType.BODY_MASS_INDEX];
+
+// Android automatically adds WEIGHT and HEIGHT to the request
+await health.requestAuthorization(types);
+```
+
+## Permission patterns
+
+### Request on first launch
+
+Ask for permissions the first time the user opens a health feature:
+
+```dart
+Future<void> initializeHealth() async {
+  // Check if we've asked before
+  final prefs = await SharedPreferences.getInstance();
+  final askedBefore = prefs.getBool('health_permission_asked') ?? false;
+  
+  if (!askedBefore) {
+    await health.requestAuthorization([HealthDataType.STEPS]);
+    await prefs.setBool('health_permission_asked', true);
+  }
+}
+```
+
+### Check, then request at startup
+
+```dart
+Future<void> initializeHealth() async {
+  await health.configure();
+  
+  final types = [
+    HealthDataType.STEPS,
+    HealthDataType.HEART_RATE,
+    HealthDataType.WEIGHT,
+  ];
+  
+  // Check existing permissions
+  bool? hasPerms = await health.hasPermissions(types);
+  
+  if (hasPerms != true) {
+    // Request permissions
+    bool authorized = await health.requestAuthorization(types);
+    
+    if (!authorized) {
+      // Show explanation to user
+      _showPermissionRationale();
+    }
+  }
+}
+```
+
+### Request on demand
+
+Check and request permission right before you read data:
+
+```dart
+Future<List<HealthDataPoint>> fetchSteps() async {
+  final type = HealthDataType.STEPS;
+  
+  // Check permission first
+  bool? hasPerm = await health.hasPermissions([type]);
+  
+  if (hasPerm != true) {
+    // Request on-demand
+    bool authorized = await health.requestAuthorization([type]);
+    if (!authorized) {
+      throw Exception('Permission denied');
+    }
+  }
+  
+  // Now fetch data
+  return await health.getHealthDataFromTypes(
+    types: [type],
+    startTime: DateTime.now().subtract(Duration(days: 1)),
+    endTime: DateTime.now(),
+  );
+}
+```
+
+### Request incrementally
+
+Request only what you need, when the user needs it:
+
+```dart
+// Request steps for main screen
+await health.requestAuthorization([HealthDataType.STEPS]);
+
+// Later, when user opens workout feature
+await health.requestAuthorization([HealthDataType.WORKOUT]);
+
+// When user wants to log weight
+await health.requestAuthorization(
+  [HealthDataType.WEIGHT],
+  permissions: [HealthDataAccess.READ_WRITE],
+);
+```
+
+Or request permissions in stages:
+
+```dart
+// Stage 1: Basic metrics
+await health.requestAuthorization([
+  HealthDataType.STEPS,
+  HealthDataType.DISTANCE_WALKING_RUNNING,
+]);
+
+// Stage 2: Add workouts after user engagement
+await health.requestAuthorization([
+  HealthDataType.WORKOUT,
+  HealthDataType.ACTIVE_ENERGY_BURNED,
+]);
+
+// Stage 3: Add biometrics for premium features
+await health.requestAuthorization([
+  HealthDataType.HEART_RATE,
+  HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+  HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+]);
+```
+
+<Callout type="tip">
+
+Users are more likely to grant permissions if you explain why you need them first.
+
+</Callout>
+
+### Handle denied permissions
+
+Send the user to the place where they can change the permission: the Health Connect settings on Android, and the Settings app on iOS.
+
+```dart
+Future<void> handlePermissionDenied() async {
+  // On Android, direct user to Health Connect settings
+  if (Platform.isAndroid) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permissions Required'),
+        content: Text(
+          'Please grant permissions in Health Connect settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              // Open Health Connect
+              await health.installHealthConnect();
+            },
+            child: Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // On iOS, direct to Settings app
+  if (Platform.isIOS) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permissions Required'),
+        content: Text(
+          'Please enable Health permissions in Settings > Health > Data Access & Devices.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => openAppSettings(),
+            child: Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### Track permission state
+
+Check each type and request only the missing ones:
+
+```dart
+class PermissionManager {
+  final Health health;
+  
+  PermissionManager(this.health);
+  
+  Future<Map<HealthDataType, bool?>> checkAllPermissions(
+    List<HealthDataType> types,
+  ) async {
+    final results = <HealthDataType, bool?>{};
+    
+    for (final type in types) {
+      final hasPermission = await health.hasPermissions([type]);
+      results[type] = hasPermission;
+    }
+    
+    return results;
+  }
+  
+  Future<void> requestMissingPermissions(
+    List<HealthDataType> types,
+  ) async {
+    final missingTypes = <HealthDataType>[];
+    
+    for (final type in types) {
+      final hasPermission = await health.hasPermissions([type]);
+      if (hasPermission != true) {
+        missingTypes.add(type);
+      }
+    }
+    
+    if (missingTypes.isNotEmpty) {
+      await health.requestAuthorization(missingTypes);
+    }
+  }
+}
+```
+
+Track READ and WRITE access per type. Pass `permissions` to `hasPermissions()` to check a specific access level:
+
+```dart
+class HealthPermissionManager {
+  final Health health;
+  Map<HealthDataType, HealthDataAccess> _grantedPermissions = {};
+  
+  Future<void> refreshPermissions(List<HealthDataType> types) async {
+    for (var type in types) {
+      // Check READ
+      bool? hasRead = await health.hasPermissions([type]);
+      
+      // Check WRITE (Android only)
+      bool? hasWrite = await health.hasPermissions(
+        [type],
+        permissions: [HealthDataAccess.WRITE],
+      );
+      
+      if (hasWrite == true) {
+        _grantedPermissions[type] = HealthDataAccess.READ_WRITE;
+      } else if (hasRead == true) {
+        _grantedPermissions[type] = HealthDataAccess.READ;
+      }
+    }
+  }
+  
+  bool canRead(HealthDataType type) {
+    return _grantedPermissions[type] != null;
+  }
+  
+  bool canWrite(HealthDataType type) {
+    return _grantedPermissions[type] == HealthDataAccess.READ_WRITE;
+  }
+}
+```
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Permissions denied on iOS">
+
+**Problem:** the user denied permissions, and they cannot be requested again.
+
+**Solution:** guide the user to the Settings app:
+
+```dart
+showDialog(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: Text('Enable Health Access'),
+    content: Text(
+      '1. Open Settings app\n'
+      '2. Scroll to ${yourAppName}\n'
+      '3. Tap Health\n'
+      '4. Enable the data types you want to share'
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => OpenSettings.openSettings(),
+        child: Text('Open Settings'),
+      ),
+    ],
+  ),
+);
+```
+
+</Accordion>
+<Accordion title="Health Connect not available">
+
+**Problem:** Health Connect returns an unavailable status.
+
+**Solution:** check the SDK status and act on it:
+
+```dart
+final status = await health.getHealthConnectSdkStatus();
+
+switch (status) {
+  case HealthConnectSdkStatus.SDK_UNAVAILABLE:
+    // Not installed - offer to install
+    await health.installHealthConnect();
+    break;
+  case HealthConnectSdkStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED:
+    // Needs update
+    showUpdateDialog();
+    break;
+  case HealthConnectSdkStatus.SDK_AVAILABLE:
+    // All good!
+    break;
+}
+```
+
+</Accordion>
+<Accordion title="hasPermissions returns null">
+
+**Problem:** the permission check returns `null` on iOS.
+
+**Solution:** this is expected behavior for privacy. Always request the permissions:
+
+```dart
+final hasPermission = await health.hasPermissions(types);
+
+// On iOS, hasPermission will be null for READ
+if (hasPermission != true) {
+  // Request regardless
+  await health.requestAuthorization(types);
+}
+```
+
+</Accordion>
+</Accordions>
+
+## See also
+
+<Cards>
+<Card title="Health Connect" href="/docs/flutter-plugins/health/health-connect" icon="Android">Android-specific Health Connect features.</Card>
+<Card title="Android setup" href="/docs/flutter-plugins/health/platform-setup/android" icon="Settings">Declare permissions in AndroidManifest.xml.</Card>
+<Card title="iOS setup" href="/docs/flutter-plugins/health/platform-setup/ios" icon="Iphone">Enable the HealthKit capability.</Card>
+<Card title="Data types" href="/docs/flutter-plugins/health/data-types" icon="Dataset">All available health data types.</Card>
+<Card title="Reading data" href="/docs/flutter-plugins/health/reading" icon="Download">Read health data once permissions are granted.</Card>
+</Cards>

@@ -1,0 +1,109 @@
+---
+title: Add the watch target
+description: Create the watchOS app target, set its identifiers and signing, and link the AWARE framework.
+---
+
+If your app uses any CocoaPods plugins, open the **workspace**, not the project:
+
+```bash
+open ios/Runner.xcworkspace
+```
+
+## Create the watchOS app target
+
+<Steps>
+<Step title="Add a new target">
+
+Choose **File → New → Target…**, then select the **watchOS** tab → **App** → **Next**.
+
+</Step>
+<Step title="Fill in the target options">
+
+| Field | Value |
+|---|---|
+| Product Name | `CarpWatch` (any name works, this guide uses `CarpWatch`) |
+| Interface | SwiftUI |
+| Language | Swift |
+| Project | `Runner` |
+| **Embed in Companion Application** | **`Runner`** |
+
+</Step>
+<Step title="Activate the scheme">
+
+When Xcode offers to activate the new scheme, choose **Activate**.
+
+</Step>
+<Step title="Set the deployment target">
+
+Select the `CarpWatch Watch App` target → **General** → **Minimum Deployments** → **watchOS 8.0** or later.
+
+</Step>
+</Steps>
+
+Xcode creates:
+
+- a group `CarpWatch Watch App` containing `CarpWatchApp.swift`, `ContentView.swift` and assets;
+- a target and a scheme of the same name;
+- an **Embed Watch Content** build phase on the `Runner` target.
+
+## Set the bundle identifiers and signing
+
+The watch app's bundle identifier **must** be the iOS app's identifier plus exactly one component:
+
+| Target | Bundle identifier |
+|---|---|
+| `Runner` | `dk.carp.myapp` |
+| `CarpWatch Watch App` | `dk.carp.myapp.watchkitapp` |
+
+Xcode normally gets this right when you use **Embed in Companion Application**. Verify it:
+
+- under the watch target → **Signing & Capabilities** → **Bundle Identifier**;
+- in the build setting `INFOPLIST_KEY_WKCompanionAppBundleIdentifier` on the watch target, which must point at the iOS bundle identifier.
+
+Set the same **Team** on both targets and let Xcode manage signing. With manual signing, you need a second provisioning profile for the watch app's identifier.
+
+<Callout type="warning">
+
+If this relationship is wrong, watchOS never offers to install the companion app.
+
+</Callout>
+
+## Link the AWARE framework into the watch target
+
+The AWARE framework ships inside `carp_aware_package` as pre-compiled binaries. Xcode already resolved them along with the plugin, so you only need to link them into the watch target.
+
+<Steps>
+<Step title="Select the watch target">
+
+`CarpWatch Watch App` → **General**.
+
+</Step>
+<Step title="Add the framework">
+
+Under **Frameworks, Libraries, and Embedded Content**, press **+**, pick **`carp-aware-watch`** from the list of package products, and choose **Add**.
+
+</Step>
+<Step title="Leave it on Do Not Embed">
+
+The binaries are static libraries and require no embedding or signing.
+
+</Step>
+</Steps>
+
+This gives the watch target two AWARE watch modules, `com_awareframework_ios_sensor_applewatch_shared` and `com_awareframework_ios_sensor_applewatch_watchOS`, including the other packages they require.
+
+<Callout type="warning" title="Watch target only">
+
+**Do not add `carp-aware-watch` to the `Runner` target.** The iOS side of the plugin already links its own AWARE binaries through `carp-aware-package`. Adding the watch product to the app as well gives you two copies of the same modules and duplicate-symbol errors at link time.
+
+</Callout>
+
+## Next step
+
+<Cards>
+<Card title="Capabilities and permissions" href="/docs/sampling-packages/apple-watch/watch-app/permissions" icon="Shield">
+
+Capabilities, background modes, and the privacy strings watchOS requires.
+
+</Card>
+</Cards>

@@ -1,0 +1,16 @@
+# Portainer stack for docs.carp.dk.
+#
+# In Portainer: Stacks > Add stack > paste this file, then add the environment variables below
+# under "Environment variables". Point the reverse proxy for docs.carp.dk at port 3000.
+# If the image is private, add ghcr.io as a registry in Portainer with a token that can read packages.
+services:
+  docs:
+    image: ghcr.io/carp-dk/carp-docs-fumadocs:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Ask AI. Without a key the docs still work, but Ask AI cannot answer.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # Optional; an OpenRouter model id. Defaults to anthropic/claude-3.5-sonnet.
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}

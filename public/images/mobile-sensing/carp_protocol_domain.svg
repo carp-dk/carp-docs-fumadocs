@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xl="http://www.w3.org/1999/xlink" viewBox="444 239 543 196" width="543" height="196">
+  <defs/>
+  <g id="Domain_Model_-_1_13" stroke-opacity="1" fill-opacity="1" fill="none" stroke-dasharray="none" stroke="none">
+    <title>Domain Model - 1.13</title>
+    <g id="Domain_Model_-_1_13_Layer_1">
+      <title>Layer 1</title>
+      <g id="Graphic_13">
+        <path d="M 454.08 393.5 L 517.08 393.5 C 522.05056 393.5 526.08 397.52944 526.08 402.5 L 526.08 424.5 C 526.08 429.47056 522.05056 433.5 517.08 433.5 L 454.08 433.5 C 449.10944 433.5 445.08 429.47056 445.08 424.5 L 445.08 402.5 C 445.08 397.52944 449.10944 393.5 454.08 393.5 Z" fill="#c0c0ff"/>
+        <path d="M 454.08 393.5 L 517.08 393.5 C 522.05056 393.5 526.08 397.52944 526.08 402.5 L 526.08 424.5 C 526.08 429.47056 522.05056 433.5 517.08 433.5 L 454.08 433.5 C 449.10944 433.5 445.08 429.47056 445.08 424.5 L 445.08 402.5 C 445.08 397.52944 449.10944 393.5 454.08 393.5 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(450.08 406.5)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="13.826172" y="11" xml:space="preserve">Device</tspan>
+        </text>
+      </g>
+      <g id="Graphic_12">
+        <path d="M 454.08 317.2477 L 517.08 317.2477 C 522.05056 317.2477 526.08 321.27714 526.08 326.2477 L 526.08 348.2477 C 526.08 353.21827 522.05056 357.2477 517.08 357.2477 L 454.08 357.2477 C 449.10944 357.2477 445.08 353.21827 445.08 348.2477 L 445.08 326.2477 C 445.08 321.27714 449.10944 317.2477 454.08 317.2477 Z" fill="#ffc0c0"/>
+        <path d="M 454.08 317.2477 L 517.08 317.2477 C 522.05056 317.2477 526.08 321.27714 526.08 326.2477 L 526.08 348.2477 C 526.08 353.21827 522.05056 357.2477 517.08 357.2477 L 454.08 357.2477 C 449.10944 357.2477 445.08 353.21827 445.08 348.2477 L 445.08 326.2477 C 445.08 321.27714 449.10944 317.2477 454.08 317.2477 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(450.08 323.2477)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="17.438477" y="11" xml:space="preserve">Study</tspan>
+          <tspan font-family="Menlo" font-size="12" fill="black" x="6.6015625" y="25" xml:space="preserve">Protocol</tspan>
+        </text>
+      </g>
+      <g id="Graphic_11">
+        <path d="M 657.92 268.27344 L 720.92 268.27344 C 725.8906 268.27344 729.92 272.30287 729.92 277.27344 L 729.92 299.27344 C 729.92 304.244 725.8906 308.27344 720.92 308.27344 L 657.92 308.27344 C 652.9494 308.27344 648.92 304.244 648.92 299.27344 L 648.92 277.27344 C 648.92 272.30287 652.9494 268.27344 657.92 268.27344 Z" fill="#ffc0c0"/>
+        <path d="M 657.92 268.27344 L 720.92 268.27344 C 725.8906 268.27344 729.92 272.30287 729.92 277.27344 L 729.92 299.27344 C 729.92 304.244 725.8906 308.27344 720.92 308.27344 L 657.92 308.27344 C 652.9494 308.27344 648.92 304.244 648.92 299.27344 L 648.92 277.27344 C 648.92 272.30287 652.9494 268.27344 657.92 268.27344 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(653.92 281.27344)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="21.05078" y="11" xml:space="preserve">Task</tspan>
+        </text>
+      </g>
+      <g id="Graphic_10">
+        <path d="M 775.7005 268.27344 L 838.7005 268.27344 C 843.671 268.27344 847.7005 272.30287 847.7005 277.27344 L 847.7005 299.27344 C 847.7005 304.244 843.671 308.27344 838.7005 308.27344 L 775.7005 308.27344 C 770.7299 308.27344 766.7005 304.244 766.7005 299.27344 L 766.7005 277.27344 C 766.7005 272.30287 770.7299 268.27344 775.7005 268.27344 Z" fill="#ffc0c0"/>
+        <path d="M 775.7005 268.27344 L 838.7005 268.27344 C 843.671 268.27344 847.7005 272.30287 847.7005 277.27344 L 847.7005 299.27344 C 847.7005 304.244 843.671 308.27344 838.7005 308.27344 L 775.7005 308.27344 C 770.7299 308.27344 766.7005 304.244 766.7005 299.27344 L 766.7005 277.27344 C 766.7005 272.30287 770.7299 268.27344 775.7005 268.27344 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(771.7005 281.27344)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="10.213867" y="11" xml:space="preserve">Measure</tspan>
+        </text>
+      </g>
+      <g id="Line_9">
+        <line x1="527.08" y1="337.2477" x2="554" y2="337.2477" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Line_8">
+        <line x1="730.92" y1="288.27344" x2="765.7005" y2="288.27344" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Graphic_19">
+        <path d="M 564 317.2477 L 627 317.2477 C 631.9706 317.2477 636 321.27714 636 326.2477 L 636 348.2477 C 636 353.21827 631.9706 357.2477 627 357.2477 L 564 357.2477 C 559.02944 357.2477 555 353.21827 555 348.2477 L 555 326.2477 C 555 321.27714 559.02944 317.2477 564 317.2477 Z" fill="#ffc0c0"/>
+        <path d="M 564 317.2477 L 627 317.2477 C 631.9706 317.2477 636 321.27714 636 326.2477 L 636 348.2477 C 636 353.21827 631.9706 357.2477 627 357.2477 L 564 357.2477 C 559.02944 357.2477 555 353.21827 555 348.2477 L 555 326.2477 C 555 321.27714 559.02944 317.2477 564 317.2477 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(560 323.2477)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="21.05078" y="11" xml:space="preserve">Task</tspan>
+          <tspan font-family="Menlo" font-size="12" fill="black" x="10.213867" y="25" xml:space="preserve">Control</tspan>
+        </text>
+      </g>
+      <g id="Graphic_20">
+        <text transform="translate(541.13666 318.14935)" fill="#797979">
+          <tspan font-family="Helvetica Neue" font-size="24" fill="#797979" x="15987212e-20" y="23" xml:space="preserve">*</tspan>
+        </text>
+      </g>
+      <g id="Line_23">
+        <line x1="485.58" y1="358.2477" x2="485.58" y2="392.5" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Graphic_37">
+        <path d="M 657.92 370.7321 L 720.92 370.7321 C 725.8906 370.7321 729.92 374.7615 729.92 379.7321 L 729.92 401.7321 C 729.92 406.70264 725.8906 410.7321 720.92 410.7321 L 657.92 410.7321 C 652.9494 410.7321 648.92 406.70264 648.92 401.7321 L 648.92 379.7321 C 648.92 374.7615 652.9494 370.7321 657.92 370.7321 Z" fill="#ffc0c0"/>
+        <path d="M 657.92 370.7321 L 720.92 370.7321 C 725.8906 370.7321 729.92 374.7615 729.92 379.7321 L 729.92 401.7321 C 729.92 406.70264 725.8906 410.7321 720.92 410.7321 L 657.92 410.7321 C 652.9494 410.7321 648.92 406.70264 648.92 401.7321 L 648.92 379.7321 C 648.92 374.7615 652.9494 370.7321 657.92 370.7321 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(653.92 383.7321)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="10.213867" y="11" xml:space="preserve">Trigger</tspan>
+        </text>
+      </g>
+      <g id="Line_40">
+        <path d="M 595.5 358.2477 L 595.5 368.2477 L 595.4079 390.51523 L 637.92 390.7321 L 647.92 390.7321" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Line_41">
+        <path d="M 595.5 316.2477 L 595.5 306.2477 L 595.03746 289.0304 L 595.03746 288.27344 L 647.92 288.27344" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Graphic_42">
+        <path d="M 886.5848 268.27344 L 976.7848 268.27344 C 981.7554 268.27344 985.7848 272.30287 985.7848 277.27344 L 985.7848 299.27344 C 985.7848 304.244 981.7554 308.27344 976.7848 308.27344 L 886.5848 308.27344 C 881.6143 308.27344 877.5848 304.244 877.5848 299.27344 L 877.5848 277.27344 C 877.5848 272.30287 881.6143 268.27344 886.5848 268.27344 Z" fill="#ffffc0"/>
+        <path d="M 886.5848 268.27344 L 976.7848 268.27344 C 981.7554 268.27344 985.7848 272.30287 985.7848 277.27344 L 985.7848 299.27344 C 985.7848 304.244 981.7554 308.27344 976.7848 308.27344 L 886.5848 308.27344 C 881.6143 308.27344 877.5848 304.244 877.5848 299.27344 L 877.5848 277.27344 C 877.5848 272.30287 881.6143 268.27344 886.5848 268.27344 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(882.5848 274.27344)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="20.201565" y="11" xml:space="preserve">Sampling</tspan>
+          <tspan font-family="Menlo" font-size="12" fill="black" x="2.1400414" y="25" xml:space="preserve">Configuration</tspan>
+        </text>
+      </g>
+      <g id="Line_43">
+        <line x1="876.5848" y1="288.27344" x2="848.7005" y2="288.27344" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Graphic_45">
+        <path d="M 454.08 240.9954 L 517.08 240.9954 C 522.05056 240.9954 526.08 245.02485 526.08 249.9954 L 526.08 271.9954 C 526.08 276.96598 522.05056 280.9954 517.08 280.9954 L 454.08 280.9954 C 449.10944 280.9954 445.08 276.96598 445.08 271.9954 L 445.08 249.9954 C 445.08 245.02485 449.10944 240.9954 454.08 240.9954 Z" fill="#c0ffc0"/>
+        <path d="M 454.08 240.9954 L 517.08 240.9954 C 522.05056 240.9954 526.08 245.02485 526.08 249.9954 L 526.08 271.9954 C 526.08 276.96598 522.05056 280.9954 517.08 280.9954 L 454.08 280.9954 C 449.10944 280.9954 445.08 276.96598 445.08 271.9954 L 445.08 249.9954 C 445.08 245.02485 449.10944 240.9954 454.08 240.9954 Z" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        <text transform="translate(450.08 246.9954)" fill="black">
+          <tspan font-family="Menlo" font-size="12" fill="black" x="21.05078" y="11" xml:space="preserve">Data</tspan>
+          <tspan font-family="Menlo" font-size="12" fill="black" x="6.6015625" y="25" xml:space="preserve">EndPoint</tspan>
+        </text>
+      </g>
+      <g id="Line_46">
+        <line x1="485.58" y1="281.9954" x2="485.58" y2="316.2477" stroke="#797979" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+      </g>
+      <g id="Graphic_47">
+        <text transform="translate(471.81724 374.60107)" fill="#797979">
+          <tspan font-family="Helvetica Neue" font-size="24" fill="#797979" x="15987212e-20" y="23" xml:space="preserve">*</tspan>
+        </text>
+      </g>
+      <g id="Graphic_48">
+        <text transform="translate(753.2525 267.3777)" fill="#797979">
+          <tspan font-family="Helvetica Neue" font-size="24" fill="#797979" x="15987212e-20" y="23" xml:space="preserve">*</tspan>
+        </text>
+      </g>
+    </g>
+  </g>
+</svg>

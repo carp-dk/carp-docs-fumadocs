@@ -1,0 +1,136 @@
+---
+title: Measure types
+description: Measure types available in the built-in and external CAMS sampling packages, with platform availability.
+icon: Dataset
+---
+
+This page lists the measure types available in sampling packages, both the packages built into the [`carp_mobile_sensing`](https://pub.dev/packages/carp_mobile_sensing) framework and the external ones. The list evolves as support for more measures is released.
+
+## Measure type format
+
+The `dataType` property of a [`Measure`](https://pub.dev/documentation/carp_core/latest/common/Measure-class.html) specifies the type of data to collect. Its string form is typically a `namespace` plus a `name`. CAMS-native measure types use the namespace `dk.cachet.carp`, and the name is the measure `type`:
+
+```text
+dk.cachet.carp.<type>
+```
+
+<Callout type="info" title="Legacy namespace">
+
+The `cachet` part of the namespace is a legacy. The original vision and design of CARP was done at the [Copenhagen Center for Health Technology](https://www.cachet.dk/) (CACHET), and the namespace `dk.cachet.carp` was adopted then. CACHET has since closed, and CARP is now maintained by the [Section of Digital Health](https://www.healthtech.dtu.dk/research/research-sections/section-digital-health) at the Department of Health Technology at the [Technical University of Denmark](https://www.dtu.dk/english/).
+
+The old namespace is kept for backward compatibility. It will be changed to `carp.dk` in the future.
+
+</Callout>
+
+## Event-based and one-time measures
+
+| Kind | Behavior | Example |
+| --- | --- | --- |
+| **Event-based** (EB) | Once triggered and started, continuously samples data from its sensor until explicitly stopped. Most measures are event-based. | A step event every time the phone detects a step. |
+| **One-time** (OT) | Samples one piece of data when triggered. | Weather data from the Open Weather API. |
+
+The kind matters when you specify a study protocol: an event-based measure can be started and runs until stopped, whereas a one-time measure must be triggered to sample data. You can, for example, trigger it periodically with a [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html).
+
+In this protocol, the first task contains a one-time measure (device information) that is triggered only once. The second task contains event-based measures that start immediately and keep sampling data based on events. The third task collects weather (a one-time measure) periodically every 5 minutes.
+
+```dart
+  // Collect device info only once, when this study is deployed.
+  protocol.addTaskControl(
+    OneTimeTrigger(),
+    BackgroundTask(
+        measures: [Measure(type: DeviceSamplingPackage.DEVICE_INFORMATION)]),
+    phone,
+  );
+
+  // Immediately start collecting step count, ambient light, screen activity, and
+  // battery level events. All event-based measures.
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(measures: [
+      Measure(type: SensorSamplingPackage.STEP_EVENT),
+      Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+      Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+      Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+    ]),
+    phone,
+  );
+
+  // Add a background task that collects weather every 5 minutes.
+  protocol.addTaskControl(
+      PeriodicTrigger(period: Duration(minutes: 5)),
+      BackgroundTask(
+          measures: [Measure(type: ContextSamplingPackage.WEATHER)]),
+      weatherService);
+```
+
+Each [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html) lists the measure types it supports in its [`dataTypes`](https://pub.dartlang.org/documentation/carp_mobile_sensing/latest/domain/SamplingPackage/dataTypes.html) property, and provides a [default sampling schema](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage/samplingSchemes.html) for each of its measure types.
+
+## Available measure types
+
+CAMS has a large set of predefined measure types, each available in a sampling package. Some measures are [part of CAMS](#built-in-sampling-packages), others are available in [separate sampling packages](#external-sampling-packages), and some are part of [device-specific sampling packages](#wearable-device-sampling-packages).
+
+For each measure, the tables list:
+
+- **Type**: all type names have the format `dk.cachet.carp.<type>`, where `type` is listed in the table.
+- **Android** and **iOS**: availability on each platform.
+- **Package**: the sampling package that contains the measure.
+- **Description**.
+
+Types marked with \* are one-time measures.
+
+### Built-in sampling packages
+
+| Type | Android | iOS | Package | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `acceleration` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Rate of change in velocity in x, y, z, including gravity |
+| `nongravitational acceleration` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Rate of change in velocity in x, y, z, excluding gravity |
+| `acceleration features` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Acceleration events over a specific sampling period, with calculated higher-order features |
+| `rotation` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Rotation of the device in x, y, z (typically measured by a gyroscope) |
+| `magneticfield` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Magnetic field around the device in x, y, z (typically measured by a magnetometer) |
+| `stepevent` | Yes | Yes | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Step events from the device's onboard sensor |
+| `ambientlight` | Yes | No | [sensors](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/SensorSamplingPackage-class.html) | Ambient light from the phone's front light sensor |
+| `deviceinformation`\* | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Basic device information |
+| `application information`\* | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Information about the app |
+| `batterystate` | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Battery charging status and battery level |
+| `screenevent` | Yes | No | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Screen events (on/off/unlock) |
+| `applifecycleevent` | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | App lifecycle state events (inactive, hidden, paused, resumed, detached) |
+| `freememory` | Yes | No | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Free memory |
+| `timezone`\* | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | Timezone of the device |
+| `heartbeat` | Yes | Yes | [device](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/DeviceSamplingPackage-class.html) | A heartbeat measurement every 15 minutes (default) telling whether the app is running (and not killed by the OS) |
+
+### External sampling packages
+
+| Type | Android | iOS | Package | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `location` | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Listens to the stream of location changes from the phone's OS |
+| `activity` | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Activity as events from the OS's built-in activity recognition API |
+| `weather`\* | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Detailed weather information for the current location of the phone |
+| `airquality`\* | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Air quality of the current location of the phone (from land-based stations) |
+| `geofence` | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Tracks entry, dwell and exit events in circular geofences |
+| `mobility` | Yes | Yes | [`context`](https://pub.dartlang.org/packages/carp_context_package) | Tracks location and calculates mobility features based on the [`mobility_features`](https://pub.dev/packages/mobility_features) plugin |
+| `bluetooth` | Yes | Yes | [`connectivity`](https://pub.dartlang.org/packages/carp_connectivity_package) | Scans nearby BLE devices |
+| `wifi` | Yes | No | [`connectivity`](https://pub.dartlang.org/packages/carp_connectivity_package) | Collects SSID and BSSID from connected Wi-Fi networks |
+| `connectivity` | Yes | Yes | [`connectivity`](https://pub.dartlang.org/packages/carp_connectivity_package) | Connectivity status events |
+| `beacon` | Yes | Yes | [`connectivity`](https://pub.dartlang.org/packages/carp_connectivity_package) | Scans for nearby [iBeacons](https://en.wikipedia.org/wiki/IBeacon) |
+| `audio`\* | Yes | Yes | [`media`](https://pub.dartlang.org/documentation/carp_media_package/latest/) | Records audio from the device microphone |
+| `noise` | Yes | Yes | [`media`](https://pub.dartlang.org/documentation/carp_media_package/latest/) | Detects ambient noise from the device microphone |
+| `apps`\* | Yes | No | [`apps`](https://pub.dartlang.org/packages/carp_apps_package) | List of installed apps |
+| `appusage`\* | Yes | No | [`apps`](https://pub.dartlang.org/packages/carp_apps_package) | List of app usage |
+| `phonelog`\* | Yes | No | [`communication`](https://pub.dartlang.org/packages/carp_communication_package) | Log of incoming and outgoing phone calls |
+| `textmessagelog`\* | Yes | No | [`communication`](https://pub.dartlang.org/packages/carp_communication_package) | Log of incoming and outgoing text messages (SMS) |
+| `textmessage` | Yes | No | [`communication`](https://pub.dartlang.org/packages/carp_communication_package) | Text message (SMS) events when received |
+| `calendar`\* | Yes | Yes | [`communication`](https://pub.dartlang.org/packages/carp_communication_package) | Calendar events from the calendars on the phone |
+| `survey`\* | Yes | Yes | [`survey`](https://pub.dev/packages/carp_survey_package) | Data from surveys (questionnaires) through the [Research Package](https://pub.dev/packages/research_package), and cognitive assessments from the [Cognition Package](https://pub.dev/packages/cognition_package) |
+
+### Wearable device sampling packages
+
+| Type | Android | iOS | Package | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `health` | Yes | Yes | [`health`](https://pub.dev/packages/carp_health_package) | Different types of health data from [Apple Health](https://www.apple.com/health/) and [Google Health Connect](https://health.google/products/), which may come from connected wearable devices |
+| `movisens` | Yes | No | [`movisens`](https://pub.dev/packages/carp_movisens_package) | Activity and heart rate monitoring using the [Movisens](https://www.movisens.com/en/) [Move4](https://www.movisens.com/en/products/activity-sensor/) and [EcgMove4](https://www.movisens.com/en/products/ecg-sensor/) devices |
+| `esense` | Yes | Yes | [`esense`](https://pub.dev/packages/carp_esense_package) | Inertial measurement unit (IMU) sensor events and button press/release events from the [eSense](http://www.esense.io) device |
+| `polar` | Yes | Yes | [`polar`](https://pub.dev/packages/carp_polar_package) | Inertial measurement (accelerometer, gyroscope, magnetometer) and heart rate (ECG, PPI, PPG, HR) data from [Polar](http://www.polar.com) devices |
+| `movesense` | Yes | Yes | [`movesense`](https://pub.dev/packages/carp_movesense_package) | State (tap), heart rate (HR), ECG and inertial measurement unit (IMU: accelerometer, gyroscope, magnetometer) data from [Movesense](http://www.movesense.com) devices |
+| `watch.aware` | No | Yes | [`aware`](https://pub.dev/packages/carp_aware_package) | Motion, heart rate, battery, location, heading, Bluetooth, ambient noise and sound classification collected on an [Apple Watch](https://www.apple.com/watch/) using the [AWARE](https://github.com/awareframework/com.awareframework.ios.sensor.applewatch) watchOS framework. These measures use the `dk.carp.watch.aware` namespace; see [Apple Watch Sensing](/docs/sampling-packages/apple-watch). |
+
+Each of these device measures has sub-types, such as `dk.cachet.carp.movisens.hr` for heart rate (HR) measures from the Movisens device.

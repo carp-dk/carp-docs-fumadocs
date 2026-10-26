@@ -1,0 +1,50 @@
+---
+title: Build and verify
+description: Install the app on the watch and follow the data end to end.
+---
+
+<Steps>
+<Step title="Run the Runner scheme on your iPhone">
+
+Select the **Runner** scheme and your iPhone, then choose **Run**. This installs the Flutter app *and* the watch app.
+
+</Step>
+<Step title="Install the watch app if it did not install itself">
+
+On the phone, open the **Watch** app → **Available Apps** → install `CarpWatch`.
+
+</Step>
+<Step title="Open the watch app once and press Start">
+
+watchOS does not run a freshly installed app in the background before its first launch.
+
+</Step>
+<Step title="Grant the permissions">
+
+The HealthKit, microphone and location prompts all appear **on the watch**.
+
+</Step>
+</Steps>
+
+## Build from the command line
+
+`flutter run` builds the `Runner` scheme, and therefore the watch app too:
+
+```bash
+flutter run --release
+```
+
+## Next steps
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/apple-watch/quickstart" icon="Bolt">
+
+Build a complete study protocol with an Apple Watch in it.
+
+</Card>
+<Card title="Runtime state" href="/docs/sampling-packages/apple-watch/runtime-state" icon="Timeline">
+
+Know whether the watch is paired, collecting and delivering.
+
+</Card>
+</Cards>

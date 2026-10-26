@@ -1,7 +1,6 @@
 'use client';
-import { CodeBlock, Pre as CodePre } from '../../codeblock';
-import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
-import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { CodeBlock, Pre as CodePre, DynamicCodeBlock } from '../../codeblock';
+import { getMDXComponents } from '../../mdx';
 import type { Element, ElementContent, Root } from 'hast';
 import { type Components, toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { type ComponentProps, memo, useState } from 'react';
@@ -15,7 +14,7 @@ const processor = remark().use(remarkGfm).use(remarkRehype);
 const streamProcessor = remark().use(remarkGfm).use(remarkRehype).use(rehypeWords);
 
 const components: Components = {
-  ...defaultMdxComponents,
+  ...getMDXComponents(),
   pre: Pre,
   img: 'img',
 };

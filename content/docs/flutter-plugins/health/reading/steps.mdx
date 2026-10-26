@@ -1,0 +1,260 @@
+---
+title: Step totals
+description: Get the total step count for a time period using getTotalStepsInInterval.
+---
+
+`getTotalStepsInInterval` returns a single total step count for a time period. It is optimized for step counting and is the fastest way to read step totals.
+
+## Signature
+
+```dart
+Future<int?> getTotalStepsInInterval(
+  DateTime startDate,
+  DateTime endDate,
+)
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `startDate` | `DateTime` | Yes | Start of time range |
+| `endDate` | `DateTime` | Yes | End of time range |
+
+## Return value
+
+- `int`: total steps in the interval.
+- `null`: no step data is available, or an error occurred.
+
+## Read today's and yesterday's steps
+
+```dart
+// Get today's steps
+final todaySteps = await health.getTotalStepsInInterval(
+  DateTime.now().copyWith(hour: 0, minute: 0, second: 0),
+  DateTime.now(),
+);
+
+print('Steps today: ${todaySteps ?? 0}');
+
+// Get yesterday's steps
+final yesterday = DateTime.now().subtract(Duration(days: 1));
+final yesterdaySteps = await health.getTotalStepsInInterval(
+  yesterday.copyWith(hour: 0, minute: 0, second: 0),
+  yesterday.copyWith(hour: 23, minute: 59, second: 59),
+);
+
+print('Steps yesterday: ${yesterdaySteps ?? 0}');
+```
+
+## Time ranges
+
+### Today
+
+```dart
+final now = DateTime.now();
+final startOfDay = DateTime(now.year, now.month, now.day);
+final todaySteps = await health.getTotalStepsInInterval(startOfDay, now);
+```
+
+### This week
+
+```dart
+final now = DateTime.now();
+final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+final weekStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+final weekSteps = await health.getTotalStepsInInterval(weekStart, now);
+```
+
+### This month
+
+```dart
+final now = DateTime.now();
+final monthStart = DateTime(now.year, now.month, 1);
+final monthSteps = await health.getTotalStepsInInterval(monthStart, now);
+```
+
+### Custom range
+
+```dart
+final start = DateTime(2024, 1, 1);
+final end = DateTime(2024, 1, 31);
+final januarySteps = await health.getTotalStepsInInterval(start, end);
+print('January total: ${januarySteps ?? 0} steps');
+```
+
+## Examples
+
+### Track a step goal
+
+```dart
+class StepGoal {
+  final int dailyGoal;
+  
+  StepGoal({this.dailyGoal = 10000});
+  
+  Future<Map<String, dynamic>> getProgress() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    
+    final steps = await health.getTotalStepsInInterval(startOfDay, now);
+    final currentSteps = steps ?? 0;
+    final percentage = (currentSteps / dailyGoal * 100).clamp(0, 100);
+    final remaining = (dailyGoal - currentSteps).clamp(0, dailyGoal);
+    
+    return {
+      'current': currentSteps,
+      'goal': dailyGoal,
+      'percentage': percentage,
+      'remaining': remaining,
+      'achieved': currentSteps >= dailyGoal,
+    };
+  }
+}
+
+// Usage
+final goal = StepGoal(dailyGoal: 10000);
+final progress = await goal.getProgress();
+print('${progress['current']} / ${progress['goal']} steps');
+print('${progress['percentage'].toStringAsFixed(1)}% complete');
+```
+
+### Summarize a week
+
+```dart
+Future<List<Map<String, dynamic>>> getWeeklySteps() async {
+  final now = DateTime.now();
+  final weeklySteps = <Map<String, dynamic>>[];
+  
+  for (int i = 6; i >= 0; i--) {
+    final day = now.subtract(Duration(days: i));
+    final dayStart = DateTime(day.year, day.month, day.day);
+    final dayEnd = dayStart.add(Duration(days: 1));
+    
+    final steps = await health.getTotalStepsInInterval(dayStart, dayEnd);
+    
+    weeklySteps.add({
+      'date': dayStart,
+      'dayName': _getDayName(dayStart.weekday),
+      'steps': steps ?? 0,
+    });
+  }
+  
+  return weeklySteps;
+}
+
+String _getDayName(int weekday) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return days[weekday - 1];
+}
+
+// Usage
+final weekData = await getWeeklySteps();
+for (var day in weekData) {
+  print('${day['dayName']}: ${day['steps']} steps');
+}
+```
+
+### Track a streak
+
+```dart
+class StepStreak {
+  final int dailyGoal;
+  
+  StepStreak({this.dailyGoal = 10000});
+  
+  Future<int> getCurrentStreak() async {
+    int streak = 0;
+    final now = DateTime.now();
+    
+    for (int i = 0; i < 365; i++) {
+      final day = now.subtract(Duration(days: i));
+      final dayStart = DateTime(day.year, day.month, day.day);
+      final dayEnd = dayStart.add(Duration(days: 1));
+      
+      final steps = await health.getTotalStepsInInterval(dayStart, dayEnd);
+      
+      if (steps != null && steps >= dailyGoal) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  }
+}
+
+// Usage
+final streakTracker = StepStreak(dailyGoal: 10000);
+final streak = await streakTracker.getCurrentStreak();
+print('Current streak: $streak days');
+```
+
+## Performance
+
+`getTotalStepsInInterval` uses an optimized step-total query. Summing the individual points from `getHealthDataFromTypes` is less efficient:
+
+```dart
+// ✅ Efficient - uses optimized step total query
+final steps = await health.getTotalStepsInInterval(start, end);
+
+// ❌ Less efficient - queries all data points then sums
+final dataPoints = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startDate: start,
+  endDate: end,
+);
+final manualTotal = dataPoints
+    .map((e) => (e.value as NumericHealthValue).numericValue)
+    .fold(0.0, (a, b) => a + b);
+```
+
+## Error handling
+
+Check for a `null` result, which means that no step data is available for the period, and catch errors:
+
+```dart
+try {
+  final steps = await health.getTotalStepsInInterval(start, end);
+  
+  if (steps == null) {
+    print('No step data available for this period');
+  } else {
+    print('Total steps: $steps');
+  }
+} catch (e) {
+  print('Error fetching steps: $e');
+}
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Aggregates the step count from Health Connect.
+- Includes data from all connected apps and devices.
+- May return `null` if Health Connect is not available.
+
+</Tab>
+<Tab value="iOS">
+
+- Aggregates all step samples from HealthKit.
+- Includes steps from iPhone, Apple Watch and connected apps.
+- Deduplicates overlapping data automatically.
+
+</Tab>
+</Tabs>
+
+## Compare with other read methods
+
+| Method | Use case | Return type |
+|--------|----------|-------------|
+| `getTotalStepsInInterval` | Quick total for a period | `int?` |
+| `getHealthDataFromTypes` | Individual step samples | `List<HealthDataPoint>` |
+| `getHealthIntervalDataFromTypes` | Steps bucketed by time | `List<HealthDataPoint>` |
+
+## Related
+
+- [Data points](/docs/flutter-plugins/health/reading/basic): read individual step samples
+- [Interval data](/docs/flutter-plugins/health/reading/interval): steps grouped by hour or day
+- [Data types](/docs/flutter-plugins/health/data-types): the `STEPS` data type

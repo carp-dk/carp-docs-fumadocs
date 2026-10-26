@@ -1,0 +1,7 @@
+{
+  "title": "Apple Watch Sensing",
+  "description": "carp_aware_package",
+  "icon": "Watch",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "watch-app", "---Concepts---", "architecture", "configuration", "data-types", "runtime-state", "---Reference---", "watch-settings", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_aware_package)", "[API reference](https://pub.dev/documentation/carp_aware_package/latest/)", "[GitHub](https://github.com/carp-dk/carp_aware_package)"]
+}

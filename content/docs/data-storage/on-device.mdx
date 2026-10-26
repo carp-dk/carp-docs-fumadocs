@@ -1,0 +1,150 @@
+---
+title: On-device storage
+description: Store measurements locally in a database or in files. No server needed.
+---
+
+On-device storage saves measurements in the app's private storage on the phone. It needs no server, no accounts and no network connection.
+
+## Data endpoint
+
+Where data goes is set by a single setting in the study protocol, the **data endpoint**. On-device storage, CAWS and your own server differ only in this setting; the rest of the protocol (what to collect, and when) stays the same.
+
+For on-device storage, use one of two endpoints:
+
+| Endpoint | Saves data as | Use for |
+| --- | --- | --- |
+| `SQLiteDataEndPoint()` | A database on the phone | Apps that show the data back to the user, for example "your steps this week" |
+| `FileDataEndPoint()` | Zipped JSON text files | Handing the data to a researcher |
+
+## Configure the protocol
+
+Start from the [quickstart](/docs/quickstart) app and change the imports at the top of `lib/main.dart` to:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+```
+
+`Smartphone` exists in both packages; `hide` makes Dart use the one from `carp_mobile_sensing`.
+
+Then, in `_startSensing()`, replace the protocol with the following steps.
+
+<Steps>
+
+<Step title="Create the protocol and choose the endpoint">
+
+The `dataEndPoint` is the one setting that decides where data goes:
+
+<Tabs items={['Database', 'Files']}>
+
+<Tab value="Database">
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  name: 'My first study',
+  dataEndPoint: SQLiteDataEndPoint(),
+);
+```
+
+</Tab>
+
+<Tab value="Files">
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  name: 'My first study',
+  dataEndPoint: FileDataEndPoint(),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+<Step title="Add the phone and the participant">
+
+The phone is the primary device that collects the data. The participant role represents the person using it.
+
+```dart
+final phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+protocol.addParticipantRole(ParticipantRole('Participant'));
+```
+
+</Step>
+
+<Step title="Define what to collect, and when">
+
+`ImmediateTrigger` starts collecting right away. `BackgroundTask` keeps collecting in the background.
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [
+    Measure(type: SensorSamplingPackage.STEP_EVENT),
+    Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+    Measure(type: DeviceSamplingPackage.APP_LIFECYCLE_EVENT),
+  ]),
+  phone,
+);
+```
+
+</Step>
+
+<Step title="Start the client">
+
+This part is unchanged from the quickstart:
+
+```dart
+final client = SmartPhoneClientManager();
+await client.configure();
+
+final study = await client.addStudyFromProtocol(protocol);
+await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+client.resume();
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="tip">
+
+To switch between database and files, change only the endpoint in the first step. CAWS also uses an endpoint (`CarpDataEndPoint`), but there the protocol is set up in the portal and the app signs in. See [CARP Web Services](/docs/data-storage/caws).
+
+</Callout>
+
+## Retrieve the data
+
+The data is stored in the app's private folder:
+
+| Endpoint | Location |
+| --- | --- |
+| Database | `carp-data`, in the app's `databases` folder |
+| Files | `carp/deployments/<deployment id>/data/`, in the app's documents folder |
+
+To copy the data to your computer:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+
+<Tab value="Android">
+
+In Android Studio, open **Device Explorer** and go to `data/data/<your app id>/`. The database is in `databases/`, and the files are in `app_flutter/carp/`.
+
+</Tab>
+
+<Tab value="iOS">
+
+Add `UIFileSharingEnabled` = `YES` to `Info.plist`, connect the iPhone to a Mac, and open it in **Finder → Files**.
+
+</Tab>
+
+</Tabs>
+
+## Moving to a server
+
+On-device storage suits trying things out. For a study, you usually want data to arrive centrally without accessing each phone. For that, use [CARP Web Services](/docs/data-storage/caws) or [your own server](/docs/data-storage/custom-backend).
+
+For more detail, see [Data managers](/docs/mobile-sensing/data-managers).

@@ -1,0 +1,84 @@
+/* Material tabs share a surface; selection belongs to the indicator and label.
+   M3E supplies the state layers, focus ring, ripple, and indicator motion. */
+.docs-tabs, .docs-code-tabs {
+  background: transparent;
+  --m3e-tab-font-size: 14px;
+  --m3e-tab-line-height: 20px;
+  --m3e-tab-font-weight: 500;
+  --m3e-tab-tracking: .1px;
+  --m3e-tab-padding-start: 20px;
+  --m3e-tab-padding-end: 20px;
+  --m3e-tab-spacing: 8px;
+  --m3e-tab-icon-size: 24px;
+  --m3e-tab-focus-ring-shape: 4px;
+  --m3e-tab-selected-color: var(--docs-tone, var(--md-sys-color-primary));
+  --m3e-tab-selected-container-hover-color: var(--docs-tone, var(--md-sys-color-primary));
+  --m3e-tab-selected-container-focus-color: var(--docs-tone, var(--md-sys-color-primary));
+  --m3e-tab-selected-ripple-color: var(--docs-tone, var(--md-sys-color-primary));
+  --m3e-tab-unselected-color: var(--md-sys-color-on-surface-variant);
+  --m3e-tabs-active-indicator-color: var(--docs-tone, var(--md-sys-color-primary));
+  --m3e-tabs-primary-active-indicator-thickness: 3px;
+  --m3e-tabs-primary-active-indicator-inset: 0px;
+  --m3e-tabs-primary-before-active-indicator-shape: 3px 3px 0 0;
+  --m3e-tabs-secondary-active-indicator-thickness: 2px;
+  --m3e-divider-color: var(--docs-border);
+}
+.docs-tabs { min-width: 0; }
+.docs-tabs > m3e-tab, .docs-code-tabs > m3e-tab {
+  height: 48px;
+  flex-shrink: 0;
+  background: transparent;
+}
+.docs-tabs[data-stacked] > m3e-tab { height: 64px; }
+.docs-tabs[data-layout='fixed'] > m3e-tab { flex: 1 0 0; min-width: max-content; }
+.docs-tabs[data-variant='secondary'], .docs-code-tabs {
+  --m3e-tab-selected-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-container-hover-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-container-focus-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-ripple-color: var(--md-sys-color-on-surface);
+}
+/* A slate tone colours only the indicator; the selected label keeps the strongest ink. */
+.docs-tabs[data-tone='secondary'] {
+  --m3e-tab-selected-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-container-hover-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-container-focus-color: var(--md-sys-color-on-surface);
+  --m3e-tab-selected-ripple-color: var(--md-sys-color-on-surface);
+}
+.docs-tab-label { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.docs-tab-icon { display: inline-flex; position: relative; flex: none; width: 24px; height: 24px; }
+.docs-tab-icon > svg { width: 24px; height: 24px; }
+.docs-tabs[data-stacked] .docs-tab-icon { margin-bottom: 4px; }
+.docs-tab-badge {
+  flex: none;
+  --m3e-badge-container-color: var(--md-sys-color-error);
+  --m3e-badge-color: var(--md-sys-color-on-error);
+}
+.docs-tab-icon > .docs-tab-badge { position: absolute; inset-block-start: -4px; inset-inline-start: 18px; }
+.docs-tab-icon > .docs-tab-badge[size='small'] { inset-block-start: 0; inset-inline-start: 20px; }
+m3e-tab[disabled] .docs-tab-badge { opacity: .38; }
+.docs-tabs > m3e-tab-panel > .docs-mdx-body { padding: 20px 16px; }
+.docs-tabs > m3e-tab-panel > .docs-mdx-body > :first-child { margin-top: 0; }
+.docs-tabs > m3e-tab-panel > .docs-mdx-body > :last-child { margin-bottom: 0; }
+
+/* The language selector and its code form a single documentation surface. */
+.docs-code-tabs {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  overflow: clip;
+  background: var(--md-sys-color-surface-container-low);
+  /* Code tabs never inherit a surrounding tone. */
+  --m3e-tabs-active-indicator-color: var(--md-sys-color-primary);
+}
+.docs-code-tabs .docs-code-block { margin: 0; }
+.docs-code-tabs .docs-code-block m3e-card {
+  border-radius: 0;
+  --m3e-card-shape: 0px;
+  --m3e-outlined-card-outline-color: transparent;
+  --m3e-outlined-card-outline-thickness: 0px;
+  --m3e-outlined-card-container-color: transparent;
+}
+.docs-code-tabs .docs-code-viewport { border-radius: 0; }
+
+@media (width < 640px) {
+  .docs-tabs, .docs-code-tabs { --m3e-tab-padding-start: 12px; --m3e-tab-padding-end: 12px; }
+}

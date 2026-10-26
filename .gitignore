@@ -16,3 +16,7 @@ node_modules
 .tanstack
 
 .source
+# Secrets: copy .env.example to .env.local
+.env
+.env*.local
+dist

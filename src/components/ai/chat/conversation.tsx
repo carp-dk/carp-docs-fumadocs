@@ -1,6 +1,6 @@
 'use client';
 import { useTranslations } from '@fuma-translate/react';
-import { ArrowDownIcon } from 'lucide-react';
+import { ArrowDownIcon } from '@/components/ui/icons';
 import { createContext, type ReactNode, use, useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '../../../lib/cn';
 

@@ -1,0 +1,205 @@
+/*
+ * Every colour role, for both themes. Tones come from HCT tonal palettes
+ * (Material Color Utilities 0.4): primary is the brand blue (H246.7 C44), neutrals are
+ * cool (H246 C4-8), tertiary is a muted purple (#67587a family), and error is
+ * vermilion (H30) so it stays distinct from the brand accent red (H16).
+ * M3E falls back to baseline purple for any undefined --md-sys-color-* role, so keep
+ * every role defined in both blocks. Contrast: text pairs >= 4.5:1, indicators,
+ * control outlines and tracks >= 3:1 against the surfaces they sit on.
+ */
+:root {
+  --md-sys-color-primary: #006398;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #cde5ff;
+  --md-sys-color-on-primary-container: #001d32;
+  --md-sys-color-primary-fixed: #cde5ff;
+  --md-sys-color-primary-fixed-dim: #94ccff;
+  --md-sys-color-on-primary-fixed: #001d32;
+  --md-sys-color-on-primary-fixed-variant: #004b74;
+  --md-sys-color-inverse-primary: #94ccff;
+  --md-sys-color-secondary: #55606a;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #d6dee7;
+  --md-sys-color-on-secondary-container: #121d25;
+  --md-sys-color-secondary-fixed: #d9e4f0;
+  --md-sys-color-secondary-fixed-dim: #bdc8d4;
+  --md-sys-color-on-secondary-fixed: #121d25;
+  --md-sys-color-on-secondary-fixed-variant: #3e4852;
+  --md-sys-color-tertiary: #695683;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #f1e3ff;
+  --md-sys-color-on-tertiary-container: #23123b;
+  --md-sys-color-tertiary-fixed: #eddcff;
+  --md-sys-color-tertiary-fixed-dim: #d4bdf1;
+  --md-sys-color-on-tertiary-fixed: #23123b;
+  --md-sys-color-on-tertiary-fixed-variant: #503e6a;
+  --md-sys-color-error: #a31800;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffe9e5;
+  --md-sys-color-on-error-container: #650b00;
+  --md-sys-color-background: #ffffff;
+  --md-sys-color-on-background: #181c20;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-surface-dim: #d7dadf;
+  --md-sys-color-surface-bright: #ffffff;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f4f6fc;
+  --md-sys-color-surface-container: #eef1f6;
+  --md-sys-color-surface-container-high: #e9ebf0;
+  --md-sys-color-surface-container-highest: #e0e2e8;
+  --md-sys-color-surface-variant: #dde3ec;
+  --md-sys-color-on-surface: #181c20;
+  --md-sys-color-on-surface-variant: #41474f;
+  --md-sys-color-outline: #717880;
+  --md-sys-color-outline-variant: #ccd2db;
+  --md-sys-color-inverse-surface: #2d3135;
+  --md-sys-color-inverse-on-surface: #eef1f6;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+
+  /* Status roles: every container shares one tone (T95), every symbol T40. */
+  --docs-info: #006398;
+  --docs-on-info: #ffffff;
+  --docs-info-container: #e7f2ff;
+  --docs-on-info-container: #003352;
+  --docs-tip: #695683;
+  --docs-on-tip: #ffffff;
+  --docs-tip-container: #f8edff;
+  --docs-on-tip-container: #392852;
+  --docs-success: #376934;
+  --docs-on-success: #ffffff;
+  --docs-success-container: #e9f4e2;
+  --docs-on-success-container: #023909;
+  --docs-warning: #7f5600;
+  --docs-on-warning: #ffffff;
+  --docs-warning-container: #ffeeda;
+  --docs-on-warning-container: #432c00;
+
+  /* Shell, brand and utility roles. */
+  --docs-navigation: #eef1f6;
+  --docs-heading: #001d32;
+  --docs-border: #dde3ec;
+  --docs-canvas: #ffffff;
+  --docs-field: #ffffff;
+  --docs-popover: #ffffff;
+  --docs-body: var(--md-sys-color-on-surface);
+  --docs-frame-shadow: 0 1px 2px rgb(0 29 50 / 6%), 0 2px 6px rgb(0 29 50 / 4%);
+  --docs-brand: var(--brand-accent);
+  --docs-on-brand: #ffffff;
+  --docs-brand-blush: #ffe5e5;
+  --docs-control-outline: #838a92;
+  --docs-track: #7e848c;
+  --docs-graph-edge: #8b919a;
+  --docs-scrollbar: #7e848c;
+  --docs-disabled-label: #656b73;
+
+  /* Syntax roles, read by the Shiki theme (src/lib/code-theme.ts). */
+  --docs-code-text: #181c20;
+  --docs-code-comment: #62666b;
+  --docs-code-keyword: #695683;
+  --docs-code-punctuation: #41474f;
+  --docs-code-string: #2a5d29;
+  --docs-code-constant: #006a69;
+  --docs-code-function: #006398;
+  --docs-code-parameter: #7f5600;
+  --docs-code-inserted: #376934;
+  --docs-code-deleted: #a31800;
+  --docs-code-changed: #7f5600;
+}
+
+.dark {
+  --md-sys-color-primary: #94ccff;
+  --md-sys-color-on-primary: #003352;
+  --md-sys-color-primary-container: #004b74;
+  --md-sys-color-on-primary-container: #cde5ff;
+  --md-sys-color-primary-fixed: #cde5ff;
+  --md-sys-color-primary-fixed-dim: #94ccff;
+  --md-sys-color-on-primary-fixed: #001d32;
+  --md-sys-color-on-primary-fixed-variant: #004b74;
+  --md-sys-color-inverse-primary: #006398;
+  --md-sys-color-secondary: #bdc8d4;
+  --md-sys-color-on-secondary: #27313b;
+  --md-sys-color-secondary-container: #323d46;
+  --md-sys-color-on-secondary-container: #d9e4f0;
+  --md-sys-color-secondary-fixed: #d9e4f0;
+  --md-sys-color-secondary-fixed-dim: #bdc8d4;
+  --md-sys-color-on-secondary-fixed: #121d25;
+  --md-sys-color-on-secondary-fixed-variant: #3e4852;
+  --md-sys-color-tertiary: #d4bdf1;
+  --md-sys-color-on-tertiary: #392852;
+  --md-sys-color-tertiary-container: #503e6a;
+  --md-sys-color-on-tertiary-container: #eddcff;
+  --md-sys-color-tertiary-fixed: #eddcff;
+  --md-sys-color-tertiary-fixed-dim: #d4bdf1;
+  --md-sys-color-on-tertiary-fixed: #23123b;
+  --md-sys-color-on-tertiary-fixed-variant: #503e6a;
+  --md-sys-color-error: #ffb4a5;
+  --md-sys-color-on-error: #650b00;
+  --md-sys-color-error-container: #462922;
+  --md-sys-color-on-error-container: #ffdad3;
+  --md-sys-color-background: #181c20;
+  --md-sys-color-on-background: #e0e2e8;
+  --md-sys-color-surface: #181c20;
+  --md-sys-color-surface-dim: #101418;
+  --md-sys-color-surface-bright: #3a3e42;
+  --md-sys-color-surface-container-lowest: #101418;
+  --md-sys-color-surface-container-low: #1e2226;
+  --md-sys-color-surface-container: #24282c;
+  --md-sys-color-surface-container-high: #2d3135;
+  --md-sys-color-surface-container-highest: #36393e;
+  --md-sys-color-surface-variant: #41474f;
+  --md-sys-color-on-surface: #e0e2e8;
+  --md-sys-color-on-surface-variant: #c1c7d0;
+  --md-sys-color-outline: #8b919a;
+  --md-sys-color-outline-variant: #41474f;
+  --md-sys-color-inverse-surface: #e0e2e8;
+  --md-sys-color-inverse-on-surface: #2d3135;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+
+  /* Status roles: containers at T20 (chroma 18), symbols at T80. */
+  --docs-info: #94ccff;
+  --docs-on-info: #003352;
+  --docs-info-container: #203242;
+  --docs-on-info-container: #cde5ff;
+  --docs-tip: #d4bdf1;
+  --docs-on-tip: #392852;
+  --docs-tip-container: #362c42;
+  --docs-on-tip-container: #eddcff;
+  --docs-success: #9cd593;
+  --docs-on-success: #023909;
+  --docs-success-container: #243521;
+  --docs-on-success-container: #b8f1ad;
+  --docs-warning: #ffba3e;
+  --docs-on-warning: #432c00;
+  --docs-warning-container: #3e2e12;
+  --docs-on-warning-container: #ffdeae;
+
+  --docs-navigation: #0b0f12;
+  --docs-heading: #ebf1fa;
+  --docs-border: #2f353c;
+  --docs-canvas: #24282c;
+  --docs-field: #24282c;
+  --docs-popover: #2d3135;
+  --docs-frame-shadow: none;
+  --docs-brand: var(--brand-accent);
+  --docs-on-brand: #ffffff;
+  --docs-brand-blush: #62262a;
+  --docs-control-outline: #717880;
+  --docs-track: #7c7f84;
+  --docs-graph-edge: #717880;
+  --docs-scrollbar: #7c7f84;
+  --docs-disabled-label: #8b919a;
+
+  --docs-code-text: #e0e2e8;
+  --docs-code-comment: #989ea7;
+  --docs-code-keyword: #d4bdf1;
+  --docs-code-punctuation: #c1c7d0;
+  --docs-code-string: #9cd593;
+  --docs-code-constant: #72d6d5;
+  --docs-code-function: #94ccff;
+  --docs-code-parameter: #ffba3e;
+  --docs-code-inserted: #9cd593;
+  --docs-code-deleted: #ffb4a5;
+  --docs-code-changed: #ffba3e;
+}

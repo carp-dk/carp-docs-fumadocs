@@ -1,0 +1,98 @@
+---
+title: Custom tools
+description: Add your own screens to the debug menu by implementing DebugTool.
+icon: Extension
+---
+
+Implement `DebugTool` to add an app-specific screen alongside the [built-in tools](/docs/flutter-plugins/debug-toolkit/built-in-tools), then pass it with `DebugToolkitConfig.extraTools`.
+
+## The `DebugTool` interface
+
+```dart
+abstract class DebugTool {
+  String get id;                       // stable, unique id
+  String get title;                    // menu row + page title
+  String? get subtitle => null;        // one-line description (optional)
+  IconData get icon;                   // leading icon
+  Widget buildPage(BuildContext context); // the pushed page
+}
+```
+
+`buildPage` is pushed onto the toolkit's **own** navigator, so the page must provide its own scaffold. Use `DebugScaffold` for a consistent look: it gives you the app bar, an automatic back button and a `SafeArea` body.
+
+## Example: a feature flags tool
+
+<Steps>
+<Step title="Implement the tool">
+
+```dart
+import 'package:carp_debug_flutter/carp_debug_flutter.dart';
+import 'package:flutter/material.dart';
+
+class FeatureFlagsTool implements DebugTool {
+  const FeatureFlagsTool();
+
+  @override
+  String get id => 'feature-flags';
+  @override
+  String get title => 'Feature Flags';
+  @override
+  String? get subtitle => 'Toggle experimental features';
+  @override
+  IconData get icon => Icons.flag;
+
+  @override
+  Widget buildPage(BuildContext context) => const _FeatureFlagsPage();
+}
+
+class _FeatureFlagsPage extends StatefulWidget {
+  const _FeatureFlagsPage();
+  @override
+  State<_FeatureFlagsPage> createState() => _FeatureFlagsPageState();
+}
+
+class _FeatureFlagsPageState extends State<_FeatureFlagsPage> {
+  @override
+  Widget build(BuildContext context) {
+    return DebugScaffold(
+      title: 'Feature Flags',
+      body: ListView(
+        children: [
+          for (final flag in FeatureFlags.all)
+            SwitchListTile(
+              title: Text(flag.name),
+              value: flag.enabled,
+              onChanged: (v) => setState(() => flag.enabled = v),
+            ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+</Step>
+<Step title="Register the tool">
+
+```dart
+DebugToolkitConfig(
+  // ...built-in config...
+  extraTools: const [FeatureFlagsTool()],
+);
+```
+
+Custom tools are appended **after** the built-in tools, in the order you provide them.
+
+</Step>
+</Steps>
+
+## Reusing toolkit infrastructure
+
+Custom tool pages can use the same building blocks as the built-in tools:
+
+| Building block | Use |
+| --- | --- |
+| `DebugScaffold` | Consistent page chrome (`title`, `actions`, `body`, `floatingActionButton`). |
+| [`DebugEnv`](/docs/flutter-plugins/debug-toolkit/environment) | Read and write launch-argument overrides from your tool. |
+| `DebugLog` | Call `DebugLog.instance.log(...)` to emit lines into the Logs tool. |
+| [`KeyValueStore` / `DebugDatabase`](/docs/flutter-plugins/debug-toolkit/data-sources) | Reuse the data-source adapters to read app storage. |

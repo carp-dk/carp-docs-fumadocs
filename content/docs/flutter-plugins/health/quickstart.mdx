@@ -1,0 +1,383 @@
+---
+title: Quickstart
+description: Configure the health plugin, request permissions, and read, write and delete health data.
+icon: Bolt
+---
+
+This guide walks through the core `Health` API: configuration, permissions, and reading, writing and deleting data. For a complete working app, see the example app in `carp-health-flutter/example`.
+
+## Prerequisites
+
+- The [Flutter SDK](https://flutter.dev/docs/get-started/install) installed on your machine.
+- The plugin added to your app, as described in [Installation](/docs/flutter-plugins/health/installation).
+- The platform setup for [Android](/docs/flutter-plugins/health/platform-setup/android) and [iOS](/docs/flutter-plugins/health/platform-setup/ios) completed.
+
+## Create a Health instance
+
+Import the package, create a `Health` instance and call `configure()`. Call `configure()` once when your app starts; it initializes the plugin for the current platform.
+
+```dart
+import 'package:health/health.dart';
+
+final health = Health();
+await health.configure();
+```
+
+In a `StatefulWidget`, configure the instance from `initState()`:
+
+```dart
+class HealthPage extends StatefulWidget {
+  @override
+  _HealthPageState createState() => _HealthPageState();
+}
+
+class _HealthPageState extends State<HealthPage> {
+  final health = Health();
+  
+  @override
+  void initState() {
+    super.initState();
+    _configureHealth();
+  }
+  
+  Future<void> _configureHealth() async {
+    await health.configure();
+  }
+}
+```
+
+## Request permissions
+
+Request read access to the data types you need:
+
+```dart
+final types = [
+  HealthDataType.STEPS,
+  HealthDataType.HEART_RATE,
+];
+
+final granted = await health.requestAuthorization(types);
+
+if (granted) {
+  print('✓ Permissions granted!');
+} else {
+  print('✗ Permissions denied');
+}
+```
+
+To request a specific access level for each type, pass a `permissions` list with one entry per type:
+
+```dart
+final types = [
+  HealthDataType.STEPS,
+  HealthDataType.HEART_RATE,
+  HealthDataType.WORKOUT,
+  HealthDataType.WEIGHT,
+];
+
+final permissions = [
+  HealthDataAccess.READ,        // Steps: read only
+  HealthDataAccess.READ,        // Heart rate: read only
+  HealthDataAccess.READ_WRITE,  // Workout: read and write
+  HealthDataAccess.READ_WRITE,  // Weight: read and write
+];
+
+final granted = await health.requestAuthorization(
+  types, 
+  permissions: permissions,
+);
+```
+
+<Callout type="warning" title="Android runtime permissions">
+
+On Android, if you use STEPS or workout data, you also need to request the activity recognition and location runtime permissions. Use the [permission_handler](https://pub.dev/packages/permission_handler) package. See [Android runtime permissions](/docs/flutter-plugins/health/permissions#android-runtime-permissions).
+
+</Callout>
+
+### Check Health Connect on Android
+
+On Android, the user needs Google Health Connect installed:
+
+```dart
+// Check if Health Connect is available
+final available = await health.isHealthConnectAvailable();
+
+if (!available) {
+  // Open Play Store to install Health Connect
+  await health.installHealthConnect();
+}
+
+// Check detailed status
+final status = await health.getHealthConnectSdkStatus();
+print('Health Connect status: $status');
+```
+
+Health Connect is the modern replacement for Google Fit on Android. Most devices running Android 14+ have it pre-installed. See [Health Connect](/docs/flutter-plugins/health/health-connect) for the full API.
+
+## Read health data
+
+Read the step count from the last 24 hours:
+
+```dart
+final now = DateTime.now();
+final yesterday = now.subtract(const Duration(hours: 24));
+
+final healthData = await health.getHealthDataFromTypes(
+  types: [HealthDataType.STEPS],
+  startDate: yesterday,
+  endDate: now,
+);
+
+for (var point in healthData) {
+  print('Steps: ${point.value}');
+}
+```
+
+Read several data types, exclude manual entries, and process the results by type:
+
+```dart
+final now = DateTime.now();
+final yesterday = now.subtract(const Duration(hours: 24));
+
+final healthData = await health.getHealthDataFromTypes(
+  types: [
+    HealthDataType.STEPS,
+    HealthDataType.HEART_RATE,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
+  ],
+  startDate: yesterday,
+  endDate: now,
+  includeManualEntry: false,  // Exclude manual entries
+);
+
+// Group by type
+final stepData = healthData
+    .where((p) => p.type == HealthDataType.STEPS)
+    .toList();
+
+final heartRateData = healthData
+    .where((p) => p.type == HealthDataType.HEART_RATE)
+    .toList();
+
+// Calculate total steps
+final totalSteps = stepData
+    .map((p) => (p.value as NumericHealthValue).numericValue)
+    .fold(0.0, (sum, value) => sum + value);
+
+print('Total steps: $totalSteps');
+print('Heart rate readings: ${heartRateData.length}');
+```
+
+### Get today's step count
+
+For step totals, use the optimized `getTotalStepsInInterval()` method:
+
+```dart
+final now = DateTime.now();
+final midnight = DateTime(now.year, now.month, now.day);
+
+final steps = await health.getTotalStepsInInterval(midnight, now);
+
+print('Steps today: ${steps ?? 0}');
+```
+
+## Write health data
+
+Writing requires WRITE permission for the data type. Save a single measurement, such as weight:
+
+```dart
+final now = DateTime.now();
+
+final success = await health.writeHealthData(
+  value: 70.5,  // 70.5 kg
+  type: HealthDataType.WEIGHT,
+  startTime: now,
+);
+
+if (success) {
+  print('✓ Weight saved!');
+} else {
+  print('✗ Failed to save weight');
+}
+```
+
+Save a workout session with summary metrics:
+
+```dart
+final workoutEnd = DateTime.now();
+final workoutStart = workoutEnd.subtract(Duration(minutes: 30));
+
+final success = await health.writeWorkoutData(
+  activityType: HealthWorkoutActivityType.RUNNING,
+  start: workoutStart,
+  end: workoutEnd,
+  totalDistance: 5000.0,        // 5 km in meters
+  totalEnergyBurned: 350.0,     // 350 kcal
+);
+
+if (success) {
+  print('✓ Workout saved!');
+}
+```
+
+Other write methods:
+
+| Method | Use for |
+| --- | --- |
+| `writeBloodPressure()` | Systolic and diastolic readings |
+| `writeBloodOxygen()` | SpO2 measurements |
+| `writeMeal()` | Nutrition tracking |
+| `writeMenstruationFlow()` | Cycle tracking |
+
+See [Writing data](/docs/flutter-plugins/health/writing) for all write methods.
+
+## Delete health data
+
+Delete data that your app previously wrote:
+
+```dart
+final now = DateTime.now();
+final yesterday = now.subtract(Duration(hours: 24));
+
+final success = await health.delete(
+  type: HealthDataType.STEPS,
+  startTime: yesterday,
+  endTime: now,
+);
+
+if (success) {
+  print('✓ Data deleted');
+}
+```
+
+<Callout type="warning">
+
+Deletion is permanent and cannot be undone. Always confirm with the user before you delete health data.
+
+</Callout>
+
+See [Deleting data](/docs/flutter-plugins/health/deleting) for details.
+
+## Complete example
+
+A widget that configures the plugin, requests permission and shows today's step count:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:health/health.dart';
+
+class SimpleHealthExample extends StatefulWidget {
+  @override
+  _SimpleHealthExampleState createState() => _SimpleHealthExampleState();
+}
+
+class _SimpleHealthExampleState extends State<SimpleHealthExample> {
+  final health = Health();
+  int? steps;
+
+  @override
+  void initState() {
+    super.initState();
+    _initHealth();
+  }
+
+  Future<void> _initHealth() async {
+    // Configure
+    await health.configure();
+    
+    // Request permissions
+    final types = [HealthDataType.STEPS];
+    final granted = await health.requestAuthorization(types);
+    
+    if (granted) {
+      _fetchSteps();
+    }
+  }
+
+  Future<void> _fetchSteps() async {
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day);
+    
+    final stepCount = await health.getTotalStepsInInterval(midnight, now);
+    
+    setState(() {
+      steps = stepCount;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Health Example')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Steps Today',
+              style: TextStyle(fontSize: 24),
+            ),
+            SizedBox(height: 16),
+            Text(
+              '${steps ?? '...'}',
+              style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _fetchSteps,
+              child: Text('Refresh'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+For a complete implementation with UI, see the [full example app](https://github.com/cph-cachet/flutter-plugins/tree/master/packages/health/example).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Permission denied on iOS">
+
+On iOS, once the user denies a permission, it can only be changed in the Settings app. Guide the user to:
+
+1. Open the Settings app.
+2. Scroll to your app.
+3. Tap **Health**.
+4. Enable the data types you need.
+
+</Accordion>
+<Accordion title="Health Connect not installed (Android)">
+
+Use the installation helper:
+
+```dart
+if (!await health.isHealthConnectAvailable()) {
+  await health.installHealthConnect();
+}
+```
+
+</Accordion>
+<Accordion title="No data returned">
+
+Common causes:
+
+- Permissions are not granted.
+- No data exists for the time range.
+- On iOS: the device is locked.
+- On Android: Health Connect is not synced.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Reading data" href="/docs/flutter-plugins/health/reading" icon="Download">Reading methods and data processing.</Card>
+<Card title="Writing data" href="/docs/flutter-plugins/health/writing" icon="Upload">Write workouts, meals and specialized data.</Card>
+<Card title="Permissions" href="/docs/flutter-plugins/health/permissions" icon="Lock">Permission management in depth.</Card>
+<Card title="Data types" href="/docs/flutter-plugins/health/data-types" icon="Dataset">All 100+ supported health data types.</Card>
+</Cards>

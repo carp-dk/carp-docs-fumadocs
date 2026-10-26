@@ -1,0 +1,183 @@
+---
+title: Quickstart
+description: Wire the toolkit into your app so it works in debug builds and is excluded from release builds.
+icon: Bolt
+---
+
+To keep the toolkit out of production archives, set up three parts: a launch-argument hook, a debug-only setup file and a `kDebugMode` gate in `main()`. This page assumes you have [installed](/docs/flutter-plugins/debug-toolkit/installation) the package as a dev dependency.
+
+<Steps>
+<Step title="Create a launch-argument hook">
+
+Create a file with **no dependency** on `carp_debug_flutter`. Production code reads launch arguments through this hook, so it never imports the package.
+
+```dart
+// lib/debug/debug_hooks.dart
+String? Function(String key)? debugLaunchOverride;
+```
+
+Read configuration through the hook anywhere in your app. In release builds the hook is `null`, so the compile-time value is used:
+
+```dart
+final mode = debugLaunchOverride?.call('deployment-mode')
+    ?? const String.fromEnvironment('deployment-mode', defaultValue: 'production');
+```
+
+</Step>
+<Step title="Create a debug-only setup file">
+
+This is the **only** file that imports the package. The two variants differ only in where the preferences and the database come from. `myEnvEntries` is defined in [Define your launch arguments](#define-your-launch-arguments).
+
+<Tabs items={['CARP app', 'Plain Flutter app']}>
+<Tab value="CARP app">
+
+```dart
+// lib/debug/debug_setup.dart
+// ignore_for_file: depend_on_referenced_packages
+import 'package:carp_debug_flutter/carp_debug_flutter.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart' show Settings;
+import 'package:flutter/widgets.dart';
+import 'package:sembast/sembast.dart';
+import 'debug_hooks.dart';
+
+Future<void> initDebugTools() async {
+  await DebugEnv().initialize();
+  DebugEnv().registerAll(myEnvEntries);
+  debugLaunchOverride = DebugEnv().overrideOf; // install the hook
+}
+
+Widget wrapWithToolkit(Widget child, Database db) => CarpDebugToolkit(
+  config: DebugToolkitConfig(
+    title: 'My CARP App Debug',
+    envEntries: myEnvEntries,
+    keyValueStores: [
+      SharedPreferencesKeyValueStore(Settings().preferences!,
+          name: 'CARP Preferences'),
+    ],
+    databases: [SembastDebugDatabase(db, [
+      SembastStoreDescriptor('settings', StoreRef<String, Object?>.main()),
+      SembastStoreDescriptor('results', intMapStoreFactory.store('result_store')),
+    ])],
+    onApply: () => bloc.backend.reconfigure(),        // re-point CAWS live
+    onReinitialize: () => bloc.backend.reconfigure(), // iOS restart path
+  ),
+  child: child,
+);
+```
+
+</Tab>
+<Tab value="Plain Flutter app">
+
+```dart
+// lib/debug/debug_setup.dart
+// ignore_for_file: depend_on_referenced_packages
+import 'package:carp_debug_flutter/carp_debug_flutter.dart';
+import 'package:flutter/widgets.dart';
+import 'package:sembast/sembast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'debug_hooks.dart';
+
+Future<void> initDebugTools(SharedPreferences prefs) async {
+  await DebugEnv().initialize(preferences: prefs);
+  DebugEnv().registerAll(myEnvEntries);
+  debugLaunchOverride = DebugEnv().overrideOf;
+}
+
+Widget wrapWithToolkit(Widget child, SharedPreferences prefs, Database db) =>
+    CarpDebugToolkit(
+      config: DebugToolkitConfig(
+        title: 'My App Debug',
+        envEntries: myEnvEntries,
+        keyValueStores: [SharedPreferencesKeyValueStore(prefs)],
+        databases: [SembastDebugDatabase(db, [
+          SembastStoreDescriptor('main', StoreRef<String, Object?>.main()),
+        ])],
+        onApply: () async => myAppConfig.reload(),
+      ),
+      child: child,
+    );
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Gate the toolkit in main()">
+
+`main()` imports only the app-local `debug_setup.dart` and calls it only when `kDebugMode` is true. In release builds this folds to `runApp(app)`, and the whole debug subtree, including the package, is tree-shaken away.
+
+```dart
+import 'package:flutter/foundation.dart';
+import 'debug/debug_setup.dart' as debug;
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load overrides BEFORE the app reads its configuration.
+  if (kDebugMode) await debug.initDebugTools();
+
+  final db = await openAppDatabase();
+  final app = await buildApp(db);
+
+  runApp(kDebugMode ? debug.wrapWithToolkit(app, db) : app);
+}
+```
+
+[Production builds](/docs/flutter-plugins/debug-toolkit/production) explains why this excludes the toolkit from release archives and how to verify it.
+
+</Step>
+</Steps>
+
+## Define your launch arguments
+
+`myEnvEntries` is a list of [`EnvEntry`](/docs/flutter-plugins/debug-toolkit/environment#enventry-reference) descriptors for the values you normally pass with `--dart-define`:
+
+```dart
+const myEnvEntries = <EnvEntry>[
+  EnvEntry(
+    key: 'deployment-mode',
+    label: 'Deployment mode',
+    group: 'Server',
+    type: EnvValueType.enumeration,
+    options: ['production', 'test', 'dev'],
+    fallback: String.fromEnvironment('deployment-mode', defaultValue: 'production'),
+  ),
+  EnvEntry(key: 'server-host', label: 'App server host', group: 'Server'),
+];
+```
+
+<Callout type="tip">
+
+Everything in `DebugToolkitConfig` is optional. An empty config still shows the debug button, the **Device & App** tool and the **Logs & Errors** tool.
+
+</Callout>
+
+## Open the debug menu
+
+Tap the bug icon in the app, or open and close the menu programmatically:
+
+```dart
+DebugController.instance.open();
+DebugController.instance.close();
+DebugController.instance.toggle();
+```
+
+## Next steps
+
+<Cards>
+<Card title="Environment and servers" icon="Tune" href="/docs/flutter-plugins/debug-toolkit/environment">
+
+Override launch arguments and switch servers at runtime.
+
+</Card>
+<Card title="Data sources" icon="Database" href="/docs/flutter-plugins/debug-toolkit/data-sources">
+
+Expose preferences and databases to the inspector tools.
+
+</Card>
+<Card title="Custom tools" icon="Extension" href="/docs/flutter-plugins/debug-toolkit/custom-tools">
+
+Add your own screens to the debug menu.
+
+</Card>
+</Cards>

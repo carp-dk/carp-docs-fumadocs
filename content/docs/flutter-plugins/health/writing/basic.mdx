@@ -1,0 +1,341 @@
+---
+title: Numeric data
+description: Write numeric health data such as weight, vital signs, blood glucose and activity metrics using writeHealthData.
+---
+
+`writeHealthData` writes a single numeric value of a given type. Request WRITE permission for the type first; see [Request write permission](/docs/flutter-plugins/health/writing#request-write-permission).
+
+## Signature
+
+```dart
+Future<bool> writeHealthData({
+  required double value,
+  required HealthDataType type,
+  required DateTime startTime,
+  DateTime? endTime,
+  String? sourceId,
+  String? sourceName,
+  DateTime? recordingTime,
+})
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `value` | `double` | Yes | Numeric value to write |
+| `type` | `HealthDataType` | Yes | Type of health data |
+| `startTime` | `DateTime` | Yes | When the measurement was taken |
+| `endTime` | `DateTime` | No | End time (for duration-based metrics) |
+| `sourceId` | `String` | No | Custom source identifier |
+| `sourceName` | `String` | No | Custom source name |
+| `recordingTime` | `DateTime` | No | When the data was recorded (defaults to `startTime`) |
+
+## Return value
+
+- `true`: the data was written.
+- `false`: the write failed. Check permissions and platform availability.
+
+## Supported data types
+
+### Body measurements
+
+```dart
+// Weight
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+);
+
+// Height
+await health.writeHealthData(
+  value: 175.0,
+  type: HealthDataType.HEIGHT,
+  startTime: DateTime.now(),
+);
+
+// Body Fat Percentage
+await health.writeHealthData(
+  value: 18.5,
+  type: HealthDataType.BODY_FAT_PERCENTAGE,
+  startTime: DateTime.now(),
+);
+
+// BMI
+await health.writeHealthData(
+  value: 23.0,
+  type: HealthDataType.BODY_MASS_INDEX,
+  startTime: DateTime.now(),
+);
+```
+
+### Vital signs
+
+```dart
+// Heart Rate
+await health.writeHealthData(
+  value: 72.0,
+  type: HealthDataType.HEART_RATE,
+  startTime: DateTime.now(),
+);
+
+// Resting Heart Rate
+await health.writeHealthData(
+  value: 60.0,
+  type: HealthDataType.RESTING_HEART_RATE,
+  startTime: DateTime.now(),
+);
+
+// Body Temperature
+await health.writeHealthData(
+  value: 36.8,
+  type: HealthDataType.BODY_TEMPERATURE,
+  startTime: DateTime.now(),
+);
+
+// Respiratory Rate
+await health.writeHealthData(
+  value: 16.0,
+  type: HealthDataType.RESPIRATORY_RATE,
+  startTime: DateTime.now(),
+);
+```
+
+### Blood metrics
+
+```dart
+// Blood Glucose
+await health.writeHealthData(
+  value: 95.0, // mg/dL
+  type: HealthDataType.BLOOD_GLUCOSE,
+  startTime: DateTime.now(),
+);
+
+// Electrodermal Activity
+await health.writeHealthData(
+  value: 2.5,
+  type: HealthDataType.ELECTRODERMAL_ACTIVITY,
+  startTime: DateTime.now(),
+);
+```
+
+For blood pressure and blood oxygen, use the dedicated methods in [Blood pressure and oxygen](/docs/flutter-plugins/health/writing/blood).
+
+### Activity metrics
+
+Activity metrics cover a duration, so pass both `startTime` and `endTime`:
+
+```dart
+// Steps
+await health.writeHealthData(
+  value: 1000.0,
+  type: HealthDataType.STEPS,
+  startTime: DateTime.now().subtract(Duration(hours: 1)),
+  endTime: DateTime.now(),
+);
+
+// Distance
+await health.writeHealthData(
+  value: 2500.0, // meters
+  type: HealthDataType.DISTANCE_DELTA,
+  startTime: DateTime.now().subtract(Duration(hours: 1)),
+  endTime: DateTime.now(),
+);
+
+// Active Energy Burned
+await health.writeHealthData(
+  value: 150.0, // kcal
+  type: HealthDataType.ACTIVE_ENERGY_BURNED,
+  startTime: DateTime.now().subtract(Duration(hours: 1)),
+  endTime: DateTime.now(),
+);
+
+// Flights Climbed
+await health.writeHealthData(
+  value: 5.0,
+  type: HealthDataType.FLIGHTS_CLIMBED,
+  startTime: DateTime.now().subtract(Duration(hours: 1)),
+  endTime: DateTime.now(),
+);
+```
+
+## Set the source
+
+Pass `sourceId` and `sourceName` to track a custom source:
+
+```dart
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: DateTime.now(),
+  sourceId: 'my-smart-scale',
+  sourceName: 'Smart Scale Pro',
+);
+```
+
+## Set a time range
+
+For duration-based measurements, pass the start and end of the period:
+
+```dart
+// Steps during a specific hour
+await health.writeHealthData(
+  value: 1500.0,
+  type: HealthDataType.STEPS,
+  startTime: DateTime(2024, 1, 15, 14, 0), // 2:00 PM
+  endTime: DateTime(2024, 1, 15, 15, 0),   // 3:00 PM
+);
+
+// Calories burned during workout
+await health.writeHealthData(
+  value: 250.0,
+  type: HealthDataType.ACTIVE_ENERGY_BURNED,
+  startTime: workoutStart,
+  endTime: workoutEnd,
+);
+```
+
+## Set the recording time
+
+`recordingTime` is when the data was recorded, as opposed to when it was measured (`startTime`):
+
+```dart
+final measurementTime = DateTime(2024, 1, 15, 8, 0); // Morning measurement
+final recordingTime = DateTime.now(); // Recorded later
+
+await health.writeHealthData(
+  value: 70.5,
+  type: HealthDataType.WEIGHT,
+  startTime: measurementTime,
+  recordingTime: recordingTime,
+);
+```
+
+## Example: weight tracker
+
+This class checks WRITE permission, requests it if needed and then writes the weight:
+
+```dart
+class WeightTracker {
+  final Health health;
+  
+  WeightTracker(this.health);
+  
+  Future<bool> saveWeight({
+    required double weightKg,
+    DateTime? measurementTime,
+  }) async {
+    // Request permission if needed
+    final hasPermission = await health.hasPermissions(
+      [HealthDataType.WEIGHT],
+      permissions: [HealthDataAccess.WRITE],
+    );
+    
+    if (hasPermission != true) {
+      final granted = await health.requestAuthorization(
+        [HealthDataType.WEIGHT],
+        permissions: [HealthDataAccess.WRITE],
+      );
+      
+      if (!granted) {
+        return false;
+      }
+    }
+    
+    // Write the weight
+    return await health.writeHealthData(
+      value: weightKg,
+      type: HealthDataType.WEIGHT,
+      startTime: measurementTime ?? DateTime.now(),
+      sourceId: 'weight-tracker-app',
+      sourceName: 'Weight Tracker',
+    );
+  }
+}
+
+// Usage
+final tracker = WeightTracker(health);
+final success = await tracker.saveWeight(weightKg: 70.5);
+
+if (success) {
+  print('Weight saved!');
+} else {
+  print('Failed to save weight');
+}
+```
+
+## Validate before writing
+
+Validate values in your app before you write them:
+
+```dart
+Future<bool> writeValidatedWeight(double weightKg) async {
+  // Validate weight range
+  if (weightKg < 20 || weightKg > 300) {
+    print('Invalid weight: $weightKg kg');
+    return false;
+  }
+  
+  // Validate timestamp (not in future)
+  final now = DateTime.now();
+  if (now.isBefore(DateTime.now().subtract(Duration(days: 365)))) {
+    print('Measurement too old');
+    return false;
+  }
+  
+  return await health.writeHealthData(
+    value: weightKg,
+    type: HealthDataType.WEIGHT,
+    startTime: now,
+  );
+}
+```
+
+## Error handling
+
+```dart
+Future<void> saveHealthMetric(double value, HealthDataType type) async {
+  try {
+    final success = await health.writeHealthData(
+      value: value,
+      type: type,
+      startTime: DateTime.now(),
+    );
+    
+    if (success) {
+      print('✓ ${type.name} saved');
+    } else {
+      print('✗ Failed to save ${type.name}');
+      print('  Check permissions or platform availability');
+    }
+  } catch (e) {
+    print('✗ Error saving ${type.name}: $e');
+  }
+}
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- Requires the Health Connect SDK.
+- Returns `false` if Health Connect is not available. Call `isHealthConnectAvailable()` before writing; see [Health Connect](/docs/flutter-plugins/health/health-connect).
+- Some types may have platform-specific limitations.
+
+</Tab>
+<Tab value="iOS">
+
+- Supports all numeric types.
+- Data appears immediately in the Health app.
+- You cannot verify a write by reading the data back without READ permission.
+- Converts units automatically (for example, between kg and lbs).
+
+</Tab>
+</Tabs>
+
+## Related
+
+- [Workouts](/docs/flutter-plugins/health/writing/workouts): exercise sessions
+- [Blood pressure and oxygen](/docs/flutter-plugins/health/writing/blood): systolic and diastolic readings
+- [Nutrition](/docs/flutter-plugins/health/writing/nutrition): meal data
+- [Data types](/docs/flutter-plugins/health/data-types): all available health data types

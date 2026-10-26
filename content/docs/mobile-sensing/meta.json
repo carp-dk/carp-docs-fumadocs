@@ -1,0 +1,7 @@
+{
+  "title": "Mobile Sensing",
+  "description": "carp_mobile_sensing",
+  "icon": "Sensors",
+  "root": true,
+  "pages": ["index", "installation", "usage", "---Concepts---", "software-architecture", "domain-model", "measure-types", "data-managers", "---Advanced---", "app-task-model", "privacy", "extending", "best-practices", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_mobile_sensing)", "[API reference](https://pub.dev/documentation/carp_mobile_sensing/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter)"]
+}

@@ -1,0 +1,128 @@
+/* M3E component colours. Roles come from color-roles.css; these choose which role
+   each component state uses. "You are here" always uses the primary container, the
+   focus ring is always primary, and the brand accent never marks a state. */
+:root,
+.dark {
+  /* M3E rings default to secondary; light-DOM rings use --color-fd-ring. Keep them one colour. */
+  --m3e-focus-ring-color: var(--md-sys-color-primary);
+  --m3e-scrollbar-thumb-color: var(--docs-scrollbar);
+  --m3e-scrollbar-track-color: transparent;
+  --m3e-text-highlight-container-color: var(--md-sys-color-primary-container);
+  --m3e-text-highlight-color: var(--md-sys-color-on-primary-container);
+  scrollbar-color: var(--docs-scrollbar) transparent;
+
+  --m3e-filled-card-container-color: var(--md-sys-color-surface-container-low);
+  --m3e-filled-card-text-color: var(--md-sys-color-on-surface);
+  --m3e-outlined-card-outline-color: var(--md-sys-color-outline-variant);
+  /* Outlined buttons are controls, so their boundary meets 3:1. */
+  --m3e-outlined-button-outline-color: var(--docs-control-outline);
+  /* Disabled fills stay well below tonal actions so the two never look alike. */
+  --m3e-text-button-disabled-container-opacity: 0%;
+  --m3e-button-disabled-container-opacity: 6%;
+  --m3e-elevated-chip-disabled-container-opacity: 6%;
+
+  --m3e-nav-menu-item-label-color: var(--md-sys-color-on-surface-variant);
+  --m3e-nav-menu-item-selected-label-color: var(--md-sys-color-on-primary-container);
+  --m3e-nav-menu-item-selected-container-color: var(--md-sys-color-primary-container);
+  --m3e-nav-menu-item-selected-container-hover-color: var(--md-sys-color-on-primary-container);
+  --m3e-nav-menu-item-selected-container-focus-color: var(--md-sys-color-on-primary-container);
+  --m3e-nav-menu-item-selected-container-pressed-color: var(--md-sys-color-on-primary-container);
+  --m3e-nav-menu-item-unselected-container-hover-color: var(--md-sys-color-on-surface);
+  --m3e-nav-menu-item-unselected-container-focus-color: var(--md-sys-color-on-surface);
+  --m3e-nav-menu-item-unselected-container-pressed-color: var(--md-sys-color-on-surface);
+  --m3e-menu-container-color: var(--md-sys-color-surface-container-high);
+  --m3e-menu-item-color: var(--md-sys-color-on-surface);
+  --m3e-menu-item-selected-color: var(--md-sys-color-on-primary-container);
+  --m3e-menu-item-selected-container-color: var(--md-sys-color-primary-container);
+  --m3e-menu-item-selected-container-hover-color: var(--md-sys-color-on-primary-container);
+  --m3e-menu-item-selected-container-focus-color: var(--md-sys-color-on-primary-container);
+  --m3e-menu-item-selected-ripple-color: var(--md-sys-color-on-primary-container);
+  --m3e-option-selected-color: var(--md-sys-color-on-primary-container);
+  --m3e-option-selected-container-color: var(--md-sys-color-primary-container);
+  --m3e-option-selected-container-hover-color: var(--md-sys-color-on-primary-container);
+  --m3e-option-selected-container-focus-color: var(--md-sys-color-on-primary-container);
+  --m3e-option-selected-ripple-color: var(--md-sys-color-on-primary-container);
+  --m3e-tree-item-selected-container-color: var(--md-sys-color-primary-container);
+  --m3e-tree-item-selected-label-color: var(--md-sys-color-on-primary-container);
+  --m3e-tree-item-selected-container-hover-color: var(--md-sys-color-on-primary-container);
+  --m3e-tree-item-selected-container-focus-color: var(--md-sys-color-on-primary-container);
+  --m3e-tree-item-selected-ripple-color: var(--md-sys-color-on-primary-container);
+  --m3e-chip-selected-container-color: var(--md-sys-color-primary-container);
+  --m3e-chip-selected-label-text-color: var(--md-sys-color-on-primary-container);
+  --m3e-chip-selected-leading-icon-color: var(--md-sys-color-on-primary-container);
+  --m3e-chip-selected-trailing-icon-color: var(--md-sys-color-on-primary-container);
+  --m3e-chip-unselected-leading-icon-color: var(--md-sys-color-on-surface-variant);
+
+  /* M3E draws the TOC position as an outlined shape; primary keeps it above 3:1. */
+  --m3e-toc-item-color: var(--md-sys-color-on-surface-variant);
+  --m3e-toc-item-selected-color: var(--md-sys-color-primary);
+  --m3e-toc-active-indicator-color: var(--md-sys-color-primary);
+  --m3e-toc-overline-color: var(--md-sys-color-on-surface);
+
+  /* Inactive tracks need 3:1 against their canvas (WCAG 1.4.11). */
+  --m3e-slider-inactive-track-color: var(--docs-track);
+  --m3e-slider-tick-inactive-color: var(--md-sys-color-surface);
+  --m3e-progress-indicator-track-color: var(--docs-track);
+  --m3e-step-selected-icon-container-color: var(--md-sys-color-primary);
+  --m3e-step-selected-icon-color: var(--md-sys-color-on-primary);
+  --m3e-step-completed-icon-container-color: var(--md-sys-color-primary-container);
+  --m3e-step-completed-icon-color: var(--md-sys-color-on-primary-container);
+  --m3e-step-unselected-icon-container-color: var(--md-sys-color-surface-container-highest);
+  --m3e-step-unselected-icon-color: var(--md-sys-color-on-surface-variant);
+  --m3e-step-divider-color: var(--md-sys-color-outline-variant);
+
+  --m3e-dialog-container-color: var(--md-sys-color-surface-container-high);
+  --m3e-dialog-header-color: var(--md-sys-color-on-surface);
+  --m3e-dialog-content-color: var(--md-sys-color-on-surface-variant);
+  --m3e-dialog-scrim-color: var(--md-sys-color-scrim);
+  --m3e-dialog-scrim-opacity: 32%;
+  --m3e-tooltip-container-color: var(--md-sys-color-inverse-surface);
+  --m3e-tooltip-supporting-text-color: var(--md-sys-color-inverse-on-surface);
+  --m3e-expansion-panel-text-color: var(--md-sys-color-on-surface);
+  --m3e-divider-color: var(--md-sys-color-outline-variant);
+}
+
+::selection { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+
+/* Reusable Material role pairs for component emphasis and semantic states. */
+[data-tone='primary'] { --docs-tone: var(--md-sys-color-primary); --docs-on-tone: var(--md-sys-color-on-primary); --docs-tone-container: var(--md-sys-color-primary-container); --docs-on-tone-container: var(--md-sys-color-on-primary-container); }
+[data-tone='secondary'] { --docs-tone: var(--md-sys-color-secondary); --docs-on-tone: var(--md-sys-color-on-secondary); --docs-tone-container: var(--md-sys-color-secondary-container); --docs-on-tone-container: var(--md-sys-color-on-secondary-container); }
+[data-tone='tertiary'] { --docs-tone: var(--md-sys-color-tertiary); --docs-on-tone: var(--md-sys-color-on-tertiary); --docs-tone-container: var(--md-sys-color-tertiary-container); --docs-on-tone-container: var(--md-sys-color-on-tertiary-container); }
+[data-tone='neutral'] { --docs-tone: var(--md-sys-color-on-surface-variant); --docs-on-tone: var(--md-sys-color-surface); --docs-tone-container: var(--md-sys-color-surface-container-highest); --docs-on-tone-container: var(--md-sys-color-on-surface); }
+[data-tone='info'] { --docs-tone: var(--docs-info); --docs-on-tone: var(--docs-on-info); --docs-tone-container: var(--docs-info-container); --docs-on-tone-container: var(--docs-on-info-container); }
+[data-tone='tip'] { --docs-tone: var(--docs-tip); --docs-on-tone: var(--docs-on-tip); --docs-tone-container: var(--docs-tip-container); --docs-on-tone-container: var(--docs-on-tip-container); }
+[data-tone='success'] { --docs-tone: var(--docs-success); --docs-on-tone: var(--docs-on-success); --docs-tone-container: var(--docs-success-container); --docs-on-tone-container: var(--docs-on-success-container); }
+[data-tone='warning'] { --docs-tone: var(--docs-warning); --docs-on-tone: var(--docs-on-warning); --docs-tone-container: var(--docs-warning-container); --docs-on-tone-container: var(--docs-on-warning-container); }
+[data-tone='error'] { --docs-tone: var(--md-sys-color-error); --docs-on-tone: var(--md-sys-color-on-error); --docs-tone-container: var(--md-sys-color-error-container); --docs-on-tone-container: var(--md-sys-color-on-error-container); }
+.docs-mdx-icon[data-tone] { color: var(--docs-tone); }
+
+.docs-mdx-chip {
+  --m3e-chip-label-text-color: var(--docs-on-tone-container);
+  --m3e-chip-icon-color: var(--docs-tone);
+  --m3e-elevated-chip-container-color: var(--docs-tone-container);
+  --m3e-elevated-chip-elevation: none;
+  --m3e-elevated-chip-hover-elevation: none;
+  --m3e-outlined-chip-outline-color: var(--docs-tone);
+  --m3e-chip-container-shape: 8px;
+}
+.docs-mdx-chip[variant='outlined'] { --m3e-chip-label-text-color: var(--docs-tone); }
+.docs-mdx-chip[disabled] { --m3e-chip-icon-color: var(--md-sys-color-on-surface); }
+
+.docs-mdx-field {
+  /* Focus is always the primary blue; a field's tone only colours its accents. */
+  --m3e-form-field-focused-color: var(--md-sys-color-primary);
+  --m3e-form-field-focused-outline-color: var(--md-sys-color-primary);
+  --m3e-form-field-outline-color: var(--docs-control-outline);
+  --m3e-option-panel-container-color: var(--md-sys-color-surface-container-high);
+  --m3e-option-selected-color: var(--docs-on-tone-container);
+  --m3e-option-selected-container-color: var(--docs-tone-container);
+  --m3e-option-selected-container-hover-color: var(--docs-on-tone-container);
+  --m3e-option-selected-container-focus-color: var(--docs-on-tone-container);
+  --m3e-option-selected-ripple-color: var(--docs-on-tone-container);
+}
+.docs-select-field [slot='arrow'] { color: var(--docs-tone); }
+.docs-select-field m3e-select:disabled [slot='arrow'] { color: inherit; }
+:is(.docs-navbar-menu, .docs-navbar-mega-menu, .docs-open-menu) [slot='icon'] { color: var(--md-sys-color-on-surface-variant); }
+:is(.docs-navbar-menu, .docs-navbar-mega-menu) m3e-menu-item[aria-current='page'] { --m3e-menu-item-color: var(--md-sys-color-on-primary-container); background: var(--md-sys-color-primary-container); border-radius: 8px; }
+:is(.docs-navbar-menu, .docs-navbar-mega-menu) m3e-menu-item[aria-current='page'] [slot='icon'] { color: var(--md-sys-color-primary); }
+:is(.docs-navbar-menu, .docs-navbar-mega-menu) [slot='trailing-icon'] { color: var(--md-sys-color-on-surface-variant); }

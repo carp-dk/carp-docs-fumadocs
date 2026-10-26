@@ -1,0 +1,120 @@
+---
+title: Apple Watch Sensing
+description: Collect passive sensor data from an Apple Watch in a CARP Mobile Sensing study.
+icon: Watch
+---
+
+`carp_aware_package` adds an Apple Watch as a data source to a [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) study. The watch collects motion, heart rate, location, sound and more while the participant wears it, including when the phone app is closed, and hands the data to the phone a few times an hour.
+
+The package wraps the [AWARE watchOS](https://github.com/awareframework/com.awareframework.ios.sensor.applewatch) sensing framework by Yuuki Nishiyama (The University of Tokyo).
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_aware_package" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_aware_package/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp_aware_package" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+<Callout type="warning" title="iOS and watchOS only">
+
+The package supports iOS and watchOS only, and it needs a **companion watchOS app** inside your Flutter app's Xcode project. Without that app, the package has nothing to receive. You add it once, as described in [The watch app](/docs/sampling-packages/apple-watch/watch-app).
+
+</Callout>
+
+## Features
+
+<Cards>
+<Card title="Buffered data transfer" icon="Sync">
+
+The watch buffers data locally and transfers it every 15 minutes by default. Each record carries the timestamp set by the watch.
+
+</Card>
+<Card title="Background collection" icon="Schedule">
+
+The watch keeps collecting when it is out of range and when the phone app has been killed. iOS wakes your app in the background to receive the files.
+
+</Card>
+<Card title="Protocol configuration" icon="Settings">
+
+Sampling rates and which sensors run are part of the study protocol. Deploying a new protocol from CARP Web Services reconfigures the watch.
+
+</Card>
+<Card title="No raw audio" icon="Mic">
+
+Sound sensing produces a decibel value and a classification label. The recording is analyzed on the watch and discarded; no raw audio leaves the watch.
+
+</Card>
+</Cards>
+
+## How it works
+
+![The Apple Watch collects with the AWARE sensors and buffers into a database on the watch, then transfers compressed chunks over WatchConnectivity to carp_aware_package on the iPhone, which turns them into CAMS measurements.](/images/apple-watch/how-it-works.svg)
+
+[Architecture](/docs/sampling-packages/apple-watch/architecture) follows the full path from a sensor reading on the watch to a row in your data set.
+
+## Measure types
+
+The package provides nine measure types in the `dk.carp.watch.aware` namespace:
+
+| Measure type | Data class | Contents |
+|---|---|---|
+| `dk.carp.watch.aware.motion` | `AppleWatchMotion` | Acceleration, attitude, gravity, rotation rate, user acceleration |
+| `dk.carp.watch.aware.heartrate` | `AppleWatchHeartRate` | Heart rate in BPM, read from HealthKit |
+| `dk.carp.watch.aware.battery` | `AppleWatchBattery` | Battery level and charging state of the watch |
+| `dk.carp.watch.aware.location` | `AppleWatchLocation` | Latitude, longitude, altitude, speed, course |
+| `dk.carp.watch.aware.heading` | `AppleWatchHeading` | Compass heading and geomagnetic field |
+| `dk.carp.watch.aware.bluetooth` | `AppleWatchBluetooth` | Nearby Bluetooth devices seen by the watch |
+| `dk.carp.watch.aware.ambientnoise` | `AppleWatchAmbientNoise` | Noise level in decibel |
+| `dk.carp.watch.aware.audiolabel` | `AppleWatchAudioLabel` | Sound classification labels (speech, laughter, …) |
+| `dk.carp.watch.aware.device` | `AppleWatchDeviceInfo` | Watch model, watchOS version, and the phone it is paired with |
+
+[Data types](/docs/sampling-packages/apple-watch/data-types) documents every field of every type.
+
+## Requirements
+
+| Requirement | Value |
+|---|---|
+| Platforms | iOS and watchOS. Android is not supported. |
+| iOS deployment target | 16.0 |
+| watchOS deployment target | 8.0 |
+| Flutter | 3.29 or newer (Swift Package Manager support) |
+| Dart SDK | 3.8 or newer |
+| Testing | A physical iPhone with a paired Apple Watch |
+
+<Callout type="tip" title="Test on real devices">
+
+The simulator cannot pair a watch to a phone in a way that makes `WatchConnectivity` file transfers work end to end, and heart rate needs real hardware.
+
+</Callout>
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/sampling-packages/apple-watch/installation" icon="Download">
+
+Add the dependency and prepare the iOS project.
+
+</Card>
+<Card title="Quickstart" href="/docs/sampling-packages/apple-watch/quickstart" icon="Bolt">
+
+Build a complete study protocol with an Apple Watch in it.
+
+</Card>
+<Card title="The watch app" href="/docs/sampling-packages/apple-watch/watch-app" icon="Watch">
+
+Add the companion watchOS app. This step is required.
+
+</Card>
+<Card title="Configuration" href="/docs/sampling-packages/apple-watch/configuration" icon="Tune">
+
+Every setting on `AppleWatchDevice`, and what it costs.
+
+</Card>
+</Cards>
+
+## Credits
+
+The watchOS sensing framework wrapped by this package is [`com.awareframework.ios.sensor.applewatch`](https://github.com/awareframework/com.awareframework.ios.sensor.applewatch) by Yuuki Nishiyama (The University of Tokyo), available under the Apache License 2.0.
+
+If this framework supports your research, please cite:
+
+> Y. Nishiyama and K. Sezaki, "[Smartwatch-Based Sensing Framework for Continuous Data Collection: Design and Implementation](https://dl.acm.org/doi/10.1145/3594739.3612874)", UbiComp/ISWC '23 Adjunct, pages 620–625, ACM, 2023.

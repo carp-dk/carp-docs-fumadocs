@@ -1,0 +1,323 @@
+---
+title: Using CAMS
+description: Define a study protocol, deploy it, run sampling with the client manager and consume the collected measurements.
+icon: Code
+---
+
+This page describes the runtime flow of CARP Mobile Sensing (CAMS). Complete the [installation](/docs/mobile-sensing/installation) first.
+
+CAMS can run fully local on the device, including protocol creation and deployment. The flow is:
+
+1. [Define a study protocol](#define-a-study-protocol) with the triggers, tasks, devices and measures to collect.
+2. [Deploy the protocol](#deploy-the-protocol) to a local or remote `DeploymentService`, such as `SmartphoneDeploymentService`, to create a study deployment (optional).
+3. [Configure the client manager](#configure-the-client-manager), then [add and deploy the study](#add-and-deploy-studies).
+4. [Resume or pause data sampling](#control-data-sampling) for all studies or for each study.
+5. [Consume or save the collected measurements](#consume-measurements) from the `measurements` stream of one or more studies.
+
+## Define a study protocol
+
+In CAMS, sensing is configured in a [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html). Create one with the Dart API directly in your app:
+
+```dart
+final phone = Smartphone();
+final protocol =
+    SmartphoneStudyProtocol(
+        ownerId: 'AB',
+        name: 'Tracking steps, light, screen, and battery',
+        dataEndPoint: SQLiteDataEndPoint(),
+      )
+      ..addPrimaryDevice(phone)
+      ..addParticipantRole(ParticipantRole('Participant'))
+      ..addTaskControl(
+        DelayedTrigger(delay: const Duration(seconds: 10)),
+        BackgroundTask(
+          measures: [
+            Measure(type: SensorSamplingPackage.STEP_EVENT),
+            Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+            Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+            Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+          ],
+        ),
+        phone,
+        Control.Start,
+      );
+```
+
+This protocol collects steps, ambient light, and screen and battery events from the phone, and stores them in the local SQLite database. Data sampling starts after a delay of 10 seconds.
+
+### Local protocols
+
+Use the `SmartphoneStudyProtocol.local` constructor for a local protocol that:
+
+- only collects simple measures in the background
+- only uses the phone as a device
+- only has one participant
+- stores data locally in the SQLite database
+
+```dart
+var protocol = SmartphoneStudyProtocol.local(
+  name: 'Tracking steps, light, screen, and battery',
+  measures: [
+    Measure(type: SensorSamplingPackage.STEP_EVENT),
+    Measure(type: SensorSamplingPackage.AMBIENT_LIGHT),
+    Measure(type: DeviceSamplingPackage.SCREEN_EVENT),
+    Measure(type: DeviceSamplingPackage.BATTERY_STATE),
+  ],
+);
+```
+
+<Callout type="info" title="Related">
+
+- [Domain model](/docs/mobile-sensing/domain-model) and [Measure types](/docs/mobile-sensing/measure-types) describe protocols and measures in detail.
+- [Data transformation and privacy](/docs/mobile-sensing/privacy) describes transformation formats and privacy schemas.
+
+</Callout>
+
+## Deploy the protocol
+
+This step is optional. A study protocol is deployed through a [`DeploymentService`](https://pub.dev/documentation/carp_core/latest/deployment_carp_core_deployment/DeploymentService-class.html):
+
+```dart
+// Use the on-phone deployment service.
+DeploymentService deploymentService = SmartphoneDeploymentService();
+
+// Create a study deployment using the protocol.
+var status = await deploymentService.createStudyDeployment(protocol);
+```
+
+## Configure the client manager
+
+The client manager [`SmartPhoneClientManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager-class.html) handles the runtime management of studies. It is a singleton, so you can always access it with `SmartPhoneClientManager()`.
+
+The simplest configuration is:
+
+```dart
+await SmartPhoneClientManager().configure();
+```
+
+`configure()` accepts these options:
+
+| Option | Description |
+| --- | --- |
+| `registration` | Unique device registration for this phone. |
+| `deploymentService` | Deployment backend. Default: the local `SmartphoneDeploymentService`. |
+| `dataCollectorFactory` | Custom collector factory. Default: the standard `DeviceController`. |
+| `enableNotifications` | Show task notifications. Default: `true`. |
+| `enableBackgroundMode` | Run sampling in the background. Default: `true`. Android only. |
+| `backgroundNotificationTitle`, `backgroundNotificationText` | Text for the Android background notification. |
+| `askForPermissions` | Request package permissions automatically. Default: `true`. |
+
+<Tabs items={['Default', 'Customized']}>
+<Tab value="Default">
+
+```dart
+final client = SmartPhoneClientManager();
+await client.configure();
+```
+
+</Tab>
+<Tab value="Customized">
+
+```dart
+final client = SmartPhoneClientManager();
+
+await client.configure(
+  deploymentService: deploymentService,
+  enableNotifications: true,
+  enableBackgroundMode: true,
+  backgroundNotificationTitle: 'CAMS is running',
+  backgroundNotificationText: 'Collecting sensing data in background',
+  askForPermissions: false, // app handles permissions manually
+);
+```
+
+</Tab>
+</Tabs>
+
+<Callout type="tip">
+
+Set `askForPermissions: false` when your app needs a custom permission flow or staged consent screens.
+
+</Callout>
+
+## Add and deploy studies
+
+To deploy a study on the client, get a study deployment from the deployment service, based on the protocol. Configure the client to use this deployment service, then add and deploy the study:
+
+```dart
+// Use the on-phone deployment service.
+DeploymentService deploymentService = SmartphoneDeploymentService();
+
+// Create a study deployment using a protocol.
+var status = await deploymentService.createStudyDeployment(protocol);
+
+// Create and configure a client manager to use the deploymentService.
+SmartPhoneClientManager client = SmartPhoneClientManager();
+await client.configure(deploymentService: deploymentService);
+
+// Add a study based on the deployed protocol to the client
+final study = await client.addStudy(
+  SmartphoneStudy(
+    studyDeploymentId: status.studyDeploymentId,
+    deviceRoleName: phone.roleName,
+  ),
+);
+
+/// Deploy the study to the client.
+SmartPhoneClientManager().tryDeployment(
+  study.studyDeploymentId,
+  study.deviceRoleName,
+);
+```
+
+With the local `SmartphoneDeploymentService`, you can write this more compactly with `addStudyFromProtocol`:
+
+```dart
+// Create and configure a client manager for this phone.
+await SmartPhoneClientManager().configure();
+
+// Create a study based on the protocol.
+var study = await SmartPhoneClientManager().addStudyFromProtocol(protocol);
+
+/// Deploy the study.
+await SmartPhoneClientManager().tryDeployment(
+  study.studyDeploymentId,
+  study.deviceRoleName,
+);
+```
+
+The same flow as a single statement:
+
+```dart
+SmartPhoneClientManager().configure().then(
+  (_) => SmartPhoneClientManager()
+      .addStudyFromProtocol(protocol)
+      .then(
+        (study) => SmartPhoneClientManager().tryDeployment(
+          study.studyDeploymentId,
+          study.deviceRoleName,
+        ),
+      ),
+);
+```
+
+The client manager can handle **multiple** studies. Add each one to the client:
+
+```dart
+var study_1 = await client.addStudyFromProtocol(protocol_1);
+var study_2 = await client.addStudyFromProtocol(protocol_2);
+var study_3 = await client.addStudyFromProtocol(protocol_3);
+```
+
+## Control data sampling
+
+Control data sampling with the `resume` and `pause` methods:
+
+```dart
+// Resume data sampling for all studies added to the client.
+SmartPhoneClientManager().resume();
+
+// .. and pause all data sampling for all studies again.
+SmartPhoneClientManager().pause();
+```
+
+Calling `resume()` or `pause()` on the client manager resumes or pauses **all** studies added to the client. For fine-grained control, use the [`SmartphoneStudyController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController-class.html) of each study:
+
+```dart
+SmartphoneStudyController? controller = client.getStudyController(study);
+controller?.resume();
+```
+
+### Stop a study and dispose the client
+
+`stopStudy` permanently stops a study. A stopped study cannot be started again. Call `dispose` to dispose of the client, typically in the Flutter `dispose` method.
+
+```dart
+// Permanently stop the study.
+// This will mark the study as stopped and remove it from the client manager.
+SmartPhoneClientManager().stopStudy(
+  study.studyDeploymentId,
+  study.deviceRoleName,
+);
+
+// Dispose of the client (e.g. in Flutter dispose())
+client.dispose();
+```
+
+<Callout type="tip" title="Run a single local protocol">
+
+To run just one local protocol, configure, add, deploy and resume in one statement:
+
+```dart
+SmartPhoneClientManager().configure().then(
+  (_) => SmartPhoneClientManager()
+    .addStudyFromProtocol(protocol)
+    .then(
+      (study) => SmartPhoneClientManager()
+        .tryDeployment(study.studyDeploymentId, study.deviceRoleName)
+        .then((_) => SmartPhoneClientManager().resume()),
+    ),
+);
+```
+
+</Callout>
+
+## Consume measurements
+
+All sampled data is available in the `measurements` stream, on both the client and each study controller:
+
+```dart
+  // Listening on the measurements stream.
+  client.measurements.listen((measurement) {
+    // Do something with the measurement, e.g. print the json.
+    print(toJsonString(measurement));
+  });
+```
+
+`measurements` is a standard Dart [`Stream`](https://api.dart.dev/stable/3.2.0/dart-async/Stream-class.html), so you can subscribe to, filter and map it as needed:
+
+<Tabs items={['Subscribe', 'Filter', 'Map']}>
+<Tab value="Subscribe">
+
+```dart
+// subscribe to the stream of measurements
+var subscription = controller?.measurements.listen((Measurement measurement) {
+  // do something w. the measurement
+  ...
+});
+
+... 
+
+// Cancel the subscription.
+await subscription?.cancel();
+```
+
+</Tab>
+<Tab value="Filter">
+
+```dart
+// listen on ambient light measurements only
+controller?.measurements
+    .where((measurement) =>
+        measurement.data.jsonType == SensorSamplingPackage.AMBIENT_LIGHT)
+    .listen((measurement) => print(measurement));
+```
+
+</Tab>
+<Tab value="Map">
+
+```dart
+// map measurements to JSON and then print
+controller?.measurements
+    .map((measurement) => measurement.toJson())
+    .listen((json) => print(json));
+```
+
+</Tab>
+</Tabs>
+
+## Next steps
+
+- Store or upload measurements with a [data manager](/docs/mobile-sensing/data-managers).
+- Involve the user in sampling with the [app task model](/docs/mobile-sensing/app-task-model).
+- Keep sampling running in the background: see [Best practices](/docs/mobile-sensing/best-practices#background-sensing).

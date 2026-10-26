@@ -1,0 +1,107 @@
+---
+title: Installation
+description: Add carp_debug_flutter as a dev dependency and configure iOS and Android.
+icon: Download
+---
+
+<Steps>
+<Step title="Add the dependency">
+
+Add the package under `dev_dependencies` so it is excluded from production archives (see [Production builds](/docs/flutter-plugins/debug-toolkit/production)).
+
+<Tabs items={['pub.dev', 'Git', 'Local path']}>
+<Tab value="pub.dev">
+
+```yaml
+# pubspec.yaml
+dev_dependencies:
+  carp_debug_flutter: ^0.1.0
+```
+
+</Tab>
+<Tab value="Git">
+
+```yaml
+# pubspec.yaml
+dev_dependencies:
+  carp_debug_flutter:
+    git:
+      url: https://github.com/cph-cachet/carp-debug-flutter
+```
+
+</Tab>
+<Tab value="Local path">
+
+Use a path dependency for local development:
+
+```yaml
+# pubspec.yaml
+dev_dependencies:
+  carp_debug_flutter:
+    path: ../carp_debug_flutter
+```
+
+</Tab>
+</Tabs>
+
+The built-in **Shared Preferences** and **Database** tools depend on `shared_preferences` and `sembast`. If your app already uses them, as every CARP app does, no extra setup is needed.
+
+Then fetch the dependencies:
+
+```bash
+flutter pub get
+```
+
+<Callout type="info">
+
+Follow [Production builds](/docs/flutter-plugins/debug-toolkit/production) so release builds compile and ship nothing from the toolkit package. If you add it under `dependencies` instead and only set `enabled: false` at runtime, the package is still in the archive and users might find a way to access it.
+
+</Callout>
+
+</Step>
+<Step title="Configure the platforms">
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+`minSdk 24` and `compileSdk 34` or higher are required.
+
+</Tab>
+<Tab value="iOS">
+
+The minimum deployment target is **iOS 15.0**. The plugin supports both Swift Package Manager and CocoaPods; Swift Package Manager is recommended.
+
+<Callout type="info">
+
+If you switch a project from CocoaPods to Swift Package Manager, run `pod deintegrate` first and make sure `platform :ios` in `ios/Podfile` is at least `15.0`.
+
+</Callout>
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Wrap your app">
+
+Continue to the [Quickstart](/docs/flutter-plugins/debug-toolkit/quickstart) to wrap your app's root widget in `CarpDebugToolkit`.
+
+</Step>
+</Steps>
+
+## Keeping it out of production
+
+Exclude the toolkit from the release archive. With the package declared as a `dev_dependency`, reference it only from `kDebugMode`-gated code, so it is both disabled at runtime and excluded from the release archive:
+
+```dart
+import 'package:flutter/foundation.dart';
+
+// Folds to `runApp(app)` in release; the wrapper (and the package) is
+// tree-shaken away.
+runApp(kDebugMode ? debug.wrapWithDebugToolkit(app) : app);
+```
+
+The full pattern (app-local hook, debug-only setup file and per-platform exclusion details) is on the [Production builds](/docs/flutter-plugins/debug-toolkit/production) page.
+
+### Runtime switch
+
+`CarpDebugToolkit` also accepts an `enabled` flag (default `true`) for cases where the package stays in the build but you want a runtime switch. When `enabled` is `false`, `CarpDebugToolkit` returns its `child` untouched, with zero overhead.
