@@ -1,5 +1,7 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import {
+  APICallError,
+  LoadAPIKeyError,
   convertToModelMessages,
   createUIMessageStreamResponse,
   stepCountIs,
@@ -88,29 +90,47 @@ export const Route = createFileRoute("/api/chat")({
           tools: {
             search: searchTool,
           },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...(await convertToModelMessages<ChatUIMessage>(reqJson.messages ?? [], {
-              convertDataPart(part) {
-                if (part.type === 'data-client')
-                  return {
-                    type: 'text',
-                    text: `[Client Context: ${JSON.stringify(part.data)}]`,
-                  };
-              },
-            })),
-          ],
+          // AI SDK 7 takes the system prompt as `instructions`; a system message in `messages` is rejected.
+          instructions: systemPrompt,
+          messages: await convertToModelMessages<ChatUIMessage>(reqJson.messages ?? [], {
+            convertDataPart(part) {
+              if (part.type === 'data-client')
+                return {
+                  type: 'text',
+                  text: `[Client Context: ${JSON.stringify(part.data)}]`,
+                };
+            },
+          }),
           toolChoice: 'auto',
         });
 
         return createUIMessageStreamResponse({
-          stream: toUIMessageStream({ stream: result.stream }),
+          stream: toUIMessageStream({ stream: result.stream, onError: describeError }),
         });
       },
     },
   },
 });
 
+
+/**
+ * The AI SDK hides errors from readers ("An error occurred."). Log the cause for operators (it
+ * shows in the container logs) and tell the reader why Ask AI could not answer, without anything
+ * secret: provider messages carry the status and reason, never the key.
+ */
+function describeError(error: unknown): string {
+  console.error('[Ask AI]', error);
+  if (LoadAPIKeyError.isInstance(error) || !process.env.OPENROUTER_API_KEY) return 'Ask AI is not configured on this server (OPENROUTER_API_KEY is not set).';
+  const call = APICallError.isInstance(error) ? error : APICallError.isInstance((error as { lastError?: unknown })?.lastError) ? (error as { lastError: APICallError }).lastError : undefined;
+  if (call) {
+    let reason = call.message;
+    try {
+      reason = (JSON.parse(call.responseBody ?? '') as { error?: { message?: string } }).error?.message ?? reason;
+    } catch { /* not JSON; keep the SDK's message */ }
+    return `OpenRouter could not answer${call.statusCode ? ` (${call.statusCode})` : ''}: ${reason.slice(0, 300)}`;
+  }
+  return `Ask AI could not answer: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}`;
+}
 
 const searchTool = tool({
   description: 'Search the docs content and return raw JSON results.',
