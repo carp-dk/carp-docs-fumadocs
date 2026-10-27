@@ -3,7 +3,7 @@ title: Testing and publishing
 description: Test the JSON, schemes and probes of a sampling package, run it in an app, and publish it on pub.dev.
 ---
 
-Test the package on your computer, run it in an app on a phone and publish it on pub.dev. Tests matter more for a sampling package than for most code. A missing JSON registration or a wrong data type compiles and runs, and fails only at the next app start or when the data is uploaded.
+Tests matter more for a sampling package than for most code. A missing JSON registration or a wrong data type compiles and runs. It fails only at the next app start or when the data is uploaded.
 
 ## Write the tests
 
@@ -15,11 +15,11 @@ The example package has three test files, with 23 tests in all:
 | `test/package_test.dart` | The measure types, the default sampling schemes, the probes that the package creates and the privacy functions |
 | `test/probes_test.dart` | The data path of both probes, with the barometer of `sensors_plus` mocked |
 
-Each test file runs in its own isolate, so each one initializes CARP Mobile Sensing (CAMS) and registers the package in `setUpAll()`. Initialize CAMS first: before `CarpMobileSensing.ensureInitialized()`, the first use of [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) throws "Null check operator used on a null value".
+Each test file runs in its own isolate, so each one initializes CARP Mobile Sensing (CAMS) and registers the package in `setUpAll()`. Initialize CAMS before the first use of [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html), as in the app. See [Startup order](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#startup-order).
 
 ## Test the JSON round trips
 
-`test/json_test.dart` encodes each class that CAMS stores to a JSON string and decodes it again, as CAMS does when it saves and restores a study:
+Create `test/json_test.dart`, which round-trips each class that CAMS stores through a JSON string, as CAMS does when it saves and restores a study:
 
 ```dart title="test/json_test.dart"
 import 'dart:convert';
@@ -153,12 +153,12 @@ void main() {
 
 - **Decode through the registry:** decode with `FromJsonFactory().fromJson()`, or with `Measurement.fromJson()` for a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html), never by calling `fromJsonFunction` yourself. Only the registry, [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html), fails when a class is not registered. The data test of CAMS calls the functions directly, so it does not notice that CAMS 2.5.1 never registers its own [`AccelerationFeatures`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/AccelerationFeatures-class.html) data class.
 - **Check the JSON type:** `__type` must equal the measure type. Data of another type is never uploaded and never reaches privacy functions or triggers.
-- **Round-trip whole objects:** the measurement test checks that the data class and `sensorEndTime` survive, and the protocol test checks that the summary measure keeps its configuration class. CAMS adds a task with its own measures, such as errors, to each [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html). The test therefore finds the measures by type instead of taking `tasks.first`.
+- **Round-trip whole objects:** the measurement test checks that the data class and `sensorEndTime` survive. The protocol test checks that the summary measure keeps its configuration class. CAMS adds a task with its own measures, such as errors, to each [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html). The test therefore finds the measures by type instead of taking `tasks.first`.
 - **Set every field:** a round trip with `null` in a field cannot fail on that field. The registration test of `carp_polar_package` leaves a field `null` and misses that the field cannot be read back. A study with a Polar sensor therefore fails to load after a restart.
 
 ## Test the package declarations
 
-`test/package_test.dart` checks what the package declares to CAMS:
+Create `test/package_test.dart`, which checks what the package declares to CAMS:
 
 ```dart title="test/package_test.dart"
 import 'package:barometer_sampling_package/barometer_sampling_package.dart';
@@ -298,12 +298,12 @@ void main() {
 
 - **Measure types:** each type must parse back to itself. CAMS splits a type at the first occurrence of its name, so `com.example.example` would come back as `com.example`. The second test checks that each data class has the type of its measure.
 - **Default sampling schemes:** the tests read the defaults from `SamplingPackageRegistry().samplingSchemes`, the combined map that probes use, and check that the measures declare no permissions.
-- **Probes:** the registry creates the right probe for each type and gives it the device manager of the phone, and `create()` of the package returns `null` for an unknown type.
-- **Privacy:** the tests apply the default privacy schema, and the first test applies it twice, because CAMS may transform a measurement more than once. See [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
+- **Probes:** the registry creates the right probe for each type and gives it the device manager of the phone. `create()` of the package returns `null` for an unknown type.
+- **Privacy:** the tests apply the default privacy schema, and the first test applies it twice, because CAMS may transform a measurement more than once. See [Make privacy functions safe to repeat](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats#make-privacy-functions-safe-to-repeat).
 
 ## Test the probes
 
-`test/probes_test.dart` runs both probes against a mocked barometer. `sensors_plus` talks to the platform over two channels: a method channel that sets the sampling period, and an event channel that delivers the readings. The tests mock both:
+Create `test/probes_test.dart`, which runs both probes against a mocked barometer. `sensors_plus` talks to the platform over two channels: a method channel that sets the sampling period, and an event channel that delivers the readings. The tests mock both:
 
 ```dart title="test/probes_test.dart"
 import 'package:barometer_sampling_package/barometer_sampling_package.dart';
@@ -570,8 +570,8 @@ void main() {
 }
 ```
 
-- **Mock both channels:** `sensors_plus` sets the sampling period without waiting for the result, so a test without the mock of the method channel fails with an unhandled `MissingPluginException`.
-- **Send readings in the format of the plugin:** the event channel sends each reading as a `Float64List` of the pressure in hectopascals and the time in microseconds, which `sensors_plus` turns into a [`BarometerEvent`](https://pub.dev/documentation/sensors_plus/latest/sensors_plus/BarometerEvent-class.html).
+- **Mock both channels:** `sensors_plus` sets the sampling period without waiting for the result. A test without the mock of the method channel therefore fails with an unhandled `MissingPluginException`.
+- **Send readings in the plugin's format:** each reading on the event channel is a `Float64List` of the pressure in hectopascals and the time in microseconds. `sensors_plus` turns it into a [`BarometerEvent`](https://pub.dev/documentation/sensors_plus/latest/sensors_plus/BarometerEvent-class.html).
 - **Simulate a missing barometer:** `events.error()` with the code `NO_SENSOR` reproduces an Android phone without a barometer. `mockMissingIosBarometer()` makes the native `listen` call fail as on iOS, and the test replaces `FlutterError.onError` to count the reports.
 - **Create probes without a study:** `createProbe()` creates a probe through the registry and initializes it with only a measure. The probe then takes its configuration from the measure, or else from the package default.
 - **Wait for the state:** `resume()` returns the next state on `stateEvents`, which CAMS sets when `onResume()` completes.
@@ -598,25 +598,18 @@ The tests also print CAMS log lines. The warnings "Cannot read the barometer" an
 
 ## Run the package in an app
 
-The example app in `example/` registers the package, deploys a protocol with both measures and prints each measurement as JSON. To set it up, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class). Run it on a phone with a barometer, on Android and on iOS, because the platforms report a missing sensor differently:
+Unit tests mock the barometer, so they do not show how the probes behave on a real phone. Before you publish, run the example app on an Android phone and an iPhone that have a barometer:
 
 ```bash
 cd example
 flutter run
 ```
 
-For each reading, the console shows a line like the first one below. From about 40 seconds after the start, it also shows a line like the second one for each window:
-
-```text
-{"sensorStartTime":1793083703208532,"data":{"__type":"com.example.airpressure","pressure":1013.2471923828125}}
-{"sensorStartTime":1793083733211070,"sensorEndTime":1793083743212514,"data":{"__type":"com.example.airpressuresummary","count":10,"mean":1013.243,"min":1013.21,"max":1013.27}}
-```
-
-The first measurement of a study is the `dk.cachet.carp.triggeredtask` data that CAMS adds when the task starts. CAMS also prints `[CAMS INFO]` and `[CAMS WARNING]` lines, because its default log level shows both.
+Check that both measures arrive on each platform. iOS needs the `NSMotionUsageDescription` entry, and `sensors_plus` ignores the requested sampling period there. For the setup of the example app and the output to expect, see [Use the package in an app](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#use-the-package-in-an-app).
 
 ## Publish the package
 
-Publish the package on pub.dev when its tests pass and it runs on a phone.
+Publish the package on pub.dev when its tests pass, it runs on a phone and it avoids the [common pitfalls](/docs/mobile-sensing/building-sampling-packages/pitfalls).
 
 <Callout type="warning" title="Publishing is permanent">
 
@@ -642,7 +635,9 @@ publish_to: none # [!code --]
 repository: https://github.com/your-org/barometer_sampling_package # [!code ++]
 ```
 
-Keep the dependency constraints of the example. `carp_mobile_sensing: ^2.5.1` accepts every 2.x version from 2.5.1 on. For a plugin that CAMS also uses, such as `sensors_plus`, use the constraint of CAMS. An app gets only one version of each package. If your package requires another major version than CAMS does, `flutter pub get` fails in every app that uses both.
+Keep the dependency constraints of the example. `carp_mobile_sensing: ^2.5.1` accepts every 2.x version from 2.5.1 on.
+
+For a plugin that CAMS also uses, such as `sensors_plus`, use the constraint of CAMS. An app gets only one version of each package. If your package requires another major version than CAMS does, `flutter pub get` fails in every app that uses both.
 
 Use semantic versioning. A change that stored protocols or data cannot handle, such as a new measure type string or a renamed field, needs a new major version.
 
@@ -683,7 +678,7 @@ dart pub publish --dry-run
 The dry run lists the files that it would upload, including the example app, and validates the package. pub.dev also scores the package with pub points, for example for its documentation and its static analysis. To see the score before you publish, run [`pana`](https://pub.dev/packages/pana) on a copy of the package folder, as [Scoring](https://pub.dev/help/scoring) on pub.dev describes.
 
 </Step>
-<Step title="Publish the package">
+<Step title="Upload the package">
 
 ```bash
 dart pub publish
@@ -696,14 +691,14 @@ dart pub publish
 
 ## Tell the CARP team
 
-To have the package listed with the other sampling packages in [Measure types](/docs/mobile-sensing/measure-types), tell the CARP team about it on [Discord](https://discord.gg/sswpqGvnf5) or in an issue in [carp.sensing-flutter](https://github.com/carp-dk/carp.sensing-flutter/issues). Report problems in CAMS itself the same way, including the defects that this guide works around.
+To have the package listed with the [other sampling packages](/docs/mobile-sensing/measure-types#available-measure-types), tell the CARP team about it. Write on [Discord](https://discord.gg/sswpqGvnf5) or open an issue in [carp.sensing-flutter](https://github.com/carp-dk/carp.sensing-flutter/issues). Report problems in CAMS itself the same way, such as the CAMS 2.5.1 defects in the [common pitfalls](/docs/mobile-sensing/building-sampling-packages/pitfalls).
 
 ## Troubleshooting
 
 <Accordions>
 <Accordion title="No air pressure data on the iOS Simulator">
 
-Run the app on a phone. The iOS Simulator has no barometer: `sensors_plus` reports this only in the Flutter log, and after 5 seconds both probes log that they have no reading yet and keep listening:
+Run the app on a phone. The iOS Simulator has no barometer, and `sensors_plus` reports this only in the Flutter log. After 5 seconds, both probes log that they have no reading yet and keep listening:
 
 ```text
 ══╡ EXCEPTION CAUGHT BY SERVICES LIBRARY ╞══════════════════════════════════════════════════════════
@@ -719,7 +714,7 @@ Another exception was thrown: PlatformException(UNAVAILABLE, Barometer is not av
 </Accordion>
 <Accordion title="Null check operator used on a null value at startup">
 
-Call `CarpMobileSensing.ensureInitialized()` before the first use of `SamplingPackageRegistry()`, in the tests and in the app. See [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+Call `CarpMobileSensing.ensureInitialized()` before the first use of `SamplingPackageRegistry()`, in the tests and in the app. See [Startup order](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#startup-order).
 
 </Accordion>
 <Accordion title="MissingPluginException in a probe test">
@@ -734,12 +729,14 @@ Mock the platform channel that the message names:
 </Accordion>
 <Accordion title="A warning says that resuming the deployment executor is ignored">
 
-No fix is needed. In CAMS 2.5.1, the warning "Trying to resume a SmartphoneDeploymentExecutor" with "Ignoring this." appears when the app calls `resume()` right after `configure()` or `tryDeployment()`. The probes start anyway, because CAMS resumes the tasks of the phone when the device manager of the phone connects.
+No fix is needed: the probes start anyway. In CAMS 2.5.1, the warning "Trying to resume a SmartphoneDeploymentExecutor" with "Ignoring this." appears when the app calls `resume()` right after `configure()` or `tryDeployment()`. For the reason, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#run-the-app).
 
 </Accordion>
 <Accordion title="A study is gone after the app restarts">
 
-Register the missing class. The log line "Failed to load studies" means that CAMS failed to decode a stored deployment, usually because a class in it is not registered. CAMS then drops that study and every study stored after it. Register every data, configuration and device class of the package in `onRegister()`, and add a JSON round trip test for each one.
+Register the missing class in `onRegister()`, and add a JSON round trip test for it. The warning "Failed to load studies" means that CAMS failed to decode a stored deployment, usually because a class in it is not registered. CAMS then drops that study and every study stored after it.
+
+For the classes to register, see [Register the JSON classes and privacy functions](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#register-the-json-classes-and-privacy-functions).
 
 </Accordion>
 </Accordions>

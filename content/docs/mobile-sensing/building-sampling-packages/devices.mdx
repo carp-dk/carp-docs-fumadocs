@@ -7,7 +7,7 @@ Some measures run outside the phone: on a Bluetooth Low Energy (BLE) wearable or
 
 The package also provides a **device manager**: the object that CARP Mobile Sensing (CAMS) uses to configure, connect and monitor the device. The package's probes read their data through the device manager.
 
-The barometer example needs none of this: its measures run on the phone, and [`SmartphoneSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneSamplingPackage-class.html) supplies the phone's device manager. To continue with a package whose measures run on the phone, see [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
+The example package needs none of this: its measures run on the phone, and [`SmartphoneSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneSamplingPackage-class.html) supplies the phone's device manager. To continue with a package whose measures run on the phone, see [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
 
 The examples on this page are two small packages of their own. The pollen web service is built like [`WeatherService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/WeatherService-class.html) in the [context package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_context_package), and the BLE thermometer like the devices of the [Polar package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_polar_package). Both use the namespace `com.example`; use a namespace that you control.
 
@@ -20,7 +20,7 @@ Each kind of device has its own base classes in CAMS:
 | Online service, or a service on the phone | [`ServiceConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ServiceConfiguration-class.html) | [`ServiceRegistration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ServiceRegistration-class.html) | [`ServiceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/ServiceManager-class.html) | `WeatherService` in the context package, [`HealthService`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthService-class.html) in the [health package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_health_package) |
 | BLE device | [`BLEDevice`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/BLEDevice-class.html) | [`BLEDeviceRegistration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/BLEDeviceRegistration-class.html) or a subclass | [`BLEDeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BLEDeviceManager-class.html) | [`PolarDevice`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarDevice-class.html) in the Polar package, [`ESenseDevice`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseDevice-class.html) in the [eSense package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_esense_package) |
 | Other hardware with a battery | [`CamsDevice`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDevice-class.html) | [`HardwareDeviceRegistration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HardwareDeviceRegistration-class.html) or a subclass | [`HardwareDeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/HardwareDeviceManager-class.html) | None in the CARP packages |
-| The phone's own sensors | None | None | None: extend `SmartphoneSamplingPackage` | The barometer example |
+| The phone's own sensors | None | None | None: extend `SmartphoneSamplingPackage` | The example package |
 
 <Callout type="info" title="Class names in CAMS 1.x">
 
@@ -64,7 +64,7 @@ class PollenService extends ServiceConfiguration<ServiceRegistration> { // [!cod
 - **Class name:** keep it stable and distinctive. Saved protocols and deployments refer to the type, so renaming the class breaks them. CAMS also keeps only the first device manager registered for a type.
 - **Role name:** names the device in a protocol and must be unique there. CAMS stores the device's registration under it.
 - **Default values:** qualify them with the class name, as in `PollenService.DEFAULT_ROLE_NAME`. `json_serializable` copies a default into the generated code, where an unqualified name does not compile.
-- **Settings:** put them in fields that the device manager or the probes read, such as `apiKey`. CAMS ignores the `defaultSamplingConfiguration` of a connected device: probes look only at the primary device's, so set a measure's configuration on the measure itself.
+- **Settings:** put them in fields that the device manager or the probes read, such as `apiKey`. CAMS ignores the `defaultSamplingConfiguration` of a connected device, so set a measure's configuration on the measure itself. See [How configuration lookup works](/docs/mobile-sensing/building-sampling-packages/sampling-configurations#how-configuration-lookup-works).
 
 <Callout type="warning" title="Settings are stored in plain text">
 
@@ -189,9 +189,9 @@ class PollenProbe extends MeasurementProbe {
 }
 ```
 
-A [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) fits a service that answers one request each time the task runs. The probe returns an [`Error`](https://pub.dev/documentation/carp_core/latest/common/Error-class.html) measurement instead of throwing.
+A [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) fits a service that answers one request each time the task runs. The probe returns an [`Error`](https://pub.dev/documentation/carp_core/latest/common/Error-class.html) measurement instead of throwing. After an exception, a `MeasurementProbe` does not pause itself, and its task ignores the next trigger.
 
-After an exception, a `MeasurementProbe` does not pause itself, and its task then ignores every second trigger. The probe also reports a missing `PollenService`: every probe gets its package's manager, also when the protocol has no such device.
+The probe also reports a missing `PollenService`: every probe gets its package's manager, also when the protocol has no such device.
 
 CAMS creates and initializes the probes before it connects the devices, so a probe sees its device in different states:
 
@@ -258,8 +258,8 @@ class PollenSamplingPackage implements SamplingPackage {
 ```
 
 - `deviceType` returns `DEVICE_TYPE`. `register()` registers the manager under it in the [`DeviceController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceController-class.html), and CAMS matches it with the type of the device in the protocol.
-- `deviceManager` returns the same instance every time, kept in a `final` field. `register()` gives that instance to the device controller, where CAMS configures and connects it. The registry gives the getter's result to every probe it creates. A getter that builds a new manager gives the probes a manager that CAMS never configures or connects.
-- `onRegister()` registers the device configuration and the data class for JSON, because CAMS decodes them when it restores a saved study. For what else it registers, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+- `deviceManager` returns the same instance every time, kept in a `final` field. `register()` gives that instance to the device controller, where CAMS configures and connects it, and the registry gives it to every probe. A getter that builds a new manager gives the probes one that CAMS never configures or connects.
+- `onRegister()` registers the device configuration and the data class for JSON, because CAMS decodes them when it restores a saved study. For what else it registers, see [Register the JSON classes and privacy functions](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#register-the-json-classes-and-privacy-functions).
 - [`CamsDataTypeMetaData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDataTypeMetaData-class.html) lists only the measure's own runtime permissions. The permissions to reach a device, such as Bluetooth, belong to the device manager.
 
 A package supports one device type. For several types, register one package per device type. The context package does this from its `onRegister()` for its location, weather and air quality services.
@@ -338,12 +338,12 @@ Five rules follow from this:
 - **Return the real status from `onConnect()`:** when a listener sets the status later, return `status`, not a constant. `connect()` sets the returned value, which overwrites what the listener set. `carp_movisens_package` returns `connecting` even on success, and when it has to scan for the sensor, as on iOS, nothing sets `connected` later. CAMS then never starts its tasks.
 - **Map a lost link to `disconnecting` and its return to `reconnected`:** only `disconnecting` pauses the tasks so that `reconnected` resumes them. `carp_esense_package` and `carp_movesense_package` set `disconnected` instead, which pauses nothing.
 - **Set `connected` only when the probes have what they need:** `carp_polar_package` sets `connected` when its first data type arrives, usually heart rate. Its other probes then start before their data types are available, and find none.
-- **Time out the SDK's connect call:** `connect()` does nothing while the status is `connecting`, so a call that never completes blocks the device until a restart. On iOS, `carp_esense_package` stays `connecting` for about 83 minutes when the earbuds are missing. A timeout makes `connect()` set `disconnected`, so that a later `connect()` can try again.
+- **Time out the SDK's connect call:** `connect()` does nothing while the status is `connecting`. A call that never completes therefore blocks the device until a restart. On iOS, `carp_esense_package` stays `connecting` for about 83 minutes when the earbuds are missing. A timeout makes `connect()` set `disconnected`, so that a later `connect()` can try again.
 - **Cancel the old listeners in `onConnect()`:** CAMS and apps call `connect()` again after a failed attempt. `carp_polar_package` and `carp_esense_package` add new listeners at every connection, so each event is handled more than once.
 
 ## Write a BLE device manager
 
-A BLE package follows the same pattern with a `BLEDevice`, a registration class for the details it stores and a `BLEDeviceManager`. The thermometer's device class and registration class:
+A BLE package follows the same pattern with a `BLEDevice`, a registration class for the details it stores and a `BLEDeviceManager`. The thermometer package defines its device class and registration class like this:
 
 ```dart
 /// A BLE thermometer, added to a protocol as a connected device
@@ -393,7 +393,7 @@ class ThermoDeviceRegistration extends BLEDeviceRegistration { // [!code highlig
 
 `ThermoDevice` adds no fields, but the package needs the class anyway, because its name is the device type. CAMS does not use the scan settings of a `BLEDevice`, such as `namePrefix`: they are hints for the app's own scanner.
 
-The manager connects through the vendor's SDK. `ThermoSdk` stands for that SDK: it connects to an address, reports the link on `linkEvents` and streams temperatures and battery levels.
+`ThermoSdk` stands for the vendor's SDK: it connects to an address, reports the link on `linkEvents` and streams temperatures and battery levels. The device manager connects through it:
 
 ```dart
 /// The device manager of a [ThermoDevice]
@@ -574,7 +574,7 @@ Cancel battery timers and listeners in `onDisconnect()`. `carp_movesense_package
 <Cards>
 <Card title="Privacy and data formats" href="/docs/mobile-sensing/building-sampling-packages/privacy-and-formats" icon="Shield">
 
-Add privacy functions and transformers to other data formats.
+Protect sensitive values and convert data to other formats.
 
 </Card>
 </Cards>

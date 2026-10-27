@@ -3,9 +3,9 @@ title: Sampling configurations
 description: Give each measure type a default configuration, write your own configuration class and override it in a protocol.
 ---
 
-A **sampling configuration** holds the settings of one measure, such as how often its probe reads the sensor. Give each measure type in your package a default configuration, and let protocols override it for each measure. CARP Mobile Sensing (CAMS) stores the configurations of a study as JSON, so each configuration class of the package must also be registered.
+A **sampling configuration** holds the settings of one measure, such as how often its probe reads the sensor. Each measure type has a default configuration, which a protocol can override for each measure. CARP Mobile Sensing (CAMS) stores the configurations of a study as JSON, so each configuration class of the package must also be registered.
 
-The barometer package uses the [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html) of CAMS for `AIR_PRESSURE`. For `AIR_PRESSURE_SUMMARY`, it has its own `AirPressureSummarySamplingConfiguration`, which adds the rate of the barometer to a sampling window.
+The example package uses the [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html) of CAMS for `AIR_PRESSURE`. For `AIR_PRESSURE_SUMMARY`, it has its own `AirPressureSummarySamplingConfiguration`, which adds the rate of the barometer to a sampling window.
 
 ## Choose a configuration class
 
@@ -27,13 +27,15 @@ The base class of the probe decides which class works:
 - [`PeriodicStreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/PeriodicStreamProbe-class.html), [`BufferingPeriodicProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BufferingPeriodicProbe-class.html) and [`BufferingPeriodicStreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/BufferingPeriodicStreamProbe-class.html) cast it to `PeriodicSamplingConfiguration`.
 - [`StreamProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/StreamProbe-class.html), [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) and [`Probe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/Probe-class.html) accept any class and leave the reading to your code.
 
-A subclass passes these casts too. When a probe needs settings that no built-in class has, extend the class that its base class expects. `AirPressureSummarySamplingConfiguration` extends `PeriodicSamplingConfiguration` and adds `samplingPeriod`. The CARP packages do the same. [`BluetoothScanPeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BluetoothScanPeriodicSamplingConfiguration-class.html) in `carp_connectivity_package` adds scan filters to a `PeriodicSamplingConfiguration`. [`HealthSamplingConfiguration`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthSamplingConfiguration-class.html) in `carp_health_package` adds the health data types to a `HistoricSamplingConfiguration`.
+A subclass passes these casts too. When a probe needs settings that no built-in class has, extend the class that its base class expects. `AirPressureSummarySamplingConfiguration` extends `PeriodicSamplingConfiguration` and adds `samplingPeriod`.
 
-For the probe base classes, see [Probes](/docs/mobile-sensing/building-sampling-packages/probes).
+The CARP packages do the same. [`BluetoothScanPeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BluetoothScanPeriodicSamplingConfiguration-class.html) in `carp_connectivity_package` adds scan filters to a `PeriodicSamplingConfiguration`. [`HealthSamplingConfiguration`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthSamplingConfiguration-class.html) in `carp_health_package` adds the health data types to a `HistoricSamplingConfiguration`.
+
+For the probe base classes, see [Probes](/docs/mobile-sensing/building-sampling-packages/probes#choose-a-base-class).
 
 ## Set the default configurations
 
-Each measure type gets its default configuration in the `samplingSchemes` of the package class, next to its metadata. The barometer package sets both defaults there:
+Each measure type gets its default configuration in the `samplingSchemes` of the package class, next to its metadata. The example package sets both defaults in `lib/barometer_package.dart`:
 
 ```dart
   @override
@@ -68,13 +70,19 @@ A default applies to every measure that a protocol adds without a configuration 
 - **`AIR_PRESSURE` reads once per second:** air pressure changes slowly, and the motion sensors of CAMS read five times as often.
 - **`AIR_PRESSURE_SUMMARY` summarizes 10 seconds every 5 minutes:** the same windows as `AMBIENT_LIGHT` in CAMS and `NOISE` in `carp_audio_package`.
 
-Shorter intervals and longer windows give more data and use more battery. Interval and window probes also start one interval after they resume. A measure therefore collects little data when the app restarts more often than its interval, as it may on iOS. State the defaults in the README of your package.
+Shorter intervals and longer windows give more data and use more battery. Interval and window probes also start one interval after they resume. A measure therefore collects little data when the app restarts more often than its interval, as it may on iOS.
 
-CAMS combines the schemes of all registered packages into one map, with one default configuration object per measure type. Every probe and every study on the phone shares that object. Do not change the default objects: CAMS itself writes only `lastTime` to them. See [Read history since the last collection](#read-history-since-the-last-collection).
+State the defaults in the README of your package.
+
+CAMS combines the schemes of all registered packages into one map, with one default configuration object per measure type. Every probe and every study on the phone shares that object.
+
+Do not change the default objects: CAMS itself writes only `lastTime` to them. See [Read history since the last collection](#read-history-since-the-last-collection).
 
 ### Shared sensor rate
 
-The two barometer measures share one sensor. `sensors_plus` has one barometer stream and one sampling period per app, and each call to `barometerEventStream()` sets the period for every listener. The summary probe calls it at the start of each window. With different rates, the summary would therefore also set the rate of `AIR_PRESSURE`, from its first window on. Both defaults are therefore 1 second, and the doc comment of `samplingPeriod` tells protocol authors to keep the rates equal. If several of your measures read one plugin stream, give them the same default rate.
+The two barometer measures share one sensor. `sensors_plus` has one barometer stream and one sampling period per app, and each call to `barometerEventStream()` sets the period for every listener. The summary probe calls it at the start of each window.
+
+With different rates, the summary would therefore also set the rate of `AIR_PRESSURE`, from its first window on. Both defaults are 1 second for this reason, and the doc comment of `samplingPeriod` tells protocol authors to keep the rates equal. If several of your measures read one plugin stream, give them the same default rate.
 
 The rate is a request. On Android, the sensor treats it as a hint. On iOS, `sensors_plus` ignores it, because the barometer delivers readings at its own rate.
 
@@ -87,15 +95,17 @@ Each time a probe reads `samplingConfiguration`, CAMS returns the first configur
 3. the default in the sampling schemes of the primary device, which for the CAMS [`Smartphone`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/Smartphone-class.html) covers only the measure types of CAMS itself;
 4. the default in the sampling schemes of the registered packages.
 
-If none applies, for example for a measure type that no registered package declares, the result is `null`. For the measure types of your package, step 3 never applies, so a measure gets the package default unless the protocol sets step 1 or 2.
+If none applies, for example for a measure type that no registered package declares, the result is `null`. Step 3 never applies to the measure types of your package. A measure therefore gets the package default unless the protocol sets step 1 or 2.
 
-CAMS reads steps 2 and 3 only from the primary device. It never reads the `defaultSamplingConfiguration` of a connected device, so a default set on a wearable or a service has no effect. Configure the measures of a connected device on the measure itself, or in fields of the device configuration that your device manager reads. See [Devices and services](/docs/mobile-sensing/building-sampling-packages/devices).
+CAMS reads steps 2 and 3 only from the primary device. It never reads the `defaultSamplingConfiguration` of a connected device, so a default set on a wearable or a service has no effect.
+
+Configure the measures of a connected device on the measure itself, or in fields of the device configuration that your device manager reads. See [Devices and services](/docs/mobile-sensing/building-sampling-packages/devices).
 
 CAMS does not cache the result, so read `samplingConfiguration` where you use it, for example once in `onResume()`.
 
 ## Write a configuration class
 
-`lib/barometer_configuration.dart` defines the configuration of the summary measure:
+Replace the contents of `lib/barometer_configuration.dart` with the configuration class of the summary measure:
 
 ```dart title="lib/barometer_configuration.dart"
 part of 'barometer_sampling_package.dart';
@@ -136,14 +146,14 @@ class AirPressureSummarySamplingConfiguration
 
 - **The base class:** `PeriodicSamplingConfiguration` gives the class `interval` and `duration`, and lets it pass the cast of `BufferingPeriodicStreamProbe`.
 - **A default for the new field:** the generated `fromJson` function uses the default of the constructor when the JSON has no `samplingPeriod`. A protocol that was stored before you added a field therefore still loads.
-- **The JSON members:** the annotation, `fromJsonFunction`, the `fromJson` factory and `toJson()` work as in a data class. See [Data classes](/docs/mobile-sensing/building-sampling-packages/data-classes) for these members. Run `dart run build_runner build` again after each change to the fields.
+- **The JSON members:** the annotation, `fromJsonFunction`, the `fromJson` factory and `toJson()` work as in a data class. See [Members of a data class](/docs/mobile-sensing/building-sampling-packages/data-classes#members-of-a-data-class). Run `dart run build_runner build` again after each change to the fields.
 
-In JSON, each `Duration` is a whole number of microseconds. The `__type` comes from `carp_core`: every configuration class gets `dk.cachet.carp.common.application.sampling.` followed by its class name. Two classes with the same name in different packages therefore share a JSON type, and the one registered last decodes both. Give your class a name that no other package uses, for example one that starts with the name of its measure.
+The `__type` comes from `carp_core`: every configuration class gets `dk.cachet.carp.common.application.sampling.` followed by its class name. Two classes with the same name in different packages therefore share a JSON type, and the one registered last decodes both. Give your class a name that no other package uses, for example one that starts with the name of its measure.
 
 <Accordions>
 <Accordion title="Example JSON">
 
-The summary measure of the example app, with its override, as it appears in a protocol:
+The summary measure of the example app, with its override, as it appears in a protocol. Each `Duration` is a whole number of microseconds:
 
 ```json
 {
@@ -163,7 +173,7 @@ The summary measure of the example app, with its override, as it appears in a pr
 
 ## Override the configuration in a protocol
 
-A protocol overrides the default of one measure with the `samplingConfiguration` parameter of [`Measure`](https://pub.dev/documentation/carp_core/latest/common/Measure-class.html), which sets its `overrideSamplingConfiguration`. The example app shortens the interval of the summary measure, so that a summary arrives within a minute:
+A protocol overrides the default of one measure with the `samplingConfiguration` parameter of [`Measure`](https://pub.dev/documentation/carp_core/latest/common/Measure-class.html), which sets its `overrideSamplingConfiguration`. The [example app](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#use-the-package-in-an-app) shortens the interval of the summary measure in `example/lib/main.dart`, so that a summary arrives within a minute:
 
 ```dart
   // 3. Collect every reading, and a summary of a 10-second window every
@@ -200,11 +210,13 @@ phone.defaultSamplingConfiguration?.addAll({
 });
 ```
 
-A task holds one measure of each type. Measures with the same type are equal, so the task constructor drops a second measure of the same type, and so does CAMS when it restores a protocol from JSON. To run one measure type with two configurations, put each measure in a task of its own.
+A task holds one measure of each type. Measures with the same type are equal, so the task constructor drops a second measure of that type. CAMS does the same when it restores a protocol from JSON.
+
+To run one measure type with two configurations, put each measure in a task of its own.
 
 ## Read history since the last collection
 
-A **history measure** reads data that a plugin or a service has stored, such as app usage or health records, for the time since its last collection. `PersistentSamplingConfiguration` holds `lastTime`, and `HistoricSamplingConfiguration` adds `past` and `future`. Each time the probe adds a measurement, CAMS sets `lastTime` to the current time in UTC and saves the deployment, at most once per second.
+A **history measure** reads the data that a plugin or a service has stored since its last collection, such as app usage or health records. `PersistentSamplingConfiguration` holds `lastTime`, and `HistoricSamplingConfiguration` adds `past` and `future`. Each time the probe adds a measurement, CAMS sets `lastTime` to the current time in UTC and saves the deployment, at most once per second.
 
 A history probe is a `MeasurementProbe` that reads the window from `lastTime`, or from `past` before now the first time, up to now. In this example, `readRecords()` stands for the plugin call that returns the stored data:
 
@@ -243,11 +255,11 @@ class HistoryProbe extends MeasurementProbe {
 - **Failures:** the probe reports a failure with `addError()` and returns `null`. An [`Error`](https://pub.dev/documentation/carp_core/latest/common/Error-class.html) measurement would also set `lastTime`, so the next window would skip the records of the failed one.
 - **`future`:** no CARP probe reads it. Leave it at its default unless your probe reads data that lies ahead, such as planned events.
 
-`lastTime` is the time of `addMeasurement()`, not the end of the window, so records that are stored between the read and that call fall between two windows.
+`lastTime` is the time of `addMeasurement()`, not the end of the window. Records that are stored between the read and that call therefore fall between two windows.
 
 <Callout type="warning" title="Give history measures their own configuration">
 
-`lastTime` survives an app restart only when the configuration is part of the deployment: the override of a measure or an entry in the `defaultSamplingConfiguration` of the phone. On the package default, which is one object in memory, `lastTime` is lost at every restart, and the probe stores the data of `past` again.
+`lastTime` survives an app restart only in a configuration that is part of the deployment: a measure's override or an entry in the phone's `defaultSamplingConfiguration`. On the package default, which is one object in memory, `lastTime` is lost at every restart, and the probe stores the data of `past` again.
 
 </Callout>
 
@@ -264,7 +276,9 @@ static Measure getHistoryMeasure({Duration past = const Duration(days: 7)}) =>
 
 ## Validate configuration values
 
-A configuration comes from a protocol that someone else writes, and that CAMS may load from a server. Check its values before the probe uses them. For a sampling window, `duration` must be positive and shorter than `interval`. With a longer or equal `duration`, `BufferingPeriodicStreamProbe` opens a new window before the last one closes. In a test, the summaries came out wrong, and listeners stayed open after the probe paused, which keeps the sensor running.
+A configuration comes from a protocol that someone else writes, and that CAMS may load from a server. Check its values before the probe uses them.
+
+For a sampling window, `duration` must be positive and shorter than `interval`. With a longer or equal `duration`, `BufferingPeriodicStreamProbe` opens a new window before the last one closes. In a test, the summaries came out wrong, and listeners stayed open after the probe paused, which keeps the sensor running.
 
 Check the values in `onResume()`, report a bad configuration with `addError()` and return `false`. This addition to `onResume()` of `AirPressureSummaryProbe` does that:
 
@@ -290,13 +304,18 @@ Check the values in `onResume()`, report a bad configuration with `addError()` a
 
 Do not check the values in the constructor of the configuration class. CAMS also calls the constructor when it loads a stored deployment, and an exception there drops the study and every study stored after it. Do not check them in `onInitialize()` either, because a probe whose `onInitialize()` returns `false` stays `Created` for good, without an error measurement.
 
-The check covers only the values. A configuration of another class makes the cast of the base class throw as soon as the probe reads it, and the probe never starts. See [Probes](/docs/mobile-sensing/building-sampling-packages/probes) for the base classes that cast the configuration.
+The check covers only the values. A configuration of another class makes the cast of the base class throw as soon as the probe reads it, and the probe never starts. For the base classes that cast the configuration, see [Choose a configuration class](#choose-a-configuration-class).
 
 ## Register the configuration class
 
-CAMS writes the configurations of a study to JSON with the protocol and the deployment. It reads them back when it restores a study at app start and when it gets a deployment from CARP Web Services (CAWS). Apps also read them when they decode a protocol from JSON. Register each configuration class of the package in `onRegister()` of the package class, next to the data classes:
+CAMS writes the configurations of a study to JSON with the protocol and the deployment. It reads them back when it restores a study at app start and when it gets a deployment from CARP Web Services (CAWS). Apps also read them when they decode a protocol from JSON.
+
+Register each configuration class of the package in `onRegister()` of `lib/barometer_package.dart`, next to the data classes:
 
 ```dart
+  @override
+  void onRegister() {
+    // Register the classes that CAMS deserializes from JSON
     FromJsonFactory().registerAll([
       AirPressure(pressure: 0),
       AirPressureSummary(count: 0, mean: 0, min: 0, max: 0),
@@ -305,11 +324,16 @@ CAMS writes the configurations of a study to JSON with the protocol and the depl
         duration: Duration.zero, // [!code highlight]
       ), // [!code highlight]
     ]);
+
+    // ... add the privacy functions
+  }
 ```
 
 [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html) uses the instance only for its `fromJson` function and its JSON type, so the values do not matter. CAMS registers its own configuration classes, so register only yours.
 
-A missing registration shows up late. When the app deploys a protocol on the phone, the first run works, because CAMS keeps the deployed protocol as Dart objects. At the next app start, CAMS cannot decode the stored deployment: the study and every study stored after it fail to load, with the log line "Failed to load studies". The JSON round trip in [Testing and publishing](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing) catches a missing registration. Register the package before `configure()`, which restores the stored studies.
+A missing registration shows up only at the next app start. CAMS then cannot decode the stored deployment, and it drops the study and every study stored after it. For why the first run works, see [Register the JSON classes and privacy functions](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#register-the-json-classes-and-privacy-functions).
+
+The [JSON round trip tests](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing#test-the-json-round-trips) catch a missing registration.
 
 ## Next step
 

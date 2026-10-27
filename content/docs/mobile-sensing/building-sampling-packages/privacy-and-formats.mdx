@@ -5,7 +5,7 @@ description: Add privacy functions that coarsen sensitive data, and transformers
 
 CARP Mobile Sensing (CAMS) runs each measurement's data through **data transformers**, functions that take a [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) object and return one. It does so before it stores the measurement or passes it to the app.
 
-A sampling package supplies transformers for its own data types: privacy functions protect sensitive values, and format transformers convert data to another data format. The barometer example adds two privacy functions that round air pressure to whole hectopascals (hPa).
+A sampling package supplies transformers for its own data types: privacy functions protect sensitive values, and format transformers convert data to another data format. The example package adds two privacy functions that round air pressure to whole hectopascals (hPa).
 
 CAMS groups transformers in **schemas**, one for each namespace, keyed by data type. It applies two schemas to every measurement, in this order:
 
@@ -18,7 +18,7 @@ Each schema looks up the transformer for the type of the data and leaves data wi
 
 ## Write a privacy function
 
-A privacy function is a [`DataTransformer`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformer.html), that is, a `Data Function(Data)`. The barometer example rounds air pressure to whole hectopascals:
+A privacy function is a [`DataTransformer`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformer.html), that is, a `Data Function(Data)`. Replace the contents of `lib/barometer_privacy.dart` with the two privacy functions of the example package, which round air pressure to whole hectopascals:
 
 ```dart title="lib/barometer_privacy.dart"
 part of 'barometer_sampling_package.dart';
@@ -60,7 +60,7 @@ One floor of a building is about 3 m high, or 0.36 hPa, so raw readings can tell
 
 ## Register the privacy functions
 
-The barometer package adds its functions to the default privacy schema in `onRegister()` of `lib/barometer_package.dart`, keyed by the measure types:
+The example package adds its functions to the default privacy schema in `onRegister()` of `lib/barometer_package.dart`, keyed by the measure types:
 
 ```dart
   @override
@@ -83,7 +83,7 @@ The barometer package adds its functions to the default privacy schema in `onReg
 ```
 
 - [`DataTransformerSchemaRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchemaRegistry-class.html) registers the default [`PrivacySchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PrivacySchema-class.html) as soon as it is created, so `lookup()` always finds it. `add()` replaces a function that was added for the same type before.
-- The key must be the data's type, which is the data class's `jsonType`. CAMS looks a function up by the type of the data, not of the measure. The barometer data classes return the measure types from `jsonType`, so the two are the same.
+- The key must be the data's type, which is the data class's `jsonType`. CAMS looks a function up by the type of the data, not of the measure. The data classes of the example package return the measure types from `jsonType`, so the two are the same.
 - Never register a new `PrivacySchema`: `register()` replaces the schema of that name, and the functions that the packages added to it are gone.
 
 ## Turn on privacy in the protocol
@@ -107,7 +107,7 @@ The `privacySchemaName` and the `dataFormat` must name registered schemas. CAMS 
 
 CAMS transforms a measurement once for every listener of the study's measurement stream, each time on the same [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html) object. The data manager is one listener, and an app that listens to [`SmartPhoneClientManager().measurements`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/measurements.html) adds another. A privacy function therefore often runs twice on the same data, and a package cannot prevent it.
 
-Write functions that give the same result when they run again. Rounding does, and the barometer example's tests in `test/package_test.dart` apply the default schema twice to check it:
+Write functions that give the same result when they run again. Rounding does, and the `AirPressure` test in `test/package_test.dart` of the example package applies the default schema twice to check it:
 
 ```dart
   group('Privacy', () {
@@ -129,7 +129,7 @@ Hashing does not give the same result: a second run hashes the hash, so the data
 
 ## Limits of privacy functions
 
-- **Hashing is not anonymization:** an unsalted SHA-1 hash of a phone number, as `carp_communication_package` stores, can be reversed by hashing every possible number and comparing. Prefer removing or coarsening a value, as the barometer example does, and do not call hashed data anonymous.
+- **Hashing is not anonymization:** an unsalted SHA-1 hash of a phone number, as `carp_communication_package` stores, can be reversed by hashing every possible number and comparing. Prefer removing or coarsening a value, as the example package does, and do not call hashed data anonymous.
 - **Only the measurement's own data:** CAMS transforms the data of each measurement by its type, not the data nested in it. A user task's result can be stored twice: as a measurement and inside the [`CompletedAppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CompletedAppTask-class.html) of its task, as the survey package does. A function keyed by the result's type protects only the first copy.
 
 ## Convert data to another format
@@ -225,9 +225,9 @@ Its `jsonType` puts the data in the OMH namespace, and its transformer returns a
 @override
 void onRegister() {
   // ...
-  DataTransformerSchemaRegistry()
-      .lookup(NameSpace.OMH)!
-      .add(BLOOD_PRESSURE, OMHBloodPressureDataPoint.transformer);
+  DataTransformerSchemaRegistry() // [!code ++]
+      .lookup(NameSpace.OMH)! // [!code ++]
+      .add(BLOOD_PRESSURE, OMHBloodPressureDataPoint.transformer); // [!code ++]
 }
 ```
 
@@ -295,7 +295,7 @@ A blood pressure measurement after the OMH transformer, as the data manager stor
 
 - Data types without a transformer in the schema stay in the CARP format.
 - Transformed data has the type `org.openmhealth.data-point`, and the data manager stores it under that type.
-- [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html)s and `measurementsByType()` see the transformed data, so they no longer match it to the original measure type.
+- A [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) and `measurementsByType()` see the transformed data, so they no longer match it to the original measure type.
 - [`CarpDataManager`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataManager-class.html) uploads data to CARP Web Services (CAWS) only when its type is a measure type of the deployment, which transformed data does not have. Use a data format only with a data manager that keeps the data on the phone, such as the SQLite or file data manager.
 - Every OMH data point has the same type, so [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html) can hold only one class for it. Neither CAMS nor the context package registers one, so `Measurement.fromJson()` cannot read stored OMH data back.
 - The privacy schema runs first, so a format transformer gets data that the privacy functions have already changed.
@@ -305,7 +305,7 @@ A blood pressure measurement after the OMH transformer, as the data manager stor
 <Cards>
 <Card title="Testing and publishing" href="/docs/mobile-sensing/building-sampling-packages/testing-and-publishing" icon="CheckCircle">
 
-Test the package with a mocked sensor and publish it.
+Test the package, run it in an app and publish it.
 
 </Card>
 </Cards>

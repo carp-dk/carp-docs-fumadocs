@@ -3,7 +3,7 @@ title: Package setup
 description: Create a Flutter package for your measures, add the CAMS dependencies, lay out the library and generate its JSON code.
 ---
 
-Set up the Flutter package that holds your measures, from its dependencies to its generated JSON code. For the example package, `barometer_sampling_package`, this takes six steps:
+A sampling package is a Flutter package that depends on CARP Mobile Sensing (CAMS) and generates the JSON code of its classes with `build_runner`. Setting up the example package, `barometer_sampling_package`, takes six steps:
 
 <Steps>
 <Step title="Create the package">
@@ -13,7 +13,9 @@ flutter create --template=package barometer_sampling_package
 cd barometer_sampling_package
 ```
 
-The example reads the barometer through an existing plugin, `sensors_plus`, so it has no platform code of its own and the `package` template fits. Delete `test/barometer_sampling_package_test.dart`, which tests the template's `Calculator` class, and replace the placeholder in `LICENSE` with your license before you publish.
+The example reads the barometer through an existing plugin, `sensors_plus`, so it has no platform code of its own and the `package` template fits. For platform code of your own, use the `plugin` template instead.
+
+Delete `test/barometer_sampling_package_test.dart`, which tests the template's `Calculator` class, and replace the placeholder in `LICENSE` with your license before you publish.
 
 </Step>
 <Step title="Add the dependencies">
@@ -23,7 +25,7 @@ flutter pub add carp_mobile_sensing carp_core carp_serializable 'json_annotation
 flutter pub add --dev build_runner json_serializable
 ```
 
-Then set the SDK constraints to the minimums of CARP Mobile Sensing (CAMS) 2.5.1 and list the platforms. The example's `pubspec.yaml`:
+Then set the SDK constraints to the minimums of CAMS 2.5.1 and list the platforms, as in the example package's `pubspec.yaml`:
 
 ```yaml title="pubspec.yaml"
 name: barometer_sampling_package
@@ -227,13 +229,13 @@ class BarometerSamplingPackage extends SmartphoneSamplingPackage {
 }
 ```
 
-For the complete class, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class); until you add its other members, the analyzer reports them as missing.
+Until you add its other members, the analyzer reports them as missing. For the complete class, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
 
 A measure type is a namespace and a name, joined by a period. Three rules keep it working:
 
 - **Use a namespace that you control:** a reverse domain name, such as `org.mylab.sensing`, not CARP's `dk.cachet.carp`. A measure type is a global key, and when two packages declare it, CAMS logs only a warning. It then takes the probes from the first registered package and everything else from the last.
-- **Use the data class name in lowercase as the name:** `airpressure` for `AirPressure`, the pattern of CARP's own types. The name may not contain periods.
-- **Do not repeat the name earlier in the string:** CAMS takes the text after the last period as the name and cuts the namespace off where that name first occurs. `com.example.example` therefore turns into `com.example`, and `com.example.ample` into `com.e.ample`. Lookups by the original string then fail, and data is stored under the wrong type.
+- **Use the data class name in lowercase as the name:** `airpressure` for `AirPressure`, the pattern of CARP's own types. The name must not contain periods.
+- **Do not repeat the name earlier in the string:** CAMS takes the text after the last period as the name. It then cuts the namespace off where that name first occurs. `com.example.example` therefore turns into `com.example`, and `com.example.ample` into `com.e.ample`. Lookups by the original string then fail, and data is stored under the wrong type.
 
 The same string must appear in four places, or data goes missing:
 
@@ -247,13 +249,13 @@ One constant keeps all four equal.
 </Step>
 <Step title="Generate the JSON code">
 
+After you write the data classes on the next page, run the generator in the package folder:
+
 ```bash
 dart run build_runner build
 ```
 
-Run the generator in the package folder after you write the data classes on the next page. Run it again after each change to a class annotated with `@JsonSerializable`.
-
-The generator writes `lib/barometer_sampling_package.g.dart` with the JSON functions of every class in the library. To regenerate on every save while you work, run `dart run build_runner watch` instead.
+Run it again after each change to a class annotated with `@JsonSerializable`. The generator writes `lib/barometer_sampling_package.g.dart` with the JSON functions of every class in the library. To regenerate on every save while you work, run `dart run build_runner watch` instead.
 
 Older guides add `--delete-conflicting-outputs`. `build_runner` 2.7.0 and later always delete conflicting outputs. Current versions ignore the flag and warn: "These options have been removed and were ignored: --delete-conflicting-outputs".
 

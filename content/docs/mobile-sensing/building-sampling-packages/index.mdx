@@ -5,11 +5,13 @@ description: Build, test and publish a sampling package that adds your own measu
 
 A **sampling package** adds measure types to CARP Mobile Sensing (CAMS). For each type, it defines the data class that holds the values of a measurement and the probe that collects them. For a wearable or an online service, it also connects the phone to the device.
 
-Build one when no existing package collects the data your study needs; check [Measure types](/docs/mobile-sensing/measure-types) first. A package is a Flutter package of its own. You can use it in your app, share it with other CAMS apps or publish it on pub.dev.
+Build one when no existing package collects the data your study needs. To find an existing one, see [Measure types](/docs/mobile-sensing/measure-types).
+
+A sampling package is a Flutter package of its own. You can use it in your app, share it with other CAMS apps or publish it on pub.dev.
 
 <Callout type="info" title="Written for CAMS 2.5.1">
 
-The pages and the example package target `carp_mobile_sensing` 2.5.1, `carp_core` 2.2.2 and `carp_serializable` 3.0.0. Where CAMS 2.5.1 has a defect that affects package authors, the page states the rule and the workaround.
+The pages and the example package target `carp_mobile_sensing` 2.5.1, `carp_core` 2.2.2 and `carp_serializable` 3.0.0. Where CAMS 2.5.1 has a defect that affects package authors, the pages state the rule and the workaround.
 
 </Callout>
 
@@ -46,7 +48,7 @@ flowchart LR
 
 ## Example package
 
-Every page builds the same package, `barometer_sampling_package`, which reads the phone's barometer with the [`sensors_plus`](https://pub.dev/packages/sensors_plus) plugin. It adds two measure types:
+The guide builds one example package, `barometer_sampling_package`, which reads the phone's barometer with the [`sensors_plus`](https://pub.dev/packages/sensors_plus) plugin. It adds two measure types:
 
 | Measure type | Data class | Probe | Default sampling |
 | --- | --- | --- | --- |

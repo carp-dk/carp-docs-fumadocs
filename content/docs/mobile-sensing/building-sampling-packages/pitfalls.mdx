@@ -28,7 +28,7 @@ The rules are ordered by how much data breaking them loses. The first ones stop 
 ## Initialize CAMS before you register packages
 
 - **What breaks:** the first call to [`SamplingPackageRegistry()`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) registers the built-in CAMS packages, and one of them needs CAMS to be initialized. Registering a package before [`CarpMobileSensing.ensureInitialized()`](https://pub.dev/documentation/carp_mobile_sensing/latest/carp_mobile_sensing/CarpMobileSensing/ensureInitialized.html) throws "Null check operator used on a null value", and the app shows a blank screen. Registering after [`SmartPhoneClientManager().configure()`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/configure.html) is too late: `configure()` restores the saved studies and app tasks, which need the package's classes and factories.
-- **Seen in:** the doc comments of the registry and of the eSense package, and the README of every CARP sampling package, register first.
+- **Seen in:** the README of every CARP sampling package, and the doc comments of the registry and of the eSense package, leave out the initialization.
 - **Fix:** initialize CAMS, register the packages and then configure the client, in your app, README, example and tests. Creating `SmartPhoneClientManager()` also initializes CAMS. The example app's `main()` keeps this order:
 
 ```dart
@@ -45,13 +45,15 @@ void main() async {
 }
 ```
 
+For the reasons behind this order, see [Startup order](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#startup-order).
+
 ## Register every class that CAMS stores
 
 - **What breaks:** CAMS saves protocols, deployments and measurements as JSON and reads them back through [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html). At the next start, the first study with an unknown class throws a [`SerializationException`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/SerializationException-class.html), and CAMS drops it with every study saved after it. With CARP Web Services (CAWS), one unregistered data class makes every upload attempt of its study fail.
 - **Seen in:** `carp_movesense_package` never registers its device registration class, so a study fails to load at the first start after the sensor has connected. `carp_polar_package` registers its class, but one field holds a plugin enum that the plugin writes in one form and the package reads in another. Both packages' tests missed it: one decodes without `FromJsonFactory`, the other leaves that field empty.
 - **Fix:** in `onRegister()`, register every class that a protocol, a deployment or a measurement can hold. These are device configurations and registrations, sampling configurations, app tasks and their [`CompletedAppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CompletedAppTask-class.html) types, and data classes.
 
-Test each class through `FromJsonFactory`, with every field set. The barometer example's `test/json_test.dart` does this for each class:
+Test each class through `FromJsonFactory`, with every field set. The example package's `test/json_test.dart` does this for each class:
 
 ```dart
   test('AirPressure round trip', () {
@@ -64,12 +66,12 @@ Test each class through `FromJsonFactory`, with every field set. The barometer e
   });
 ```
 
-For the other tests, see [Testing and publishing](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing).
+For the other round trips, see [Test the JSON round trips](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing#test-the-json-round-trips).
 
 ## Report the device status that CAMS acts on
 
 - **What breaks:** CAMS resumes a device's tasks when its status becomes `connected`, pauses them on `disconnecting` and resumes them on `reconnected`. Any other sequence leaves the device's measures stopped. `connect()` also sets the status that `onConnect()` returns, and does nothing while the status is `connecting`.
-- **Seen in:** `carp_movisens_package` returns `connecting` even on success, and when it has to scan for the sensor, nothing sets `connected` later, so its tasks never start. `carp_polar_package` reports `connected` when the first data type arrives, so its other probes start before their data. `carp_esense_package` and `carp_movesense_package` report a lost link as `disconnected`, which pauses nothing.
+- **Seen in:** `carp_movisens_package` returns `connecting` even on success. When it has to scan for the sensor, nothing sets `connected` later, so its tasks never start. `carp_polar_package` reports `connected` when the first data type arrives, so its other probes start before their data. `carp_esense_package` and `carp_movesense_package` report a lost link as `disconnected`, which pauses nothing.
 - **Fix:** set `connected` when the device is ready, `disconnecting` when the link is lost and `reconnected` when it is back. Return `status` from `onConnect()`, not a constant, and put a timeout on the SDK's connect call. The thermometer example maps its link events like this:
 
 ```dart
@@ -100,6 +102,8 @@ Stream<Measurement>? get stream => deviceManager.isConnected
     : null;
 ```
 
+For when CAMS creates the probes, see [Read the device in a probe](/docs/mobile-sensing/building-sampling-packages/devices#read-the-device-in-a-probe).
+
 ## Keep one device manager per device type
 
 - **What breaks:** CAMS finds a device's manager by the type of the device configuration, and gives each probe the value of the package's `deviceManager` getter. A `deviceType` that differs from the configuration's type leaves the device unconfigured. A getter that builds a new manager gives the probes one that CAMS never configures or connects.
@@ -116,11 +120,13 @@ String get deviceType => ThermoDevice.DEVICE_TYPE;
 ThermoDeviceManager get deviceManager => _deviceManager;
 ```
 
+See [Expose the device in the package](/docs/mobile-sensing/building-sampling-packages/devices#expose-the-device-in-the-package).
+
 ## Give each probe the configuration it expects
 
 - **What breaks:** [`IntervalProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/IntervalProbe-class.html) and the periodic and buffering probes of CAMS cast their sampling configuration with `as`. A measure type without a default configuration gets a [`NoOptionsSamplingConfiguration`](https://pub.dev/documentation/carp_core/latest/common/NoOptionsSamplingConfiguration-class.html), so the cast throws inside `onResume()`. CAMS does not catch it, and the probe never starts, without an error measurement.
 - **Seen in:** the geofence probe of `carp_context_package` throws when its measure has no configuration. The beacon probe of `carp_connectivity_package` throws for any other configuration class.
-- **Fix:** give every measure type whose probe needs a configuration a default of that class. Read the configuration with a type test and a fallback, and check its values in `onResume()`. The barometer probe falls back to its default period:
+- **Fix:** give every measure type whose probe needs a configuration a default of that class. Read the configuration with a type test and a fallback, and check its values in `onResume()`. `AirPressureProbe` in the example package falls back to its default period:
 
 ```dart
   /// The requested time between readings
@@ -149,7 +155,7 @@ void onRegister() {
 }
 ```
 
-In the user task, call `backgroundTaskExecutor.resume()` after `super.onStart()`, which initializes the executor; executors have no `start()`. See [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+In the user task, call `backgroundTaskExecutor.resume()` after `super.onStart()`, which initializes the executor; executors have no `start()`. See [Add app task types](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#add-app-task-types).
 
 ## Make each data type equal its measure type
 
@@ -157,7 +163,7 @@ In the user task, call `backgroundTaskExecutor.resume()` after `super.onStart()`
 - **Seen in:** the activity and heart rate probes of `carp_movisens_package` emit subtypes such as `dk.cachet.carp.movisens.activity.steps`, which the CAWS data manager never uploads. Two of its classes use the data type of a third, so their data decodes as the wrong class. In CAMS itself, the data of `NON_GRAVITATIONAL_ACCELERATION` is stored as `dk.cachet.carp.acceleration`.
 - **Fix:** return the measure type constant from `jsonType`, in a namespace that you control, and give each class its own type. Choose a last segment that does not occur earlier in the type. [`DataType.fromString()`](https://pub.dev/documentation/carp_core/latest/common/DataType/DataType.fromString.html) cuts the namespace at the first occurrence of the name, so `com.example.example` parses as the namespace `com`.
 
-The barometer example's `AirPressure` returns its measure type:
+The example package's `AirPressure` returns its measure type:
 
 ```dart
   // The data type must be the measure type, see BarometerSamplingPackage
@@ -165,17 +171,19 @@ The barometer example's `AirPressure` returns its measure type:
   String get jsonType => BarometerSamplingPackage.AIR_PRESSURE;
 ```
 
+See [Return the measure type from `jsonType`](/docs/mobile-sensing/building-sampling-packages/data-classes#return-the-measure-type-from-jsontype).
+
 ## Declare the permissions that each measure needs
 
 - **What breaks:** when CAMS deploys or restores a study, it asks only for the permissions in each measure's [`CamsDataTypeMetaData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDataTypeMetaData-class.html). On Android, the base probes do not start without them, so a missing permission stops the measure or leaves fields empty. An extra permission asks for access that the measure does not need, and stops the measure on Android when the participant denies it.
 - **Seen in:** the Wi-Fi measure of `carp_connectivity_package` declares no location permission, which Android needs for the network name. The text message measure of `carp_communication_package` declares the phone permission instead of the SMS permission.
-- **Fix:** declare exactly the Android permission groups that each probe needs, and leave out the permissions to reach a device. List the manifest and `Info.plist` entries in your README. The barometer measures declare none, because Android needs no permission for the barometer.
+- **Fix:** declare exactly the Android permission groups that each probe needs, and leave out the permissions to reach a device. List the manifest and `Info.plist` entries in your README. The measures of the example package declare none, because Android needs no permission for the barometer.
 
-For how CAMS asks for permissions, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+For how CAMS asks for permissions, see [Declare permissions](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#declare-permissions).
 
 ## Report errors and keep the rest of the data
 
-- **What breaks:** an exception while converting one record can lose that record, the rest of a batch or the whole measure. A [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) whose `getMeasurement()` throws never pauses itself, so its task ignores every second trigger. Errors that a probe keeps to itself never reach the app or the data manager.
+- **What breaks:** an exception while converting one record can lose that record, the rest of a batch or the whole measure. A [`MeasurementProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/MeasurementProbe-class.html) whose `getMeasurement()` throws never pauses itself, so its task ignores the next trigger. Errors that a probe keeps to itself never reach the app or the data manager.
 - **Seen in:** `carp_communication_package` force-unwraps a date that incoming text messages never have, so it loses all of them. The health probe of `carp_health_package` reads all its data types in one call, so one failing type empties the measure. It also reports its errors on a stream that nothing listens to.
 - **Fix:** convert each record in its own `try`, and report failures with `addError()`, which the data manager stores as an error measurement. In `getMeasurement()`, return an [`Error`](https://pub.dev/documentation/carp_core/latest/common/Error-class.html) measurement or `null` instead of throwing. `PluginRecord` stands for a record of the plugin:
 
@@ -193,11 +201,13 @@ void addRecords(List<PluginRecord> records) {
 }
 ```
 
+For error handling in probes, see [Probes](/docs/mobile-sensing/building-sampling-packages/probes#error-handling).
+
 ## Get units and timestamps right
 
 - **What breaks:** CAMS measurement times are microseconds since the epoch, and the durations in its JSON are microseconds. A `DateTime` is written with a `Z` only when it is in UTC. A value in the wrong unit or time zone dates every record wrong.
 - **Seen in:** `carp_communication_package` reads Android's millisecond dates as microseconds, so every call and text message is dated January 1970. The activity probe of `carp_context_package` stamps the time the event reaches the app, not the time of the activity. The Bluetooth scan of `carp_connectivity_package` declares a time span but sets no end time.
-- **Fix:** convert each plugin value with its documented unit, and use the sensor's time when it has a reliable one. Convert `DateTime` values to UTC, and set `sensorEndTime` on data that covers a period. The barometer summary probe sets both times of its window:
+- **Fix:** convert each plugin value with its documented unit, and use the sensor's time when it has a reliable one. Convert `DateTime` values to UTC, and set `sensorEndTime` on data that covers a period. `AirPressureSummaryProbe` in the example package sets both times of its window:
 
 ```dart
   @override
@@ -212,17 +222,19 @@ void addRecords(List<PluginRecord> records) {
 
 Test each conversion against recorded plugin data, field by field. The test of `carp_movesense_package` checks only the type of its motion data, which holds accelerometer values where the gyroscope and magnetometer values belong.
 
+For timestamps and units, see [Data classes](/docs/mobile-sensing/building-sampling-packages/data-classes#timestamps).
+
 ## Leave the deployment's configurations unchanged
 
 - **What breaks:** a sampling configuration belongs to the deployment, or is a package default that every probe of the type shares. A probe that changes one changes it for every probe and study that uses it, and fails on a `const` list. A history measure keeps its `lastTime` over a restart only when its configuration belongs to the deployment.
 - **Seen in:** the health probe of `carp_health_package` removes unsupported types from the configured list in place. On a `const` list this throws, and the measure stops until the app restarts. `APP_USAGE`, `PHONE_LOG`, `CALENDAR` and `HEALTH` measures without their own configuration read their whole default window again after every restart, and store overlapping data.
-- **Fix:** copy a configuration's lists before you filter them, and give app developers a method that returns a history measure with its own configuration. Say in your README that a task holds one measure per type: CAMS collapses two measures of one type in one task into one. See [Sampling configurations](/docs/mobile-sensing/building-sampling-packages/sampling-configurations).
+- **Fix:** copy a configuration's lists before you filter them, and give protocol authors a method that returns a history measure with its own configuration. Say in your README that a task holds one measure per type: CAMS collapses two measures of one type in one task into one. See [Read history since the last collection](/docs/mobile-sensing/building-sampling-packages/sampling-configurations#read-history-since-the-last-collection).
 
 ## Make resume safe to repeat, and release what a probe starts
 
 - **What breaks:** CAMS calls `onResume()` again on a resumed probe, so whatever `onResume()` starts without stopping the old one runs twice. A probe that keeps its stream gets nothing after a reconnect, and a broadcast wrapper keeps the sensor running while the probe is paused. A stream that completes closes the probe for good.
 - **Seen in:** the geofence probe of `carp_context_package` adds a location listener at every resume. Its activity probe keeps activity recognition running while it is paused. The sensor probe of `carp_esense_package` keeps its stream, so its data stops after a reconnect, and `carp_movesense_package` never cancels its battery timer.
-- **Fix:** build a fresh stream in the `stream` getter, and keep one timer. Cancel a subscription before you listen again and in `onPause()`, and stop native work when the probe pauses. The barometer summary probe ignores a second resume:
+- **Fix:** build a fresh stream in the `stream` getter, and keep one timer. Cancel a subscription before you listen again and in `onPause()`, and stop native work when the probe pauses. `AirPressureSummaryProbe` in the example package ignores a second resume:
 
 ```dart
   @override
@@ -235,7 +247,7 @@ Test each conversion against recorded plugin data, field by field. The test of `
   }
 ```
 
-For which probe base classes need this guard, see [Probes](/docs/mobile-sensing/building-sampling-packages/probes).
+For the probe base classes that need this guard, see [Resume guard](/docs/mobile-sensing/building-sampling-packages/probes#resume-guard).
 
 ## Emit data as soon as it exists
 
@@ -243,8 +255,30 @@ For which probe base classes need this guard, see [Probes](/docs/mobile-sensing/
 - **Seen in:** `carp_audio_package` adds the measurement of a recording only when its probe pauses, so a killed app leaves a file without a measurement. `carp_movesense_package` skips the first 10 notifications of every subscription, which for its tap measure are the first 10 taps.
 - **Fix:** add each measurement when its data is complete, and report long recordings in parts. Never skip or replay events, and choose default intervals with the first delay in mind.
 
+For the first delay of interval and window probes, see [Set the default configurations](/docs/mobile-sensing/building-sampling-packages/sampling-configurations#set-the-default-configurations).
+
 ## Know when transformers run
 
-- **What breaks:** no data is lost, but data can leave the phone unprotected. Privacy functions run only when the protocol sets `privacySchemaName`, can run twice on the same data, and a hash is not anonymization. Registering a built-in schema again drops every transformer that packages added to it.
+- **What breaks:** no data is lost, but data can leave the phone unprotected. Privacy functions run only when the protocol sets `privacySchemaName`, and they can run twice on the same data. A hash is not anonymization, and registering a built-in schema again drops every transformer that packages added to it.
 - **Seen in:** the READMEs of `carp_communication_package` and `carp_connectivity_package` do not say that their privacy protection needs `privacySchemaName`, and their anonymizers hash values without a salt.
 - **Fix:** write privacy functions that give the same result when they run again, and add transformers to the existing schemas. Say in your README which fields the functions change, and that they need `privacySchemaName`. See [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
+
+## Next steps
+
+<Cards>
+<Card title="Testing and publishing" href="/docs/mobile-sensing/building-sampling-packages/testing-and-publishing" icon="CheckCircle">
+
+Test the package, run it in an app and publish it.
+
+</Card>
+<Card title="Extending CAMS" href="/docs/mobile-sensing/extending" icon="Extension">
+
+Add custom triggers, probes, data managers and transformer schemas.
+
+</Card>
+<Card title="Best practices" href="/docs/mobile-sensing/best-practices" icon="Star">
+
+Android and iOS setup recommendations, permissions and troubleshooting.
+
+</Card>
+</Cards>

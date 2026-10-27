@@ -3,11 +3,11 @@ title: Data classes
 description: Define the classes that hold the values of your measurements, and give each one the JSON type of its measure.
 ---
 
-Write one **data class** per measure type: a subclass of [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) that holds the values of one measurement and serializes them to JSON. CARP Mobile Sensing (CAMS) stores, uploads and decodes measurements by the JSON type of their data class. Each class must therefore use its measure type as its JSON type.
+A **data class** holds the values of one measurement and serializes them to JSON. Each measure type has its own data class, a subclass of [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html), whose JSON type must be the measure type. CARP Mobile Sensing (CAMS) stores, uploads and decodes measurements by that type.
 
 ## Write the data classes
 
-The example package has two data classes: `AirPressure` holds one barometer reading, and `AirPressureSummary` holds the count, mean, minimum and maximum of the readings in one sampling window. Add both to `lib/barometer_data.dart`:
+The example package has two data classes. `AirPressure` holds one barometer reading, and `AirPressureSummary` holds the count, mean, minimum and maximum of the readings in one sampling window. Replace the contents of `lib/barometer_data.dart` with both classes:
 
 ```dart title="lib/barometer_data.dart"
 part of 'barometer_sampling_package.dart';
@@ -84,7 +84,7 @@ class AirPressureSummary extends SensorData {
 }
 ```
 
-The functions whose names start with `_$` do not exist until you generate them with `dart run build_runner build`; see [Package setup](/docs/mobile-sensing/building-sampling-packages/package-setup). `fromReadings` expects at least one reading, and the summary probe never calls it with an empty list.
+Now run `dart run build_runner build` in the package folder: the functions whose names start with `_$` do not exist until the generator writes them. `AirPressureSummary.fromReadings()` expects at least one reading, and the summary probe never calls it with an empty list.
 
 ## Members of a data class
 
@@ -92,7 +92,7 @@ Every data class in a CARP package has the same members:
 
 | Member | What it does |
 | --- | --- |
-| `@JsonSerializable(includeIfNull: false, explicitToJson: true)` | Makes `json_serializable` generate `_$AirPressureFromJson` and `_$AirPressureToJson`. These options are the CARP convention; see [Generated code](#generated-code). |
+| `@JsonSerializable(includeIfNull: false, explicitToJson: true)` | Makes `json_serializable` generate `_$AirPressureFromJson` and `_$AirPressureToJson`. These options are the CARP convention. See [Generated code](#generated-code). |
 | A constructor that calls `super()` | Runs the [`Serializable`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/Serializable-class.html) constructor, which sets the `__type` value from `jsonType`. It must work with placeholder values, because the package registers a placeholder instance. |
 | `jsonType` | Returns the measure type, which becomes `__type` in the JSON and the data type of each measurement. |
 | `fromJsonFunction` | Returns the generated `_$AirPressureFromJson`, which [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html) stores and calls to decode this type. |
@@ -111,7 +111,7 @@ Two optional members change how CAMS treats the data:
 
 | Member | Default | Override it when |
 | --- | --- | --- |
-| `equivalentTo(Data other)` | Returns `false` | A [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) must fire on specific values of your data. With the default, a trigger with a condition never fires. |
+| `equivalentTo()` | Returns `false` | A [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) must fire on specific values of your data. With the default, a trigger with a condition never fires. |
 | `recordId` | `null` | The source has a stable ID for each record. The SQLite data manager then drops later measurements with the same ID, so return only an ID that is unique per record. |
 
 ## Return the measure type from `jsonType`
@@ -125,7 +125,7 @@ The `jsonType` string is written to `__type` and is the data type of every measu
 - **Triggers and app code:** a `SamplingEventTrigger` and [`measurementsByType()`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartphoneStudyController/measurementsByType.html) of the study controller filter by the data type, so they never see the data.
 - **Local storage:** the SQLite data manager stores each measurement under its data type.
 
-Override `jsonType` in every data class to return its measure type constant, as both example classes do. Give each class its own type: `FromJsonFactory` keeps one decoder per type, so the JSON of two classes with the same type decodes as the class registered last.
+Override `jsonType` in every data class to return its measure type constant, as both example classes do. Give each class its own type. `FromJsonFactory` keeps one decoder per type, so the JSON of two classes with the same type decodes as the class registered last.
 
 A test catches a type that does not match. This one is from `test/package_test.dart` in the example package:
 
@@ -190,19 +190,19 @@ The two options of the annotation show in the highlighted lines:
 - **`includeIfNull: false`:** the `?` before a value leaves out its key when the value is `null`. A `null` field such as `sensorSpecificData` therefore does not appear in the JSON. These null-aware elements need Dart 3.8 or later.
 - **`explicitToJson: true`:** nested objects are converted with their own `toJson()`. Without it, `toJson()` returns the nested Dart objects; `jsonEncode` still writes the same JSON, but code that reads the map gets objects instead of maps.
 
-Decoding restores `__type` from the JSON and decodes `sensorSpecificData` through `Data.fromJson`, which again needs a registered class. Do not edit the generated file; generate it again after each change to a data class.
+Decoding restores `__type` from the JSON and decodes `sensorSpecificData` through `Data.fromJson()`, which again needs a registered class. Do not edit the generated file; generate it again after each change to a data class.
 
 ## Register the data classes
 
-CAMS decodes a data class only after it is registered in `FromJsonFactory`. The package class registers both data classes, with placeholder values, in its `onRegister()` method:
+CAMS decodes a data class only after it is registered in `FromJsonFactory`. The package class registers both data classes, with placeholder values, in `onRegister()` of `lib/barometer_package.dart`:
 
 ```dart
   @override
   void onRegister() {
     // Register the classes that CAMS deserializes from JSON
     FromJsonFactory().registerAll([
-      AirPressure(pressure: 0),
-      AirPressureSummary(count: 0, mean: 0, min: 0, max: 0),
+      AirPressure(pressure: 0), // [!code highlight]
+      AirPressureSummary(count: 0, mean: 0, min: 0, max: 0), // [!code highlight]
       AirPressureSummarySamplingConfiguration(
         interval: Duration.zero,
         duration: Duration.zero,
@@ -215,7 +215,7 @@ CAMS decodes a data class only after it is registered in `FromJsonFactory`. The 
 
 Collection works without the registration, but reading the data back does not. The CAWS data manager, for example, decodes the buffered measurements of all measures before it uploads them. One unregistered data class therefore makes every upload attempt of the study fail with a `SerializationException`, while the phone keeps collecting and storing data.
 
-For the rest of `onRegister()`, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+For the rest of `onRegister()`, see [Register the JSON classes and privacy functions](/docs/mobile-sensing/building-sampling-packages/sampling-package-class#register-the-json-classes-and-privacy-functions).
 
 ## Timestamps
 
@@ -269,7 +269,7 @@ Three rules apply to timestamps:
 
 - When the source reports when it took a reading, pass that time in microseconds as the second argument of `Measurement.fromData()`. A value in milliseconds would date the data to January 1970.
 - Use one clock for measures that belong together. The example uses the phone's time for both measures, so the times of readings and windows are comparable.
-- Set `sensorEndTime` for every measure that the package declares as `DataTimeType.TIME_SPAN`. CAMS does not set it from the declaration.
+- Set `sensorEndTime` for every measure that the package declares as `DataTimeType.TIME_SPAN`. CAMS does not set it from the declaration: the `BLUETOOTH` measure of `carp_connectivity_package`, for example, declares `TIME_SPAN` but sets only a start time.
 
 ## Example data
 

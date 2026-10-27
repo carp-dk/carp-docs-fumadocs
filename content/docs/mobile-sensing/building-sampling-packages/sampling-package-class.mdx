@@ -7,7 +7,7 @@ The **sampling package class** is what an app registers with CARP Mobile Sensing
 
 ## Write the package class
 
-The example's package class, `BarometerSamplingPackage`, goes in `lib/barometer_package.dart`:
+Replace the contents of `lib/barometer_package.dart` with the complete `BarometerSamplingPackage` class:
 
 ```dart title="lib/barometer_package.dart"
 part of 'barometer_sampling_package.dart';
@@ -99,6 +99,8 @@ class BarometerSamplingPackage extends SmartphoneSamplingPackage { // [!code hig
 
 Both measures run on the phone, so the class extends [`SmartphoneSamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneSamplingPackage-class.html) and implements only `samplingSchemes`, `create()` and `onRegister()`.
 
+To compile the package, add the two privacy functions that `onRegister()` uses to `lib/barometer_privacy.dart`. For their code, see [Write a privacy function](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats#write-a-privacy-function).
+
 ## Members of a sampling package
 
 Every sampling package implements the six members of [`SamplingPackage`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingPackage-class.html). `SmartphoneSamplingPackage` implements four of them for packages that collect data on the phone:
@@ -106,7 +108,7 @@ Every sampling package implements the six members of [`SamplingPackage`](https:/
 | Member | Called by | In `SmartphoneSamplingPackage` |
 | --- | --- | --- |
 | `samplingSchemes` | `register()` and the registry, each time it creates a probe | You implement it |
-| `create(type)` | The registry, for each measure when CAMS initializes a deployment or a user task starts | You implement it |
+| `create()` | The registry, for each measure when CAMS initializes a deployment or a user task starts | You implement it |
 | `onRegister()` | `register()`, once | Does nothing; you override it |
 | `dataTypes` | Only the phone's device manager, which lists the types of phone packages for information | `samplingSchemes.dataTypes` |
 | `deviceType` | `register()`, which registers `deviceManager` under this type | `dk.carp.cams.devices.Smartphone` |
@@ -119,7 +121,7 @@ For a wearable or an online service, implement `SamplingPackage` with all six me
 `samplingSchemes` returns a [`DataTypeSamplingSchemeMap`](https://pub.dev/documentation/carp_core/latest/common/DataTypeSamplingSchemeMap-class.html) with one [`DataTypeSamplingScheme`](https://pub.dev/documentation/carp_core/latest/common/DataTypeSamplingScheme-class.html) per measure type: the type's metadata and its default sampling configuration. It is the list of types that the package supports:
 
 - **Only declared types get probes:** the registry finds the package for a measure by looking for its type in `samplingSchemes`. For a type that `create()` handles but `samplingSchemes` lacks, CAMS creates no probe; it skips the measure and logs a warning.
-- **The default configuration applies when the protocol sets none:** a scheme without one gets a [`NoOptionsSamplingConfiguration`](https://pub.dev/documentation/carp_core/latest/common/NoOptionsSamplingConfiguration-class.html). A probe that casts its configuration to another class, such as an [`IntervalProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/IntervalProbe-class.html), then throws inside `onResume()` and never starts. Give each type the default that its probe expects; see [Sampling configurations](/docs/mobile-sensing/building-sampling-packages/sampling-configurations).
+- **The default configuration applies when the protocol sets none:** give each type the default that its probe expects. A scheme without one gets a [`NoOptionsSamplingConfiguration`](https://pub.dev/documentation/carp_core/latest/common/NoOptionsSamplingConfiguration-class.html), and a probe that casts its configuration, such as an [`IntervalProbe`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/IntervalProbe-class.html), never starts. See [Set the default configurations](/docs/mobile-sensing/building-sampling-packages/sampling-configurations#set-the-default-configurations).
 
 The metadata of each scheme is a [`CamsDataTypeMetaData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CamsDataTypeMetaData-class.html):
 
@@ -143,7 +145,7 @@ DataTypeSamplingScheme(
     type: STEP_COUNT,
     displayName: "Step Count",
     timeType: DataTimeType.POINT,
-    permissions: [Permission.activityRecognition],
+    permissions: [Permission.activityRecognition], // [!code highlight]
   ),
 ),
 ```
@@ -170,8 +172,8 @@ Declaring `Permission.sensors` would make CAMS ask for body sensor access on And
 
 - **Return a new probe from every call:** each measure has its own probe with its own state. An app task's measures get new probes each time one of its user tasks starts.
 - **Return `null` on an unsupported platform:** CAMS then skips the measure with a warning and runs the rest of the protocol. The sensor package of CAMS does this for ambient light on iOS.
-- **Keep the probe constructor free of setup:** the registry sets the probe's `deviceManager` after `create()` returns. Reading it in the constructor throws a `LateInitializationError`. A probe reads its device manager, measure and sampling configuration when it resumes; see [Probes](/docs/mobile-sensing/building-sampling-packages/probes).
-- **Do not choose the probe from device state:** on a first deployment, `create()` runs before the device connects. The Movesense package creates its temperature probe only for a sensor model that it learns after connecting. On a first deployment, that probe is never created.
+- **Keep the probe constructor free of setup:** the registry sets the probe's `deviceManager` after `create()` returns, so reading it in the constructor throws a `LateInitializationError`. See [Probe lifecycle](/docs/mobile-sensing/building-sampling-packages/probes#probe-lifecycle).
+- **Do not choose the probe from device state:** `create()` runs before the device connects. See [Read the device in a probe](/docs/mobile-sensing/building-sampling-packages/devices#read-the-device-in-a-probe).
 
 ## Register the JSON classes and privacy functions
 
@@ -186,24 +188,21 @@ In `onRegister()`, register every class of the package that CAMS decodes from JS
 | Classes | CAMS decodes them from | When one is not registered |
 | --- | --- | --- |
 | Data classes and a `CompletedAppTask` for each app task type | Stored measurements, for example before an upload to CARP Web Services (CAWS) | Every upload attempt of the study fails. |
-| Sampling configurations, device configurations, device registrations and `AppTask` subclasses | The deployment, which CAMS saves on the phone and restores at every app start | At the next app start, the study and every study saved after it fail to load. |
+| Sampling configurations, device configurations, device registrations and `AppTask` subclasses | The deployment, which CAMS saves on the phone and restores at every app start | At the next app start, the study and every study saved after it fail to load. CAMS logs the warning "Failed to load studies". |
 
-For the classes in the deployment, the first run hides a missing registration, because the local deployment service keeps the protocol's objects and decodes nothing. The Movesense package, for example, does not register its device registration class.
+For the classes in the deployment, the first run hides a missing registration, because the local deployment service keeps the protocol's objects and decodes nothing.
 
-A study in which a Movesense sensor has connected therefore fails to load at the next app start. Test every class with a JSON round trip; see [Testing and publishing](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing).
+`carp_movesense_package`, for example, does not register its device registration class. A study in which a Movesense sensor has connected therefore fails to load at the next app start. For a test that catches this, see [Test the JSON round trips](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing#test-the-json-round-trips).
 
-Register only the classes of your package: CAMS registers its own, such as [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html), when it initializes. Register each package once, too. `register()` does not check for duplicates: a second registration runs `onRegister()` again, and with a second instance, CAMS logs a duplicate-type warning for every probe of the package's types.
+Register only the classes of your package: CAMS registers its own, such as [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html), when it initializes.
+
+Register each package once, too. `register()` does not check for duplicates: a second registration runs `onRegister()` again. With a second instance, CAMS also logs a duplicate-type warning for every probe of the package's types.
 
 The example's `onRegister()` also adds two privacy functions to the default privacy schema. They run only in studies whose protocol sets `privacySchemaName: PrivacySchema.DEFAULT`. See [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
 
 ## Device type and device manager
 
-`deviceType` and `deviceManager` connect the package's probes to a device. `SmartphoneSamplingPackage` returns the phone's type and the `SmartphoneDeviceManager` that all phone packages share, so the example implements neither. A package for a wearable or an online service implements both:
-
-- **`deviceType` must equal the type of the device configuration in the protocol:** `dk.carp.cams.devices.` followed by the configuration's class name. Otherwise CAMS logs that the device is not available on the phone and never configures or connects it.
-- **`deviceManager` must return the same instance on every call:** keep it in a `final` field. `register()` hands that instance to CAMS, which configures and connects it, and the registry hands it to every new probe. A getter that creates a new manager each time gives the probes a manager that never connects.
-
-For device configurations and device managers, see [Devices and services](/docs/mobile-sensing/building-sampling-packages/devices).
+`deviceType` and `deviceManager` connect the package's probes to a device. `SmartphoneSamplingPackage` returns the phone's type and the `SmartphoneDeviceManager` that all phone packages share, so the example implements neither. To implement both for a wearable or an online service, see [Expose the device in the package](/docs/mobile-sensing/building-sampling-packages/devices#expose-the-device-in-the-package).
 
 ## Use the package in an app
 
@@ -234,7 +233,7 @@ dependencies:
 </Step>
 <Step title="Set up Android and iOS for CAMS">
 
-Apply the platform setup in [Installation](/docs/mobile-sensing/installation) to the example app. Its iOS part includes the entry that `sensors_plus` needs to read the barometer:
+To configure the example app for CAMS on Android and iOS, see [Installation](/docs/mobile-sensing/installation). The iOS setup there includes the entry that `sensors_plus` needs to read the barometer:
 
 ```xml title="example/ios/Runner/Info.plist"
 <key>NSMotionUsageDescription</key>
@@ -338,8 +337,6 @@ Show the same order in your package's README, example app and doc comments. In t
 
 Register the package before `configure()`, because `configure()` restores the studies saved in earlier runs. It decodes their deployments, including the summary measure's `AirPressureSummarySamplingConfiguration`, so a package registered later comes too late and the saved study fails to load. Register user task factories and other extensions at the same point.
 
-The console also shows a warning that CAMS ignores the `resume()` call: in CAMS 2.5.1, the study's executor cannot resume yet at that point. The probes start anyway, because CAMS resumes the tasks on the phone when the phone's device manager connects.
-
 ### Run the app
 
 Run the app on a phone from the `example/` folder:
@@ -348,13 +345,22 @@ Run the app on a phone from the `example/` folder:
 flutter run
 ```
 
+For each reading, the console shows a line like the first one below. From about 40 seconds after the start, it also shows a line like the second one for each window:
+
+```text
+{"sensorStartTime":1793083703208532,"data":{"__type":"com.example.airpressure","pressure":1013.2471923828125}}
+{"sensorStartTime":1793083733211070,"sensorEndTime":1793083743212514,"data":{"__type":"com.example.airpressuresummary","count":10,"mean":1013.243,"min":1013.21,"max":1013.27}}
+```
+
+The first measurement of a study is the `dk.cachet.carp.triggeredtask` data that CAMS adds when the task starts. CAMS also prints `[CAMS INFO]` and `[CAMS WARNING]` lines, because its default log level shows both.
+
+One of the warnings says that CAMS ignores the `resume()` call: in CAMS 2.5.1, the study's executor cannot resume yet at that point. The probes start anyway, because CAMS resumes the tasks on the phone when the phone's device manager connects.
+
 The iOS Simulator has no barometer. There, each probe logs a warning like this one after 5 seconds and collects nothing:
 
 ```text
 [CAMS WARNING] AirPressureProbe - No barometer reading yet. The phone may have no barometer, or the user has not allowed motion access yet. Listening anyway.
 ```
-
-For the tests and the data the app prints, see [Testing and publishing](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing).
 
 ## Add app task types
 
