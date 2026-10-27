@@ -1,0 +1,146 @@
+---
+title: Calendar
+description: How the calendar measure collects events from all calendars on Android and iOS, and the data it produces.
+icon: CalendarMonth
+---
+
+`CALENDAR` (`dk.cachet.carp.calendar`) collects the events from all calendars on the phone that overlap a time window ending now. It is a [one-time](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure on the phone, on Android and iOS, and each run adds one [`Calendar`](https://pub.dev/documentation/carp_communication_package/latest/communication/Calendar-class.html) measurement. The constant is on [`CommunicationSamplingPackage`](https://pub.dev/documentation/carp_communication_package/latest/communication/CommunicationSamplingPackage-class.html), and the package reads the calendars with the `device_calendar_plus` plugin.
+
+## Add the measure to a protocol
+
+The measure collects once each time its task is triggered, so add it with a trigger that repeats. This task uses an [`AppLifecycleTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppLifecycleTrigger-class.html) to collect the calendar each time the app comes to the foreground:
+
+```dart
+protocol.addTaskControl(
+  AppLifecycleTrigger({AppLifecycleState.resumed}),
+  BackgroundTask(
+    measures: [
+      Measure(type: CommunicationSamplingPackage.CALENDAR)
+        ..overrideSamplingConfiguration = HistoricSamplingConfiguration(
+          past: const Duration(days: 7),
+        ),
+    ],
+  ),
+  phone,
+);
+```
+
+The first run goes back 7 days, and later runs continue from the previous one, also after an app restart. A [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html) works too, as in the [quickstart](/docs/sampling-packages/communication/quickstart).
+
+## Configuration
+
+The measure takes its time window from a [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html):
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `past` | `Duration` | 1 day | How far back the first run collects. |
+| `future` | `Duration` | 1 day | Not used by this package, so upcoming events are never collected. |
+| `lastTime` | `DateTime?` | `null` | When the measure last added a measurement. CARP Mobile Sensing (CAMS) sets it after each run. |
+
+The default configuration lives in memory, so `lastTime` is lost when the app restarts, and the next run goes back `past` again. To keep `lastTime` across restarts, set the configuration on the measure, as in the example above: CAMS then saves it with the deployment.
+
+## Collection window
+
+On the first run, the window starts `past` before now; on later runs, it starts at `lastTime`. It always ends at the time of the run.
+
+The window includes every event that overlaps it, not only the events that start in it. A long or ongoing event appears in each window it overlaps, so the same event can occur in several measurements. On iOS, a window longer than 4 years is cut to its first 4 years.
+
+On Android, all-day events are compared by date instead. A run includes the all-day events from the day its window starts up to the day before the window ends. A single-day event therefore appears in the first run after its day has ended.
+
+## All-day and recurring events
+
+An all-day event has `allDay` set to `true` and no `timeZone`. It starts at midnight of its date in the phone's time zone and ends at midnight of the next day, stored in UTC.
+
+For example, an all-day event on October 26 collected in Copenhagen (UTC+1) has the `start` value `2026-10-25T23:00:00.000Z`. To get the calendar date, convert `start` to the phone's time zone at the time of collection.
+
+Each occurrence of a recurring event in the window is a separate entry. The occurrences share the event's `eventId`, have their own `start` and `end`, and have `isRecurring` set to `true`. Use `eventId` and `start` together to tell them apart.
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- CAMS asks for `Permission.calendarFullAccess`, which covers `READ_CALENDAR` and `WRITE_CALENDAR`, and starts the measure only when both are granted.
+- The app must declare both permissions, although the package only reads.
+- The plugin reads the events of all calendars in the Android Calendar Provider.
+
+</Tab>
+<Tab value="iOS">
+
+- CAMS asks for full calendar access when the study is deployed. On iOS 17 or later, reading events needs full access; write-only access is not enough.
+- If access was never asked for, the measure asks the first time it runs.
+- If the participant denied access, the measure reports an error (`dk.cachet.carp.error`) instead of calendar data. Access can be turned on again in **Settings → Privacy & Security → Calendars**.
+- The plugin reads the events of all calendars in EventKit.
+
+</Tab>
+</Tabs>
+
+## Limitations
+
+- **Past events only:** the measure never collects upcoming events.
+- **Repeated events:** an event that spans several windows appears in several measurements. Remove the duplicates by `eventId` and `start`.
+- **Fields not collected:** attendees, availability, the recurrence rule and the event URL are not stored.
+- **Location in clear text:** the privacy schema hashes titles and descriptions but leaves `location` unchanged. See [Privacy](/docs/sampling-packages/communication/privacy).
+
+## Data
+
+Each `Calendar` holds the window and the events in it:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `calendarEvents` | `List<CalendarEvent>` | The events that overlap the window. |
+| `start` | `DateTime` | Start of the window. On the first run, in the phone's local time without a time zone offset; on later runs, in UTC. |
+| `end` | `DateTime` | End of the window, which is the time of the run, in the phone's local time without a time zone offset. |
+
+The measurement's `sensorStartTime` and `sensorEndTime` hold the same window in microseconds since the epoch. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+Each [`CalendarEvent`](https://pub.dev/documentation/carp_communication_package/latest/communication/CalendarEvent-class.html) has these fields; a field without a value is left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `eventId` | `String?` | The platform's ID of the event. All occurrences of a recurring event share it. |
+| `calendarId` | `String?` | The ID of the calendar the event belongs to. |
+| `title` | `String?` | The title of the event. Empty if the event has no title. |
+| `description` | `String?` | The description or notes of the event. |
+| `start` | `DateTime?` | When the event starts, in UTC. |
+| `end` | `DateTime?` | When the event ends, in UTC. The end itself is not part of the event. |
+| `allDay` | `bool?` | Whether the event lasts all day. |
+| `location` | `String?` | The location of the event. |
+| `status` | `String?` | `none`, `confirmed`, `tentative` or `canceled`. |
+| `timeZone` | `String?` | The event's IANA time zone, such as `Europe/Copenhagen`. Not set for all-day events. |
+| `isRecurring` | `bool` | Whether the event is part of a recurring series. Always present. |
+
+For a first run on a phone in Copenhagen, without the privacy schema, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.calendar",
+  "calendarEvents": [
+    {
+      "eventId": "1187",
+      "calendarId": "5",
+      "title": "Conference",
+      "start": "2026-10-25T23:00:00.000Z",
+      "end": "2026-10-26T23:00:00.000Z",
+      "allDay": true,
+      "status": "confirmed",
+      "isRecurring": false
+    },
+    {
+      "eventId": "1042",
+      "calendarId": "3",
+      "title": "Team meeting",
+      "description": "Weekly sync",
+      "start": "2026-10-27T08:00:00.000Z",
+      "end": "2026-10-27T09:00:00.000Z",
+      "allDay": false,
+      "location": "Room 101",
+      "status": "confirmed",
+      "timeZone": "Europe/Copenhagen",
+      "isRecurring": true
+    }
+  ],
+  "start": "2026-10-26T14:00:00.512345",
+  "end": "2026-10-27T14:00:00.512345"
+}
+```

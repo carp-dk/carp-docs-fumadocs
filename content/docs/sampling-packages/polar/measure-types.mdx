@@ -1,0 +1,278 @@
+---
+title: Measure types
+description: The seven Polar measure types, their sample rates, timestamps and data fields.
+icon: Dataset
+---
+
+`carp_polar_package` has seven measure types in the `dk.cachet.carp.polar` namespace, for heart rate, ECG, photoplethysmography (PPG), pulse-to-pulse intervals (PPI) and motion. Add each one to a protocol as `Measure(type: PolarSamplingPackage.<constant>)`, in a task that runs on a [`PolarDevice`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarDevice-class.html):
+
+| Measure type | Constant | Kind | Android | iOS |
+| --- | --- | --- | --- | --- |
+| [`dk.cachet.carp.polar.hr`](#heart-rate) | `HR` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.ecg`](#ecg) | `ECG` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.accelerometer`](#acceleration) | `ACCELEROMETER` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.gyroscope`](#angular-velocity) | `GYROSCOPE` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.magnetometer`](#magnetic-field) | `MAGNETOMETER` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.ppg`](#photoplethysmography) | `PPG` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.polar.ppi`](#pulse-to-pulse-intervals) | `PPI` | Event-based | Yes | Yes |
+
+All seven are event-based; see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures). They stream from the moment their task starts until it is paused.
+
+Add them to a `BackgroundTask` with an `ImmediateTrigger`, and they start when the sensor connects. For a known issue in version 2.1.0, see [Connect to the sensor](/docs/sampling-packages/polar/connecting#connect-to-the-sensor). Which of them produce data depends on the sensor model; see [Supported models](/docs/sampling-packages/polar#supported-models).
+
+Each measurement holds one batch of samples, as the sensor sent it. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Sample rates and ranges
+
+None of the measures has a sampling configuration, so `overrideSamplingConfiguration` has no effect.
+
+For ECG, acceleration, angular velocity, magnetic field and PPG, the `polar` plugin asks the sensor which settings it offers. It then selects the highest sample rate, range and resolution. Heart rate and PPI have no settings.
+
+Polar's documentation of the [H10](https://github.com/polarofficial/polar-ble-sdk/blob/master/documentation/products/PolarH10.md) and the [Verity Sense](https://github.com/polarofficial/polar-ble-sdk/blob/master/documentation/products/PolarVeritySense.md) gives these highest settings:
+
+| Measure | Sensor | Sample rate | Range |
+| --- | --- | --- | --- |
+| ECG | H10 | 130 Hz | — |
+| Acceleration | H10 | 200 Hz | ±8 g |
+| Acceleration | Verity Sense | 52 Hz | ±8 g |
+| Angular velocity | Verity Sense | 52 Hz | ±2000 degrees per second |
+| Magnetic field | Verity Sense | 100 Hz | ±50 gauss |
+| PPG | Verity Sense | 55 Hz | — |
+
+CARP Mobile Sensing (CAMS) cannot select lower settings. It also does not turn on the SDK mode of the Verity Sense, which offers more rates and ranges.
+
+## Timestamps
+
+The `sensorStartTime` of each measurement is the phone time, in microseconds since the Unix epoch, when the batch reached CAMS. Polar measurements have no `sensorEndTime`.
+
+ECG, acceleration, angular velocity, magnetic field and PPG samples also have a `timeStamp` from the sensor's clock. Heart rate and PPI samples have no time of their own.
+
+The sensor counts its time in nanoseconds since 1 January 2000. The `polar` plugin converts this count to a local date and time, starting from midnight on that day in the phone's time zone. CAMS writes `timeStamp` in ISO 8601 without a UTC offset, for example `2026-10-26T15:03:12.103692`.
+
+CAMS does not set the sensor's clock. The H10 resets its clock to a default time whenever it shuts down, so `timeStamp` may be far from the real time. To align Polar data with other data, use `sensorStartTime`.
+
+## Heart rate
+
+`dk.cachet.carp.polar.hr` streams the heart rate that the sensor computes. The H10 and H9 also report RR intervals: the times between heartbeats.
+
+Each measurement is a [`PolarHR`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarHR-class.html) with a list of `PolarHRSample` in `samples`. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `hr` | `int` | Heart rate in beats per minute. |
+| `rrsMs` | `List<int>` | RR intervals in milliseconds. May be empty. |
+| `contactStatus` | `bool` | `true` if the sensor has contact with the skin. |
+| `contactStatusSupported` | `bool` | `true` if the sensor can detect skin contact. |
+
+The `polar` plugin also reports a PPG quality value and a corrected heart rate, which CAMS does not store.
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.hr",
+  "samples": [
+    {
+      "hr": 64,
+      "rrsMs": [938],
+      "contactStatus": true,
+      "contactStatusSupported": true
+    }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## ECG
+
+`dk.cachet.carp.polar.ecg` streams a single-lead ECG from the H10 at 130 Hz. Polar describes the signal in [`H10_ECG_Explained.pdf`](https://github.com/carp-dk/carp.sensing-flutter/blob/main/packages/carp_polar_package/doc/H10_ECG_Explained.pdf), which comes with the package.
+
+Each measurement is a [`PolarECG`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarECG-class.html) with a list of `PolarECGSample` in `samples`. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeStamp` | `DateTime` | Time of the sample from the sensor's clock, in ISO 8601 local time. |
+| `voltage` | `int` | ECG voltage in microvolts (µV). |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.ecg",
+  "samples": [
+    { "timeStamp": "2026-10-26T15:03:12.096154", "voltage": -54 },
+    { "timeStamp": "2026-10-26T15:03:12.103846", "voltage": -42 },
+    { "timeStamp": "2026-10-26T15:03:12.111538", "voltage": -12 }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Acceleration
+
+`dk.cachet.carp.polar.accelerometer` streams acceleration on three axes, including gravity, from the H10 and the Verity Sense.
+
+Each measurement is a [`PolarAccelerometer`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarAccelerometer-class.html) with a list of `PolarAccelerometerSample` in `samples`. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeStamp` | `DateTime` | Time of the sample from the sensor's clock, in ISO 8601 local time. |
+| `x` | `int` | Acceleration along the x axis in milli-g, including gravity. |
+| `y` | `int` | Acceleration along the y axis in milli-g, including gravity. |
+| `z` | `int` | Acceleration along the z axis in milli-g, including gravity. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.accelerometer",
+  "samples": [
+    { "timeStamp": "2026-10-26T15:03:12.104692", "x": -23, "y": 980, "z": 105 },
+    { "timeStamp": "2026-10-26T15:03:12.109692", "x": -21, "y": 983, "z": 101 }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Angular velocity
+
+`dk.cachet.carp.polar.gyroscope` streams the angular velocity on three axes from the Verity Sense.
+
+Each measurement is a [`PolarGyroscope`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarGyroscope-class.html) with a list of `PolarGyroscopeSample` in `samples`. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeStamp` | `DateTime` | Time of the sample from the sensor's clock, in ISO 8601 local time. |
+| `x` | `double` | Angular velocity around the x axis in degrees per second. |
+| `y` | `double` | Angular velocity around the y axis in degrees per second. |
+| `z` | `double` | Angular velocity around the z axis in degrees per second. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.gyroscope",
+  "samples": [
+    { "timeStamp": "2026-10-26T15:03:12.104692", "x": 1.22, "y": -0.61, "z": 0.0 }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Magnetic field
+
+`dk.cachet.carp.polar.magnetometer` streams the magnetic field on three axes from the Verity Sense.
+
+Each measurement is a [`PolarMagnetometer`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarMagnetometer-class.html) with a list of `PolarMagnetometerSample` in `samples`. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeStamp` | `DateTime` | Time of the sample from the sensor's clock, in ISO 8601 local time. |
+| `x` | `double` | Magnetic field along the x axis in gauss. |
+| `y` | `double` | Magnetic field along the y axis in gauss. |
+| `z` | `double` | Magnetic field along the z axis in gauss. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.magnetometer",
+  "samples": [
+    { "timeStamp": "2026-10-26T15:03:12.104692", "x": 0.213, "y": -0.402, "z": 0.155 }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Photoplethysmography
+
+`dk.cachet.carp.polar.ppg` streams the raw signals of the optical heart rate sensor of the Verity Sense. The signals measure the light that the skin reflects, which changes with the blood volume under it.
+
+Each measurement is a [`PolarPPG`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarPPG-class.html) with these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `type` | `PpgDataType` | The layout of the optical channels: `ppg3_ambient1`, with three PPG channels and one ambient light channel, or `unknown`. |
+| `samples` | `List<PolarPPGSample>` | The samples in the batch. |
+
+Each `PolarPPGSample` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeStamp` | `DateTime` | Time of the sample from the sensor's clock, in ISO 8601 local time. |
+| `channelSamples` | `List<int>` | One raw sensor value per channel. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.ppg",
+  "samples": [
+    {
+      "timeStamp": "2026-10-26T15:03:12.104692",
+      "channelSamples": [263464, 270146, 255894, 2385]
+    }
+  ],
+  "type": "ppg3_ambient1"
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Pulse-to-pulse intervals
+
+`dk.cachet.carp.polar.ppi` streams the pulse-to-pulse intervals that the Verity Sense derives from its optical signal: the time from one pulse to the next. Polar's documentation of the Verity Sense notes three things:
+
+- the first batch arrives about 25 seconds after the stream starts;
+- while PPI runs, the heart rate updates only every 5 seconds;
+- the skin contact detection is unreliable, so do not rely on `skinContactStatus`.
+
+Each measurement is a [`PolarPPI`](https://pub.dev/documentation/carp_polar_package/latest/carp_polar_package/PolarPPI-class.html) with a list of `PolarPPISample` in `samples`. The samples have no time of their own. Each sample has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ppi` | `int` | Pulse-to-pulse interval in milliseconds. |
+| `errorEstimate` | `int` | Expected absolute error of `ppi` in milliseconds. Below 10 ms, the interval is probably very accurate. Above 30 ms, movement or loose contact may have disturbed it. |
+| `hr` | `int` | Heart rate in beats per minute. |
+| `blockerBit` | `bool` | `true` if the interval is invalid, for example because of movement. |
+| `skinContactStatus` | `bool` | `false` if the sensor detects poor or no skin contact. |
+| `skinContactSupported` | `bool` | `true` if the sensor can detect skin contact. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.polar.ppi",
+  "samples": [
+    {
+      "ppi": 875,
+      "errorEstimate": 6,
+      "hr": 68,
+      "blockerBit": false,
+      "skinContactStatus": true,
+      "skinContactSupported": true
+    }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>

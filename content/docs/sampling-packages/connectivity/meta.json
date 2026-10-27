@@ -1,0 +1,7 @@
+{
+  "title": "Connectivity Sampling",
+  "description": "carp_connectivity_package",
+  "icon": "Wifi",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Measures---", "connectivity-status", "wifi", "bluetooth", "beacons", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_connectivity_package)", "[API reference](https://pub.dev/documentation/carp_connectivity_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_connectivity_package)"]
+}

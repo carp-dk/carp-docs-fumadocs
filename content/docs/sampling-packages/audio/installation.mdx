@@ -1,0 +1,132 @@
+---
+title: Installation
+description: Add carp_audio_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+Add the package, give the app microphone access on Android and iOS, raise the iOS deployment target, and register the package:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_audio_package
+```
+
+The package runs on top of CARP Mobile Sensing (CAMS), so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first. The steps below add only what the audio measures need.
+
+</Step>
+<Step title="Configure Android">
+
+Add the microphone permission to `android/app/src/main/AndroidManifest.xml`, above the `<application>` element:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+```
+
+`NOISE` and `AUDIO` both need it: CAMS asks the participant for `Permission.microphone`, which is `RECORD_AUDIO` on Android. The package does not use the camera, so declare `CAMERA` only if your app captures images or videos itself.
+
+The package needs `minSdk` 24 or later, because `flutter_sound` and `audio_streamer` do. If `android/app/build.gradle.kts` sets a lower value, raise it to 24.
+
+</Step>
+<Step title="Configure iOS">
+
+`audio_streamer` requires iOS 16.0 or later, which is higher than the CAMS minimum. In Xcode, select **Runner → General** and set **Minimum Deployments** to 16.0. If `ios/Podfile` has a `platform` line, set it to the same version:
+
+```ruby title="ios/Podfile"
+platform :ios, '16.0'
+```
+
+Add the microphone usage description and the `audio` background mode to `ios/Runner/Info.plist`. If the file already has `UIBackgroundModes`, add `audio` to its array:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSMicrophoneUsageDescription</key>
+<string>This app uses the microphone to measure noise levels and record sound for a research study.</string>
+<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+</array>
+```
+
+Noise sampling and recordings need the `audio` background mode to continue when the app moves to the background. Add `NSCameraUsageDescription` only if your app captures images or videos itself.
+
+`AUDIO` checks the microphone permission through `permission_handler` and records nothing until the check passes. How you enable microphone access in `permission_handler` depends on how Flutter builds the iOS plugins:
+
+<Tabs items={['Swift Package Manager', 'CocoaPods']}>
+<Tab value="Swift Package Manager">
+
+No change is needed: `permission_handler_apple` enables microphone access when it finds `NSMicrophoneUsageDescription` in `Info.plist`.
+
+`flutter_sound` is available through CocoaPods only, so CocoaPods must stay installed for the iOS build.
+
+</Tab>
+<Tab value="CocoaPods">
+
+Enable microphone access in the `post_install` block of the Podfile. If the block already sets `GCC_PREPROCESSOR_DEFINITIONS`, add the macro to that list:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_MICROPHONE=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure the client:
+
+```dart
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_audio_package/media.dart'; // [!code ++]
+
+void main() async {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(MediaSamplingPackage()); // [!code ++]
+
+  await SmartPhoneClientManager().configure();
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering the package makes its four measure types known to CAMS and registers the JSON types of their data. `configure()` restores the studies saved on the phone and resumes their sampling, which needs the package's measure types.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No audio recordings on iOS">
+
+Enable microphone access in `permission_handler`: add `NSMicrophoneUsageDescription` to `Info.plist` with Swift Package Manager, or the `PERMISSION_MICROPHONE=1` macro to the Podfile with CocoaPods. `AUDIO` records nothing while `permission_handler` reports the microphone permission as denied.
+
+</Accordion>
+<Accordion title="The iOS build fails on the deployment target">
+
+Set **Minimum Deployments** to 16.0 in Xcode and `platform :ios, '16.0'` in the Podfile, then run `pod install` in the `ios/` folder again. `audio_streamer` 5.0.0 does not build for earlier iOS versions.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/audio/quickstart" icon="Bolt">
+
+Build an app that samples noise and records audio.
+
+</Card>
+</Cards>

@@ -1,0 +1,144 @@
+---
+title: Communication Sampling Package
+description: Collect phone calls, text messages and calendar events in a CARP Mobile Sensing study.
+icon: Call
+---
+
+`carp_communication_package` adds the phone's call log, its text messages (SMS) and its calendar events to a [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) study. Use it in studies of social behavior and daily routines, such as how often a participant calls, texts or has appointments.
+
+Calls and text messages come from Android only, because iOS gives apps no access to them. Calendar events come from Android and iOS. The package reads the call log with the [`call_e_log`](https://pub.dev/packages/call_e_log) plugin, text messages with [`another_telephony`](https://pub.dev/packages/another_telephony) and calendars with [`device_calendar_plus`](https://pub.dev/packages/device_calendar_plus).
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_communication_package" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_communication_package/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_communication_package" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+<Callout type="warning" title="Google Play restrictions">
+
+Google Play treats the SMS and Call Log permissions as restricted: only apps with an approved use can request them. Research is not one of the exceptions, and an app that requests them can be rejected. To publish an app that collects only the calendar, see [Google Play policy](/docs/sampling-packages/communication/installation#google-play-policy).
+
+</Callout>
+
+## Features
+
+<Cards>
+<Card title="Phone calls" icon="Call">
+
+The calls in the call log since the last collection: call type, duration, number and contact name. Android only.
+
+</Card>
+<Card title="Text messages" icon="Sms">
+
+The messages in the inbox and the sent folder, with the other party's number, the text and the delivery status. Android only.
+
+</Card>
+<Card title="Calendar" icon="CalendarMonth">
+
+The events in all calendars on the phone, including recurring and all-day events. Android and iOS.
+
+</Card>
+<Card title="Privacy" icon="Shield">
+
+With the default privacy schema in the protocol, phone numbers, contact names, message texts and event titles are stored as SHA-1 hashes.
+
+</Card>
+</Cards>
+
+## Measure types
+
+| Measure type | Data | Android | iOS |
+| --- | --- | --- | --- |
+| [`dk.cachet.carp.phonelog`](/docs/sampling-packages/communication/calls-and-messages#phone-log) | The calls in the call log since the last run | Yes | No |
+| [`dk.cachet.carp.textmessagelog`](/docs/sampling-packages/communication/calls-and-messages#text-message-log) | All messages in the inbox and the sent folder | Yes | No |
+| [`dk.cachet.carp.textmessage`](/docs/sampling-packages/communication/calls-and-messages#incoming-text-messages) | Each text message as it arrives | Yes | No |
+| [`dk.cachet.carp.calendar`](/docs/sampling-packages/communication/calendar) | The calendar events since the last run | Yes | Yes |
+
+`dk.cachet.carp.textmessage` is event-based; the other three are one-time measures that collect once each time their task is triggered. For the difference, see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures).
+
+<Callout type="warning" title="Known issues in version 2.1.0">
+
+The call and message times in the phone log and the text message log fall in January 1970, and `TEXT_MESSAGE` adds no measurements. See [Calls and text messages](/docs/sampling-packages/communication/calls-and-messages) for how to recover the times.
+
+</Callout>
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| Dart SDK | 3.10 or later |
+| Flutter | 3.38.1 or later |
+| `carp_mobile_sensing` | 2.2.0 or later |
+| Android | API level 24 (Android 7.0) or later |
+| iOS | 15.0 or later (calendar only) |
+
+## How it works
+
+Adding the package to a study takes three steps:
+
+<Steps>
+<Step title="Register the package">
+
+Registering [`CommunicationSamplingPackage`](https://pub.dev/documentation/carp_communication_package/latest/communication/CommunicationSamplingPackage-class.html) makes the four measure types known to CAMS and adds their privacy transformers to the default privacy schema.
+
+</Step>
+<Step title="Add the measures to a protocol">
+
+The measures run on the phone, the protocol's primary device. Trigger the one-time measures repeatedly, for example every few hours.
+
+</Step>
+<Step title="Deploy the protocol">
+
+CAMS asks the participant for the phone, SMS and calendar permissions that the measures need, and then collects data each time a trigger fires.
+
+</Step>
+</Steps>
+
+This protocol collects the calendar every 3 hours and hashes event titles and descriptions:
+
+```dart
+CarpMobileSensing.ensureInitialized();
+SamplingPackageRegistry().register(CommunicationSamplingPackage()); // [!code highlight]
+
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Calendar events',
+  dataEndPoint: SQLiteDataEndPoint(),
+  privacySchemaName: PrivacySchema.DEFAULT, // [!code highlight]
+);
+final phone = Smartphone();
+protocol.addPrimaryDevice(phone);
+
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 3)),
+  BackgroundTask(
+    measures: [Measure(type: CommunicationSamplingPackage.CALENDAR)], // [!code highlight]
+  ),
+  phone,
+);
+```
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/sampling-packages/communication/installation" icon="Download">
+
+Add the package to a CAMS app and configure Android and iOS.
+
+</Card>
+<Card title="Quickstart" href="/docs/sampling-packages/communication/quickstart" icon="Bolt">
+
+Build an app that collects calls, messages and calendar events.
+
+</Card>
+<Card title="Calls and text messages" href="/docs/sampling-packages/communication/calls-and-messages" icon="Sms">
+
+What the call and message measures collect, and their data.
+
+</Card>
+<Card title="Privacy" href="/docs/sampling-packages/communication/privacy" icon="Shield">
+
+Hash phone numbers, message texts and event titles before storage.
+
+</Card>
+</Cards>

@@ -1,0 +1,189 @@
+---
+title: Installation
+description: Add research_package to a Flutter app, register its localization delegates and add its translation files.
+icon: Download
+---
+
+Setting up `research_package` in a Flutter app takes four steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add research_package
+flutter pub add "flutter_localizations@{sdk: flutter}"
+```
+
+`flutter_localizations` holds Flutter's own Material and Cupertino texts for languages other than English. Research Package shows Material dialogs and a Cupertino date picker, which fail in other languages without these texts.
+
+<Callout type="info">
+
+In an app that also uses `carp_survey_package` or `cognition_package`, the first command resolves `research_package` 3.2.0, because both packages require version 3. Version 3.2.0 brings the `health` and `permission_handler` plugins and their platform setup, as described in Survey Sampling [Installation](/docs/sampling-packages/survey/installation).
+
+</Callout>
+
+</Step>
+<Step title="Initialize Research Package">
+
+In `lib/main.dart`, call `ResearchPackage.ensureInitialized()` at the start of `main()`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:research_package/research_package.dart'; // [!code ++]
+
+void main() {
+  ResearchPackage.ensureInitialized(); // [!code ++]
+  runApp(const MyApp());
+}
+```
+
+`ensureInitialized()` registers the model classes that `fromJson()` needs to load tasks and results from JSON. If a consent flow asks for permissions, also pass a permission requester as `permissionRequester`. See [Permissions](/docs/flutter-plugins/research-package/permissions).
+
+</Step>
+<Step title="Register the localization delegates">
+
+Add the delegates and the languages your app supports to your `MaterialApp`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // [!code ++]
+import 'package:research_package/research_package.dart';
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    supportedLocales: const [Locale('en'), Locale('da')], // [!code ++]
+    localizationsDelegates: [ // [!code ++]
+      RPLocalizations.delegate, // [!code ++]
+      GlobalMaterialLocalizations.delegate, // [!code ++]
+      GlobalCupertinoLocalizations.delegate, // [!code ++]
+      GlobalWidgetsLocalizations.delegate, // [!code ++]
+    ], // [!code ++]
+    home: const HomePage(),
+  );
+}
+```
+
+`RPLocalizations.delegate` loads the package's own texts, which exist in Chinese (Simplified), Danish, English, French, Hungarian, Portuguese and Spanish. It then loads your app's translation file for the language and lets it override the package's texts. For any other language, your file must also translate the package's texts, or the screens show their keys.
+
+Write the list without `const`: `RPLocalizations.delegate` is not a constant.
+
+</Step>
+<Step title="Add the translation files">
+
+In `assets/lang/`, create one file for each language in `supportedLocales`, named after the language code: `en.json` and `da.json` for the app above. A file holds your translations as a JSON object, which may be empty until you add any:
+
+```json title="assets/lang/en.json"
+{}
+```
+
+Then declare the folder as an asset:
+
+```yaml title="pubspec.yaml"
+flutter:
+  uses-material-design: true
+  assets: # [!code ++]
+    - assets/lang/ # [!code ++]
+```
+
+<Callout type="warning">
+
+`RPLocalizations.delegate` requires these files. When the file for the current language is missing, the delegate fails to load, and the app does not show its first screen. An app without translation files uses `RPLocalizationsDelegate(loaders: const [])` instead, which loads only the package's own texts.
+
+</Callout>
+
+For the file format, keys and plurals, see [Localization](/docs/flutter-plugins/research-package/localization).
+
+</Step>
+</Steps>
+
+## Add media and sound assets
+
+Instruction steps, image choices and timer steps load files from your app's assets. Add only the ones your tasks use:
+
+| Asset | Needed when | Path in the task |
+| --- | --- | --- |
+| Image | An instruction step has an `imagePath`, or an image choice has an `imageUrl`. | The full asset key, such as `assets/images/sleep.png` |
+| Audio | An instruction step has an `audioPath`. | Relative to `assets/`, such as `audio/breathing.mp3` for `assets/audio/breathing.mp3` |
+| Video | An instruction step has a `videoPath`. | The full asset key, such as `assets/video/intro.mp4` |
+| Timer sound | A timer step has `playSound: true`. | Fixed to `assets/audio/RPTimerStepSound.mp3` |
+
+The package does not bundle the timer sound into your app. Copy [`RPTimerStepSound.mp3`](https://github.com/carp-dk/research.package/blob/master/example/assets/audio/RPTimerStepSound.mp3) from the example app, or use your own sound under that name.
+
+Declare each folder you use:
+
+```yaml title="pubspec.yaml"
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/lang/
+    - assets/images/ # [!code ++]
+    - assets/audio/ # [!code ++]
+    - assets/video/ # [!code ++]
+```
+
+`imagePath`, `audioPath` and `videoPath` also accept URLs. See [Instruction step](/docs/flutter-plugins/research-package/tasks-and-steps#instruction-step).
+
+## Configure Android and iOS
+
+Research Package asks for no permissions and needs no manifest or `Info.plist` entries for surveys, consent screens and asset media. Each platform still has a minimum version:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+Set `minSdk` to 24 or later. The default `flutter.minSdkVersion` of current Flutter releases is 24, so a new app needs no change.
+
+Flutter declares the `INTERNET` permission only for debug and profile builds. To load media from a URL in a release build, add it to `android/app/src/main/AndroidManifest.xml`, directly above `<application`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.INTERNET"/>
+```
+
+</Tab>
+<Tab value="iOS">
+
+Set the deployment target to 15.0 or later, which is the default of new Flutter apps. For an older project, select **Runner → General** in Xcode and set **Minimum Deployments** to 15.0.
+
+</Tab>
+</Tabs>
+
+Load media from `https` URLs: by default, both platforms block video and audio over plain `http`.
+
+A consent flow that sets `askPermission` asks through your app's permission requester, which brings its own platform setup. See [Permissions](/docs/flutter-plugins/research-package/permissions).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The app shows a blank screen at startup">
+
+Add a translation file for every language in `supportedLocales`, and declare `assets/lang/` in `pubspec.yaml`. Without the file for the current language, `RPLocalizations.delegate` fails to load, and Flutter does not show the first screen. An app without translations uses `RPLocalizationsDelegate(loaders: const [])` instead.
+
+</Accordion>
+<Accordion title="Error: No CupertinoLocalizations found">
+
+Add `flutter_localizations` and its three delegates, as in the third step. The app supports a language other than English, and the date picker and dialogs need Flutter's texts for it.
+
+</Accordion>
+<Accordion title="fromJson throws a SerializationException">
+
+Call `ResearchPackage.ensureInitialized()` before the first `fromJson()`. Until then, no model class is registered for JSON.
+
+</Accordion>
+<Accordion title="The timer step plays no sound">
+
+Add the file `assets/audio/RPTimerStepSound.mp3` to your app, and declare `assets/audio/` in `pubspec.yaml`. When the file is missing, the step prints an error and continues without sound.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/flutter-plugins/research-package/quickstart" icon="Bolt">
+
+Build a short survey and print the answers as JSON.
+
+</Card>
+</Cards>

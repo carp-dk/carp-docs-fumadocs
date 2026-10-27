@@ -1,0 +1,143 @@
+---
+title: Apps Sampling Package
+description: Collect the installed apps and per-app usage time from Android phones in a CARP Mobile Sensing study.
+icon: Apps
+---
+
+`carp_apps_package` adds two measures to a [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) study: the installed apps and how long each app was in the foreground. Use them when a study looks at how participants use their phone.
+
+The package reads the app list with the [`installed_apps`](https://pub.dev/packages/installed_apps) plugin and the usage times from Android's usage statistics with the [`app_usage`](https://pub.dev/packages/app_usage) plugin.
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_apps_package" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_apps_package/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_apps_package" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+<Callout type="warning" title="Android only">
+
+Both measures work on Android only. On iOS, CAMS skips them and logs a warning, so a protocol that contains them still runs on iOS, without app data.
+
+</Callout>
+
+## Features
+
+<Cards>
+<Card title="Installed apps" icon="Apps">
+
+Lists the non-system apps that the participant can open from the launcher, with package name, version and last update time.
+
+</Card>
+<Card title="App usage" icon="Timer">
+
+Records how long each app was in the foreground over a time window, from Android's usage statistics.
+
+</Card>
+</Cards>
+
+## Measure types
+
+The package has two [one-time](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure types, which collect once each time their trigger fires:
+
+| Measure type | Data | Android | iOS |
+| --- | --- | --- | --- |
+| [`dk.cachet.carp.apps`](/docs/sampling-packages/apps/installed-apps) | Installed apps that have a launcher entry, without system apps | Yes | No |
+| [`dk.cachet.carp.appusage`](/docs/sampling-packages/apps/app-usage) | Foreground time per app over a time window | Yes | No |
+
+For the measure types of the other sampling packages, see [Measure types](/docs/mobile-sensing/measure-types).
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| Dart SDK | 3.10 or later, the CAMS minimum |
+| Flutter | 3.38.1 or later, the CAMS minimum |
+| `carp_mobile_sensing` | 2.2.0 or later |
+| Android | API level 24 (Android 7.0) or later, the CAMS minimum |
+| iOS | Not supported |
+
+## How it works
+
+Adding the package to a study takes three steps:
+
+<Steps>
+<Step title="Register the package">
+
+Registering an [`AppsSamplingPackage`](https://pub.dev/documentation/carp_apps_package/latest/apps/AppsSamplingPackage-class.html) in the [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) makes the two measure types and their data classes known to CAMS.
+
+</Step>
+<Step title="Add the measures with a repeating trigger">
+
+One-time measures collect only when their trigger fires, so use a trigger that repeats, such as a [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html). App usage also needs its own [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html), so that each collection continues where the previous one ended, also after an app restart.
+
+</Step>
+<Step title="Deploy and grant usage access">
+
+After you deploy the protocol, CAMS collects both measures each time the trigger fires. For app usage, the participant must also turn on **Usage access** for the app in Android settings. The `app_usage` plugin opens that screen when access is missing.
+
+</Step>
+</Steps>
+
+This example registers the package and collects both measures once a day:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_apps_package/apps.dart';
+
+void main() {
+  CarpMobileSensing.ensureInitialized();
+  SamplingPackageRegistry().register(AppsSamplingPackage()); // [!code highlight]
+
+  final phone = Smartphone();
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Daily app use',
+    dataEndPoint: SQLiteDataEndPoint(),
+  )..addPrimaryDevice(phone);
+
+  // One-time measures collect when the trigger fires: here once a day
+  protocol.addTaskControl(
+    PeriodicTrigger(period: const Duration(days: 1)),
+    BackgroundTask(
+      measures: [
+        Measure(type: AppsSamplingPackage.APPS), // [!code highlight]
+        Measure(
+          type: AppsSamplingPackage.APP_USAGE, // [!code highlight]
+          samplingConfiguration: HistoricSamplingConfiguration( // [!code highlight]
+            past: const Duration(days: 1),
+          ),
+        ),
+      ],
+    ),
+    phone,
+  );
+
+  // ... deploy the protocol and start sampling
+}
+```
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/sampling-packages/apps/installation" icon="Download">
+
+Add the package and the Android manifest entries.
+
+</Card>
+<Card title="Quickstart" href="/docs/sampling-packages/apps/quickstart" icon="Bolt">
+
+Build an app that collects both measures and prints them.
+
+</Card>
+<Card title="Installed apps" href="/docs/sampling-packages/apps/installed-apps" icon="Apps">
+
+The apps installed on an Android phone, with version and update time.
+
+</Card>
+<Card title="App usage" href="/docs/sampling-packages/apps/app-usage" icon="Timer">
+
+Foreground time per app over a time window, from Android usage statistics.
+
+</Card>
+</Cards>

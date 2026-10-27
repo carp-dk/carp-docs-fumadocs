@@ -1,0 +1,309 @@
+---
+title: Package setup
+description: Create a Flutter package for your measures, add the CAMS dependencies, lay out the library and generate its JSON code.
+---
+
+Set up the Flutter package that holds your measures, from its dependencies to its generated JSON code. For the example package, `barometer_sampling_package`, this takes six steps:
+
+<Steps>
+<Step title="Create the package">
+
+```bash
+flutter create --template=package barometer_sampling_package
+cd barometer_sampling_package
+```
+
+The example reads the barometer through an existing plugin, `sensors_plus`, so it has no platform code of its own and the `package` template fits. Delete `test/barometer_sampling_package_test.dart`, which tests the template's `Calculator` class, and replace the placeholder in `LICENSE` with your license before you publish.
+
+</Step>
+<Step title="Add the dependencies">
+
+```bash
+flutter pub add carp_mobile_sensing carp_core carp_serializable 'json_annotation:^4.12.0' 'sensors_plus:^7.0.0'
+flutter pub add --dev build_runner json_serializable
+```
+
+Then set the SDK constraints to the minimums of CARP Mobile Sensing (CAMS) 2.5.1 and list the platforms. The example's `pubspec.yaml`:
+
+```yaml title="pubspec.yaml"
+name: barometer_sampling_package
+description: A CARP Mobile Sensing sampling package that collects air pressure from the phone's barometer.
+version: 0.1.0
+# An example package; remove this line to publish it
+publish_to: none
+
+environment:
+  sdk: ^3.10.0 # [!code highlight]
+  flutter: ">=3.38.1" # [!code highlight]
+
+# Like CAMS, this package runs only on Android and iOS
+platforms:
+  android:
+  ios:
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  carp_serializable: ^3.0.0
+  carp_core: ^2.2.2
+  carp_mobile_sensing: ^2.5.1
+
+  json_annotation: ^4.12.0 # [!code highlight]
+  sensors_plus: ^7.0.0 # [!code highlight]
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.10.0
+  json_serializable: ^6.11.0
+```
+
+`flutter pub add` writes the newest versions as minimums, so your dev dependency constraints may be higher than the example's. Each entry has a reason:
+
+| Entry | Why |
+| --- | --- |
+| `sdk`, `flutter` | The minimums of CAMS 2.5.1. The template sets your own SDK version as the minimum, which shuts out apps on older versions that CAMS supports. The generated JSON code needs Dart 3.8 or later. |
+| `platforms` | Declares Android and iOS, the platforms that CAMS runs on. |
+| `carp_core`, `carp_serializable` | The library imports both directly, and CAMS does not export them. |
+| `json_annotation` | Current versions of `json_serializable` warn when the minimum is below 4.12.0. |
+| `sensors_plus` | The constraint that CAMS 2.5.1 uses, so the package never asks an app for another major version than CAMS does. |
+| `build_runner`, `json_serializable` | Generate the JSON code. Apps that use the package get the generated file and never run them. |
+| `publish_to: none` | Only for the example. Remove it to publish your package. |
+
+</Step>
+<Step title="Set the analysis options">
+
+Replace `analysis_options.yaml` with the example's, which adds the checks that CAMS uses:
+
+```yaml title="analysis_options.yaml"
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude: [build/**, example/build/**]
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    # CAMS names measure types in capitals, for example AIR_PRESSURE
+    constant_identifier_names: false # [!code highlight]
+    cancel_subscriptions: true
+    depend_on_referenced_packages: true # [!code highlight]
+    use_string_in_part_of_directives: true
+```
+
+Each option has a reason:
+
+| Option | Why |
+| --- | --- |
+| `strict-casts`, `strict-inference`, `strict-raw-types` | Report implicit casts from `dynamic` and missing type arguments, which compile but can fail at runtime. CAMS uses the same modes. |
+| `constant_identifier_names: false` | Allows measure type constants in capitals, such as `AIR_PRESSURE`, as in CAMS. |
+| `cancel_subscriptions` | Reports a stream subscription that is never canceled, which keeps a sensor running after its probe stops. |
+| `depend_on_referenced_packages` | Reports an import of a package that is not a direct dependency. |
+| `use_string_in_part_of_directives` | Requires a part file to name its library file, as in `part of 'barometer_sampling_package.dart';`. |
+
+</Step>
+<Step title="Lay out the library">
+
+Give the package one library file with a part file per concern, as the CARP sampling packages do:
+
+<Files>
+<Folder name="barometer_sampling_package" defaultOpen>
+<File name="pubspec.yaml" />
+<File name="analysis_options.yaml" />
+<File name="README.md" />
+<File name="CHANGELOG.md" />
+<Folder name="lib" defaultOpen>
+<File name="barometer_sampling_package.dart" />
+<File name="barometer_package.dart" />
+<File name="barometer_data.dart" />
+<File name="barometer_configuration.dart" />
+<File name="barometer_probes.dart" />
+<File name="barometer_privacy.dart" />
+<File name="barometer_sampling_package.g.dart" />
+</Folder>
+<Folder name="test" defaultOpen>
+<File name="json_test.dart" />
+<File name="package_test.dart" />
+<File name="probes_test.dart" />
+</Folder>
+<Folder name="example" defaultOpen>
+<File name="pubspec.yaml" />
+<Folder name="lib" defaultOpen>
+<File name="main.dart" />
+</Folder>
+</Folder>
+</Folder>
+</Files>
+
+Each page of the guide fills one part of the package:
+
+| File | Holds | Page |
+| --- | --- | --- |
+| `lib/barometer_sampling_package.dart` | The library: imports and `part` directives | Package setup |
+| `lib/barometer_data.dart` | `AirPressure` and `AirPressureSummary` | [Data classes](/docs/mobile-sensing/building-sampling-packages/data-classes) |
+| `lib/barometer_probes.dart` | `AirPressureProbe` and `AirPressureSummaryProbe` | [Probes](/docs/mobile-sensing/building-sampling-packages/probes) |
+| `lib/barometer_configuration.dart` | `AirPressureSummarySamplingConfiguration` | [Sampling configurations](/docs/mobile-sensing/building-sampling-packages/sampling-configurations) |
+| `lib/barometer_package.dart` | `BarometerSamplingPackage` | [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class) |
+| `lib/barometer_privacy.dart` | `roundAirPressure` and `roundAirPressureSummary` | [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats) |
+| `lib/barometer_sampling_package.g.dart` | The JSON functions that `build_runner` generates | Package setup |
+| `test/` | The unit tests | [Testing and publishing](/docs/mobile-sensing/building-sampling-packages/testing-and-publishing) |
+| `example/` | An app that runs the package | [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class) |
+
+Each part file starts with `part of 'barometer_sampling_package.dart';`. Create the five part files now with only that line; the following pages fill them in. Then replace the contents of `lib/barometer_sampling_package.dart` with:
+
+```dart title="lib/barometer_sampling_package.dart"
+/// A CARP Mobile Sensing (CAMS) sampling package that collects air pressure
+/// from the phone's barometer
+///
+/// It adds two measure types:
+///  * [BarometerSamplingPackage.AIR_PRESSURE]: one [AirPressure] per
+///    barometer reading
+///  * [BarometerSamplingPackage.AIR_PRESSURE_SUMMARY]: one
+///    [AirPressureSummary] per sampling window
+///
+/// Register the package before you use its measure types in a protocol:
+///
+/// ```dart
+/// CarpMobileSensing.ensureInitialized();
+/// SamplingPackageRegistry().register(BarometerSamplingPackage());
+/// ```
+library;
+
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:carp_core/carp_core.dart' hide Smartphone; // [!code highlight]
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_serializable/carp_serializable.dart';
+import 'package:json_annotation/json_annotation.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+
+part 'barometer_package.dart';
+part 'barometer_data.dart';
+part 'barometer_configuration.dart';
+part 'barometer_probes.dart';
+part 'barometer_privacy.dart';
+part 'barometer_sampling_package.g.dart'; // [!code highlight]
+```
+
+With one library, `json_serializable` writes one generated file for all part files. Every part file can use the library's imports and the generated functions, which are private to the library. Apps import only `package:barometer_sampling_package/barometer_sampling_package.dart`.
+
+</Step>
+<Step title="Name the measure types">
+
+Declare each measure type as a string constant on the package class, in `lib/barometer_package.dart`:
+
+```dart
+class BarometerSamplingPackage extends SmartphoneSamplingPackage {
+  /// The namespace of the measure types in this package
+  ///
+  /// A reverse domain name that you control, not the CARP namespace
+  /// `dk.cachet.carp`
+  static const String NAMESPACE = 'com.example'; // [!code highlight]
+
+  /// Measure type for air pressure readings from the phone's barometer
+  ///  * Event-based measure, one measurement per reading
+  ///  * Uses the [Smartphone] primary device
+  ///  * Uses an [IntervalSamplingConfiguration], whose interval is the
+  ///    requested time between readings; default 1 second
+  ///  * Collected as [AirPressure] data
+  static const String AIR_PRESSURE = '$NAMESPACE.airpressure'; // [!code highlight]
+
+  /// Measure type for a summary of the air pressure in a sampling window
+  ///  * Event-based (periodic) measure, one measurement per window
+  ///  * Uses the [Smartphone] primary device
+  ///  * Uses an [AirPressureSummarySamplingConfiguration] or a
+  ///    [PeriodicSamplingConfiguration]; default a 10-second window every
+  ///    5 minutes, with 1 second between readings
+  ///  * Collected as [AirPressureSummary] data
+  static const String AIR_PRESSURE_SUMMARY = '$NAMESPACE.airpressuresummary'; // [!code highlight]
+
+  // ... DEFAULT_SAMPLING_PERIOD, samplingSchemes, create() and onRegister()
+}
+```
+
+For the complete class, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class); until you add its other members, the analyzer reports them as missing.
+
+A measure type is a namespace and a name, joined by a period. Three rules keep it working:
+
+- **Use a namespace that you control:** a reverse domain name, such as `org.mylab.sensing`, not CARP's `dk.cachet.carp`. A measure type is a global key, and when two packages declare it, CAMS logs only a warning. It then takes the probes from the first registered package and everything else from the last.
+- **Use the data class name in lowercase as the name:** `airpressure` for `AirPressure`, the pattern of CARP's own types. The name may not contain periods.
+- **Do not repeat the name earlier in the string:** CAMS takes the text after the last period as the name and cuts the namespace off where that name first occurs. `com.example.example` therefore turns into `com.example`, and `com.example.ample` into `com.e.ample`. Lookups by the original string then fail, and data is stored under the wrong type.
+
+The same string must appear in four places, or data goes missing:
+
+- the type of the measures in a protocol;
+- a key in the package's sampling schemes;
+- a case in the `switch` of its `create()` method;
+- the `jsonType` of the data class.
+
+One constant keeps all four equal.
+
+</Step>
+<Step title="Generate the JSON code">
+
+```bash
+dart run build_runner build
+```
+
+Run the generator in the package folder after you write the data classes on the next page. Run it again after each change to a class annotated with `@JsonSerializable`.
+
+The generator writes `lib/barometer_sampling_package.g.dart` with the JSON functions of every class in the library. To regenerate on every save while you work, run `dart run build_runner watch` instead.
+
+Older guides add `--delete-conflicting-outputs`. `build_runner` 2.7.0 and later always delete conflicting outputs. Current versions ignore the flag and warn: "These options have been removed and were ignored: --delete-conflicting-outputs".
+
+Commit the generated file and publish it with the package: apps that depend on the package do not run the generator.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The analyzer reports that the generated file is missing">
+
+Run `dart run build_runner build`. Until `lib/barometer_sampling_package.g.dart` exists, the analyzer reports `uri_has_not_been_generated` for its `part` directive and undefined names such as `_$AirPressureFromJson` in the part files.
+
+</Accordion>
+<Accordion title="build_runner warns about the json_annotation constraint">
+
+Raise the minimum version of `json_annotation`:
+
+```bash
+flutter pub add 'json_annotation:^4.12.0'
+```
+
+With a lower minimum, `json_serializable` prints this warning, with your constraint in it, and still generates the code:
+
+```text
+The version constraint "^4.9.0" on json_annotation allows versions before 4.12.0 which is not allowed.
+```
+
+</Accordion>
+<Accordion title="The analyzer reports ambiguous_import for Smartphone">
+
+Import `carp_core` with `hide Smartphone`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+```
+
+`carp_core` and CAMS both define a `Smartphone` class. A library that imports both and uses `Smartphone` fails with `ambiguous_import`, so CAMS and its sampling packages hide the `carp_core` class.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Data classes" href="/docs/mobile-sensing/building-sampling-packages/data-classes" icon="Dataset">
+
+Define the classes that hold the values of each measurement.
+
+</Card>
+</Cards>

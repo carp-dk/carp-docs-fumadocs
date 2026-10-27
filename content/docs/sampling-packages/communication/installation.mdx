@@ -1,0 +1,189 @@
+---
+title: Installation
+description: Add carp_communication_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+The package builds on the CARP Mobile Sensing (CAMS) setup and adds the permissions that its measures need. Set it up in four steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_communication_package
+```
+
+The package runs on top of CAMS, so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first. The steps below add only what the communication measures need.
+
+</Step>
+<Step title="Configure Android">
+
+Each measure needs its own manifest entries, and CAMS asks the participant for one `permission_handler` permission per measure:
+
+| Measure | Manifest entries | CAMS asks for |
+| --- | --- | --- |
+| `PHONE_LOG` | `READ_CALL_LOG` and `READ_PHONE_STATE`, which `call_e_log` adds by itself | `Permission.phone` |
+| `TEXT_MESSAGE_LOG` | `READ_SMS` | `Permission.sms` |
+| `TEXT_MESSAGE` | `RECEIVE_SMS` and the `IncomingSmsReceiver` receiver | `Permission.phone` |
+| `CALENDAR` | `READ_CALENDAR` and `WRITE_CALENDAR` | `Permission.calendarFullAccess` |
+
+Add the permissions of the measures you use to `android/app/src/main/AndroidManifest.xml`, directly above `<application`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.READ_SMS"/>
+<uses-permission android:name="android.permission.RECEIVE_SMS"/>
+<uses-permission android:name="android.permission.READ_CALENDAR"/>
+<uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+```
+
+The calendar needs both calendar permissions, although the package only reads: `permission_handler` and `device_calendar_plus` refuse calendar access unless both are declared.
+
+For `TEXT_MESSAGE`, also declare the receiver of `another_telephony` inside `<application>`. It passes incoming messages to the app:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<receiver android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
+    android:permission="android.permission.BROADCAST_SMS"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+    </intent-filter>
+</receiver>
+```
+
+In version 2.1.0, `TEXT_MESSAGE` adds no measurements. See [Incoming text messages](/docs/sampling-packages/communication/calls-and-messages#incoming-text-messages).
+
+On Android, CAMS starts a measure only when `permission_handler` reports its permission as granted. `permission_handler` reports a group as granted only when the participant granted every permission of the group that the merged manifest declares. If your app or another plugin declares more phone permissions, such as `CALL_PHONE`, the participant must grant them too before `PHONE_LOG` starts.
+
+The package needs `minSdk` 24 or later. If `android/app/build.gradle.kts` sets a lower value, raise it to 24.
+
+</Step>
+<Step title="Configure iOS">
+
+Only `CALENDAR` runs on iOS. Add the calendar usage descriptions to `ios/Runner/Info.plist`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSCalendarsUsageDescription</key>
+<string>This app reads your calendar events for a research study.</string>
+<key>NSCalendarsFullAccessUsageDescription</key>
+<string>This app reads your calendar events for a research study.</string>
+```
+
+`device_calendar_plus` refuses to read calendars without `NSCalendarsUsageDescription`, on every iOS version. iOS 17 or later shows the `NSCalendarsFullAccessUsageDescription` text when the app asks for full calendar access.
+
+CAMS asks for calendar access through `permission_handler`, which includes only the permissions your build enables:
+
+<Tabs items={['Swift Package Manager', 'CocoaPods']}>
+<Tab value="Swift Package Manager">
+
+`permission_handler_apple` enables calendar access when it finds the two keys in `Info.plist`, so no other change is needed. After you change the keys, delete Xcode's derived data once so that Xcode reads them again:
+
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData
+```
+
+</Tab>
+<Tab value="CocoaPods">
+
+Enable calendar access in the `post_install` block of the Podfile. If the block already sets `GCC_PREPROCESSOR_DEFINITIONS`, add the two macros to that list:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_EVENTS=1', # [!code ++]
+        'PERMISSION_EVENTS_FULL_ACCESS=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+</Tab>
+</Tabs>
+
+Without calendar access in `permission_handler`, CAMS cannot ask when the study is deployed, and iOS asks the participant when the calendar measure first runs.
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure the client:
+
+```dart
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_communication_package/communication.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(CommunicationSamplingPackage()); // [!code ++]
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering the package makes its four measure types and the JSON types of their data known to CAMS. It also adds its privacy transformers to the default privacy schema. `configure()` restores the studies saved on the phone and needs these types to read them.
+
+</Step>
+</Steps>
+
+## Google Play policy
+
+Google Play treats `READ_SMS`, `RECEIVE_SMS`, `SEND_SMS` and `READ_CALL_LOG` as restricted SMS and Call Log permissions. Only apps with an approved use can request them, and research is not one of the exceptions.
+
+An app that collects calls or text messages can therefore be rejected. See Google Play's [policy on SMS and Call Log permissions](https://support.google.com/googleplay/android-developer/answer/10208820).
+
+Two plugins add permissions to every app that depends on the package, also when it only collects the calendar:
+
+| Plugin | Permissions it adds | Used by |
+| --- | --- | --- |
+| `call_e_log` | `READ_CALL_LOG`, `READ_PHONE_STATE` | `PHONE_LOG` |
+| `another_telephony` | `ACCESS_COARSE_LOCATION` | None in this package |
+
+To publish an app that collects only the calendar, remove the restricted permissions from the merged manifest. Add the `tools` namespace to `<manifest>` and the marked lines:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.READ_CALL_LOG" tools:node="remove"/> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.READ_SMS" tools:node="remove"/> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.SEND_SMS" tools:node="remove"/> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove"/> <!-- [!code ++] -->
+    <!-- ... the rest of your manifest -->
+</manifest>
+```
+
+`tools:node="remove"` drops a permission even when a plugin's manifest adds it. Use only `CALENDAR` in the protocols of such an app.
+
+If no other package in the app uses location, remove `ACCESS_COARSE_LOCATION` the same way. To check the result, open `AndroidManifest.xml` in Android Studio and select the **Merged Manifest** tab.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No calendar data on Android">
+
+Declare both `READ_CALENDAR` and `WRITE_CALENDAR`. With only one of them, `permission_handler` reports the calendar permission as denied, and `device_calendar_plus` refuses to read calendars.
+
+</Accordion>
+<Accordion title="The call log is never collected">
+
+Check that the participant granted every phone permission. In the **Merged Manifest** tab, look for phone permissions that the study does not need, such as `CALL_PHONE` or `READ_PHONE_NUMBERS`, and remove them with `tools:node="remove"`.
+
+</Accordion>
+<Accordion title="The calendar measure fails on iOS">
+
+Add `NSCalendarsUsageDescription` to `Info.plist`; `device_calendar_plus` needs it on every iOS version. If the participant denied calendar access, the measure reports an error instead of calendar data. Access can be turned on again in **Settings → Privacy & Security → Calendars**.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/communication/quickstart" icon="Bolt">
+
+Build an app that collects calls, messages and calendar events.
+
+</Card>
+</Cards>

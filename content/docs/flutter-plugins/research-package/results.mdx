@@ -1,0 +1,184 @@
+---
+title: Results
+description: The result classes of a task run, which step records which result, and how to read the answers.
+icon: Dataset
+---
+
+Every run of a task produces one [`RPTaskResult`](https://pub.dev/documentation/research_package/latest/model/RPTaskResult-class.html). Its `results` map holds one result per step that records something, keyed by the step identifier. [`RPUITask`](https://pub.dev/documentation/research_package/latest/ui/RPUITask-class.html) passes the result to `onSubmit` after the last step, and the partial result to `onCancel` when the participant leaves the task.
+
+## Result classes
+
+All result classes extend [`RPResult`](https://pub.dev/documentation/research_package/latest/model/RPResult-class.html), which has an `identifier`, a `startDate` and an `endDate`:
+
+| Class | Recorded by | Other fields |
+| --- | --- | --- |
+| `RPTaskResult` | `RPUITask`, once per run, with the task identifier | `results` |
+| [`RPStepResult`](https://pub.dev/documentation/research_package/latest/model/RPStepResult-class.html) | Question and form steps | `questionTitle`, `results` and `answerFormat` |
+| [`RPActivityResult`](https://pub.dev/documentation/research_package/latest/model/RPActivityResult-class.html) | Activity steps | `results`, `stepTimes` and `interactions` |
+| [`RPConsentSignatureResult`](https://pub.dev/documentation/research_package/latest/model/RPConsentSignatureResult-class.html) | Consent review steps | `consentDocument`, `signature` and `userId` |
+| [`RPPermissionResult`](https://pub.dev/documentation/research_package/latest/model/RPPermissionResult-class.html) | Visual consent steps that ask for permissions | `statuses` |
+
+`RPNoResult` exists for JSON, but no step records it. For the details of the other results, see [Read the activity result](/docs/flutter-plugins/research-package/activity-steps#read-the-activity-result), [Read the consent result](/docs/flutter-plugins/research-package/informed-consent#read-the-consent-result) and [Read the permission statuses](/docs/flutter-plugins/research-package/permissions#read-the-permission-statuses).
+
+## Results by step type
+
+| Step | Result | Recorded |
+| --- | --- | --- |
+| `RPInstructionStep`, `RPTimerStep`, `RPCompletionStep` | None | — |
+| `RPQuestionStep` | `RPStepResult` under the step identifier | Each time the answer changes, and with a `null` answer when the participant skips the question. |
+| `RPFormStep` | `RPStepResult` under the form identifier, with one `RPStepResult` per question inside | Each time an answer changes, and when the form is skipped or its countdown ends. |
+| `RPActivityStep` | `RPActivityResult` under the step identifier | Each time the test reports a result. |
+| `RPVisualConsentStep` | `RPPermissionResult` under the step identifier | When the participant leaves the last section, if the step asked for at least one permission. |
+| `RPConsentReviewStep` | `RPConsentSignatureResult` under the identifier of the review step | After **AGREE**, or after the signature when the document asks for one. |
+
+A later result for the same identifier replaces the earlier one, so the map holds the last answer to each question. In an [`RPNavigableOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPNavigableOrderedTask-class.html), a result also stays in the map when the participant goes back and takes another branch. The map may then hold answers from steps that are no longer on the path the participant took.
+
+## Step results
+
+An `RPStepResult` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The identifier of the step. |
+| `questionTitle` | `String` | The title of the question as written in the task, also when it is a translation key. The result of a form has the fixed text `Form Step - See titles for every question included`. |
+| `results` | `Map<String, dynamic>` | The answer, under the key `answer`, which is also the constant `RPStepResult.DEFAULT_KEY`. The result of a form holds one `RPStepResult` per question instead, under the question identifier. |
+| `answerFormat` | `RPAnswerFormat` | The answer format of the question, with the options and limits that give the answer its meaning. |
+| `startDate` | `DateTime?` | When the step appeared. |
+| `endDate` | `DateTime?` | When the answer last changed. |
+
+A question inside a form that the participant never answered has an empty `results` map, without an `answer` key.
+
+## Answer values
+
+The type of an answer depends on the answer format:
+
+| Answer format | Type in Dart | In JSON |
+| --- | --- | --- |
+| `RPChoiceAnswerFormat` | A `List` of [`RPChoice`](https://pub.dev/documentation/research_package/latest/model/RPChoice-class.html), also for a single choice | `[{"__type": "RPChoice", "text": "Yes", "value": 1, "isFreeText": false}]` |
+| `RPIntegerAnswerFormat` | `String` | `"72"` |
+| `RPDoubleAnswerFormat` | `String` | `"37.5"` |
+| `RPSliderAnswerFormat` | `double` | `8.0` |
+| `RPImageChoiceAnswerFormat` | [`RPImageChoice`](https://pub.dev/documentation/research_package/latest/model/RPImageChoice-class.html) | `{"__type": "RPImageChoice", "imageUrl": "assets/images/happy.png", "value": 1, "description": "Happy"}` |
+| `RPDateTimeAnswerFormat` | `String` from `DateTime.toString()` | `"2026-10-27 07:30:00.000"` |
+| `RPTextAnswerFormat` | `String` | `"Slept badly after a late dinner."` |
+| Skipped or not answered | `null` | `null` |
+
+For what each format shows and stores, see [Answer formats](/docs/flutter-plugins/research-package/answer-formats).
+
+## Answers in code
+
+Look up a step result with `getStepResultForIdentifier()`, then read its answer. This function reads the answers of the [quickstart survey](/docs/flutter-plugins/research-package/quickstart) and of a form like the [form step example](/docs/flutter-plugins/research-package/tasks-and-steps#form-step):
+
+```dart
+void printAnswers(RPTaskResult result) {
+  // A choice answer is a list, also for a single choice
+  final sleep = result.getStepResultForIdentifier('sleepQuality');
+  if (sleep is RPStepResult) {
+    final answer = sleep.results[RPStepResult.DEFAULT_KEY];
+    if (answer is List) {
+      final values = answer.whereType<RPChoice>().map((choice) => choice.value);
+      print('Sleep quality: ${values.join(', ')}');
+    }
+  }
+
+  // An integer answer is the typed text
+  final coffee = result.getStepResultForIdentifier('coffeeCups');
+  if (coffee is RPStepResult) {
+    final text = coffee.results[RPStepResult.DEFAULT_KEY] as String?;
+    print('Cups of coffee: ${int.tryParse(text ?? '')}');
+  }
+
+  // A form holds one step result per question
+  final aboutYou = result.getStepResultForIdentifier('aboutYou');
+  if (aboutYou is RPStepResult) {
+    final age = aboutYou.results['age'];
+    if (age is RPStepResult) {
+      print('Age: ${age.results[RPStepResult.DEFAULT_KEY]}');
+    }
+  }
+}
+```
+
+Test a choice answer with `is List`, not `is List<RPChoice>`. When the app registers `RPLocalizations`, a choice answer in the result that `onSubmit` receives is a `List<dynamic>` that holds `RPChoice` objects.
+
+## Timestamps
+
+| Result | `startDate` | `endDate` |
+| --- | --- | --- |
+| `RPTaskResult` | When `RPUITask` appeared | When the last step finished; not set in the partial result of `onCancel` |
+| `RPStepResult` | When the step appeared | When the answer last changed, not when the participant tapped **NEXT** |
+| `RPActivityResult` | Not set | When the test last reported a result |
+| `RPConsentSignatureResult` | Not set | When the participant agreed or signed, also available as `signingDate` |
+| `RPPermissionResult` | When the visual consent step appeared | When the participant left the last section |
+
+All dates are local times of the device. JSON stores them as ISO 8601 strings without a time zone offset, such as `2026-10-27T08:15:02.118346`. To compare results from several time zones, store the time zone of the device with each result.
+
+<Callout type="warning" title="Known issue">
+
+With [`RPLocalizations`](https://pub.dev/documentation/research_package/latest/ui/RPLocalizations-class.html) in the app, the question and form results that `onSubmit` receives carry the time of submission as their `startDate` and `endDate`. The task dates, the questions inside a form and the partial result of `onCancel` keep their real times. To keep the real step times, read the untranslated result from `blocTask.lastTaskResult` inside `onSubmit`.
+
+</Callout>
+
+## Translated results
+
+When the app registers `RPLocalizations`, `onSubmit` receives a copy of the result with texts in the language the participant saw:
+
+- The answer formats of question results get translated choice texts, choice detail texts, image descriptions, integer suffixes, and slider prefixes and suffixes. The suffix of a decimal number stays as written.
+- Choice answers are translated. An image choice answer keeps its description as written.
+- `questionTitle` keeps the title as written in the task, so a translation key stays a key.
+- The answers inside a form result are not translated.
+- Activity, consent and permission results pass through unchanged.
+
+`onCancel` receives the result without translation. For translation keys and files, see [Localization](/docs/flutter-plugins/research-package/localization).
+
+## JSON format
+
+Every result class serializes with `jsonEncode()` from `dart:convert`, and the JSON holds the class name of each result, answer format and choice in `__type`. It leaves out fields that are `null`, except a `null` answer. For the full result of a survey, see [Quickstart](/docs/flutter-plugins/research-package/quickstart#run-the-app).
+
+The result of a form nests a step result per question. For the [form step example](/docs/flutter-plugins/research-package/tasks-and-steps#form-step) with an age and no occupation, the result is:
+
+```json
+{
+  "__type": "RPStepResult",
+  "identifier": "aboutYou",
+  "startDate": "2026-10-27T09:02:11.540872",
+  "endDate": "2026-10-27T09:02:11.540881",
+  "questionTitle": "Form Step - See titles for every question included",
+  "results": {
+    "age": {
+      "__type": "RPStepResult",
+      "identifier": "age",
+      "startDate": "2026-10-27T09:01:52.117374",
+      "endDate": "2026-10-27T09:01:58.902511",
+      "questionTitle": "How old are you?",
+      "results": { "answer": "42" },
+      "answerFormat": {
+        "__type": "RPIntegerAnswerFormat",
+        "minValue": 18,
+        "maxValue": 110,
+        "suffix": "years",
+        "questionType": "Integer"
+      }
+    },
+    "occupation": {
+      "__type": "RPStepResult",
+      "identifier": "occupation",
+      "startDate": "2026-10-27T09:01:52.117391",
+      "questionTitle": "What is your occupation?",
+      "results": {},
+      "answerFormat": {
+        "__type": "RPTextAnswerFormat",
+        "hintText": "For example, nurse",
+        "autoFocus": false,
+        "disableHelpers": false,
+        "questionType": "Text"
+      }
+    }
+  },
+  "answerFormat": { "__type": "RPFormAnswerFormat", "questionType": "Form" }
+}
+```
+
+`RPTaskResult.fromJson()` reads a result back after `ResearchPackage.ensureInitialized()`. The answers then stay plain JSON values. A choice answer is a list of maps instead of `RPChoice` objects, and the questions in a form result are maps too.
+
+For more on JSON, see [JSON surveys](/docs/flutter-plugins/research-package/json).

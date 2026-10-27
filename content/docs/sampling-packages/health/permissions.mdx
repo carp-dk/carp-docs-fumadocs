@@ -1,0 +1,132 @@
+---
+title: Permissions
+description: Ask the participant for access to health data, and connect the health service on Android and iOS.
+icon: Lock
+---
+
+Ask the participant for access to the health data types in Google Health Connect or Apple Health before the first read. Ask where your app explains why the study needs the data, for example during onboarding, as Google's and Apple's guidelines expect. The package itself never asks during background collection.
+
+Who asks depends on how the data is collected:
+
+| Collection | Who asks for access | When |
+| --- | --- | --- |
+| Background measure | Your app, with `requestPermissions()` | After the study is deployed |
+| [`HealthAppTask`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthAppTask-class.html) | The task | When the participant starts it |
+| Health measure in another app task | Your app, with `requestHealthPermissions()` | Before the task runs |
+
+The `askForPermissions` option of `configure()` does not cover health data. It asks only for the permissions that sampling packages request through `permission_handler`.
+
+## Ask for access
+
+Get the health service manager from the device controller, ask for access, and connect the service:
+
+```dart
+import 'dart:io';
+
+// ... the CAMS and health package imports
+
+Future<void> askForHealthAccess() async {
+  final manager = SmartPhoneClientManager().deviceController.getDeviceManager(
+    HealthService.DEVICE_TYPE,
+  );
+  if (manager == null) return;
+
+  // iOS does not report read access, so always ask there
+  if (Platform.isIOS || !await manager.hasPermissions()) {
+    await manager.requestPermissions();
+  }
+
+  // Reconnect, so that the service reads with the new access
+  await manager.disconnect();
+  await manager.connect();
+}
+```
+
+`requestPermissions()` asks for the data types of all health measures that the manager knows, in one permission screen. Call the function after the study is deployed: the manager collects the data types from the deployed health measures and has none before that.
+
+The data types of an app task, such as a `HealthAppTask`, join the manager only when the task first starts. To ask for them earlier, pass them to `requestHealthPermissions()`.
+
+## Reconnect after a change
+
+CARP Mobile Sensing (CAMS) connects the health service when the study is deployed, which also happens each time the app starts. It does not connect the service again when the participant grants access later. After a change, connect the service yourself, as the function above does:
+
+- On Android, `connect()` checks `hasPermissions()` and connects only when every data type is granted. Connecting resumes the task controls that target the service, which starts their triggers.
+- On iOS, the service is already connected after deployment. Disconnecting it first makes `connect()` restart its task controls, so the next read runs with the new access.
+
+## Platform differences
+
+| | Android | iOS |
+| --- | --- | --- |
+| **`hasPermissions()`** | `true` only when every data type of the manager is granted | `true` as soon as the manager has data types, because HealthKit does not report read access |
+| **Service connects** | Only when every data type is granted | Right after deployment, before the participant is asked |
+| **Denied data type** | No data type is read, because the service does not connect | That type returns no data and no error, and the others are read |
+| **Asking again** | After two denials, Health Connect no longer shows the request, and the participant allows access in the Health Connect app | HealthKit asks only about types that it has not asked about before, and the participant changes access in the Apple Health app or in Settings |
+| **Older data** | Only from up to 30 days before access was granted, unless the app has history access | All stored data |
+
+## Request history access (Android)
+
+Health Connect returns data only from up to 30 days before the participant granted access. To read further back, for example with a `past` of 90 days, declare the history permission:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+```
+
+The package itself never asks for it. Ask for it with the `health` plugin, which the package exports:
+
+```dart
+final health = Health();
+if (await health.isHealthDataHistoryAvailable() &&
+    !await health.isHealthDataHistoryAuthorized()) {
+  await health.requestHealthDataHistoryAuthorization();
+}
+```
+
+For the history methods, see [Historical data access](/docs/flutter-plugins/health/health-connect#historical-data-access). The package reads only while the app is in the foreground and does not ask for Health Connect's background access either.
+
+## `HealthServiceManager` reference
+
+[`HealthServiceManager`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthServiceManager-class.html) is the device manager of the `HealthService`. The device controller returns it as a [`DeviceManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceManager-class.html); cast it to use the health-specific members:
+
+```dart
+final healthManager =
+    SmartPhoneClientManager().deviceController.getDeviceManager(
+      HealthService.DEVICE_TYPE,
+    ) as HealthServiceManager?;
+
+healthManager?.statusEvents.listen(
+  (status) => print('Health service is ${status.name}'),
+);
+print('${healthManager?.displayName} types: ${healthManager?.types}');
+```
+
+The manager has these members:
+
+| Member | Description |
+| --- | --- |
+| `hasPermissions()` | On Android, `true` when every data type of the manager is granted. On iOS, `true` as soon as the manager has data types. |
+| `requestPermissions()` | Shows the permission screen for every data type of the manager. |
+| `connect()` | Connects the service when `hasPermissions()` is `true`, which resumes the task controls that target it. Returns the new `DeviceStatus`. |
+| `disconnect()` | Pauses the task controls that target the service and disconnects it. |
+| `status`, `statusEvents` | The current `DeviceStatus` of the service, such as `connected` or `disconnected`, and a stream of its changes. |
+| `types` | The data types that the manager accesses: those of the deployed background measures and of the app tasks that have started. Only types that the platform offers. |
+| `hasHealthPermissions()` | Checks the given data types. Always `false` on iOS. |
+| `requestHealthPermissions()` | Asks for the given data types. On Android, returns `true` when at least one is granted. On iOS, returns `true` when the sheet was handled without an error. |
+| `service` | The `Health` instance of the `health` plugin, or `null` before the service is configured. |
+| `displayName` | `Google Health Connect` on Android and `Apple Health` on iOS. |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Health service stays disconnected on Android">
+
+Declare the permission of every data type in the manifest, and ask again or have the participant allow access in the Health Connect app. Then call `connect()`. The service connects only when every type is allowed; until then, the log shows "has not the permissions required to connect".
+
+</Accordion>
+<Accordion title="The permission screen does not appear">
+
+Ask after the study is deployed: before that, the manager has no data types, and the request does nothing. The request also does nothing when the protocol has no `HealthService`, or on Android when Health Connect is not installed and available. On iOS, HealthKit shows the sheet only for data types that it has not asked about before.
+
+</Accordion>
+</Accordions>
+
+For the permission model of the `health` plugin, see [Permissions](/docs/flutter-plugins/health/permissions).

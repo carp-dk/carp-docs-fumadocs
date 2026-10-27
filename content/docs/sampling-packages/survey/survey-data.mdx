@@ -1,0 +1,350 @@
+---
+title: Survey data
+description: The dk.cachet.carp.survey measurement and the Research Package results, answers and timestamps inside it.
+icon: Dataset
+---
+
+Each run of an `RPAppTask` produces one `dk.cachet.carp.survey` measurement, when the participant submits the task or leaves it. Its data, an [`RPTaskResultData`](https://pub.dev/documentation/carp_survey_package/latest/survey/RPTaskResultData-class.html) with the `__type` `dk.cachet.carp.survey`, holds the complete Research Package result. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Measurements per task
+
+A run of an `RPAppTask` can produce these measurements:
+
+| Measure type | When | Data |
+| --- | --- | --- |
+| `dk.cachet.carp.survey` | The participant submits or leaves the task | `RPTaskResultData` with the answers |
+| `dk.cachet.carp.completedapptask.<type>` | The participant submits the task | `CompletedAppTask`, which holds the same `RPTaskResultData` |
+| The types in the task's `measures` | Between `onStart()` and the end of the task | The data of each measure |
+
+`<type>` is the type of the `RPAppTask`: `survey`, `cognition` or `informed_consent`. A submitted result is therefore stored twice. Count runs and read answers from `dk.cachet.carp.survey`, which also holds the canceled runs.
+
+## Survey result
+
+`RPTaskResultData` has two fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | `SurveyStatus` | `submitted` or `canceled`. `unknown` appears only when JSON without a status is read back. |
+| `result` | `RPTaskResult?` | The Research Package result. For a canceled task, the answers given until the participant left. Omitted from the JSON when `null`. |
+
+The [`RPTaskResult`](https://pub.dev/documentation/research_package/latest/model/RPTaskResult-class.html), with the `__type` `RPTaskResult`, holds the results of the steps:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The `identifier` of the Research Package task, for example `who5_task` |
+| `startDate` | `DateTime?` | When the survey opened |
+| `endDate` | `DateTime?` | When the participant finished the last step. Not set in a canceled result. |
+| `results` | `Map<String, RPResult>` | One result for each step that produces one, keyed by step identifier |
+
+## Step results
+
+These steps produce results; instruction, timer and completion steps leave nothing in the result:
+
+| Step | Result class | Content |
+| --- | --- | --- |
+| `RPQuestionStep` | `RPStepResult` | The answer under the key `answer` |
+| `RPFormStep` | `RPStepResult` | One nested `RPStepResult` for each question, keyed by question identifier |
+| `RPActivityStep`, including the cognitive tests | `RPActivityResult` | The test's values under the key `result`, with step times and interactions |
+| `RPConsentReviewStep` | `RPConsentSignatureResult` | The consent document as shown, and the participant's name and signature |
+| `RPVisualConsentStep` with `askPermission: true` | `RPPermissionResult` | The status of each permission asked for |
+
+An `RPStepResult` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The step identifier |
+| `startDate` | `DateTime?` | When the step was shown |
+| `endDate` | `DateTime?` | When the answer last changed |
+| `questionTitle` | `String` | The step's `title`, as written in the task |
+| `results` | `Map<String, dynamic>` | The answer under the key `answer` (`RPStepResult.DEFAULT_KEY`) |
+| `answerFormat` | `RPAnswerFormat` | A copy of the answer format, including every choice |
+
+An `RPActivityResult` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The step identifier |
+| `endDate` | `DateTime?` | When the test last reported a value. `startDate` is never set. |
+| `results` | `Map<String, dynamic>` | The test's values under the key `result`. For the keys of each test, see [Read the test results](/docs/sampling-packages/survey/cognitive-tests#read-the-test-results). |
+| `stepTimes` | `StepTimes` | The times of the phases, under the keys `instruction_started`, `instruction_ended`, `test_shown`, `test_started`, `test_ended`, `results_shown` and `results_closed`. Keys for phases that a test does not log are left out; the Cognition Package tests never log `test_shown` or `results_closed`. |
+| `interactions` | `List<Interaction>` | One entry for each interaction that the test logs, such as a tap or a drawn path, with `time`, `correctness` (`Correct gesture` or `Wrong gesture`), `type` and `description` |
+
+The consent signature result holds the participant's first and last name and the signature image. The image is a string of the PNG bytes in decimal, such as `"[137, 80, 78, 71, ...]"`, not Base64.
+
+For the fields of the consent result, see [Read the consent result](/docs/flutter-plugins/research-package/informed-consent#read-the-consent-result). For the permission result, see [Read the permission statuses](/docs/flutter-plugins/research-package/permissions#read-the-permission-statuses).
+
+## Answer values
+
+The value under `answer` depends on the answer format:
+
+| Answer format | Value of `answer` | JSON example |
+| --- | --- | --- |
+| `RPChoiceAnswerFormat` | `List<RPChoice>` with the selected choices, also for a single choice | `[{"__type": "RPChoice", "text": "Most of the time", "value": 4, "isFreeText": false}]` |
+| `RPIntegerAnswerFormat` | `String` | `"7"` |
+| `RPDoubleAnswerFormat` | `String` | `"5.4"` |
+| `RPSliderAnswerFormat` | `double` | `6.0` |
+| `RPTextAnswerFormat` | `String` | `"Woke up twice"` |
+| `RPDateTimeAnswerFormat` | `String` from `DateTime.toString()`, in local time | `"2026-10-26 07:30:00.000"` |
+| `RPImageChoiceAnswerFormat` | `RPImageChoice` | `{"__type": "RPImageChoice", "imageUrl": "assets/images/happy.png", "value": 4, "description": "Happy"}` |
+| An optional question that was skipped | `null` | `null` |
+
+Analyze the choice `value`, not the `text`. With `RPLocalizations.delegate` in the app, the submitted result holds translated choice texts. A free-text choice holds the text that the participant typed.
+
+## Timestamps
+
+| Timestamp | Format | Meaning |
+| --- | --- | --- |
+| `sensorStartTime` | Microseconds since epoch | When the participant submitted or left the task |
+| `startDate`, `endDate` of the task | ISO 8601 local time without UTC offset | When the survey opened and when the participant finished it |
+| `startDate`, `endDate` of a step | ISO 8601 local time without UTC offset | When the step was shown and when its answer last changed |
+| `completedAt` | ISO 8601 UTC | When CARP Mobile Sensing (CAMS) marked the task as done |
+
+With `RPLocalizations.delegate` in the app, the submitted result is a translated copy in which each `RPStepResult` is created again at submit time. Its `startDate` and `endDate` are then the submit time, not the time of the answer. The task dates and canceled results keep the real times.
+
+The local times carry no UTC offset. To convert them, collect the phone's time zone, for example with the `DeviceSamplingPackage.TIMEZONE` measure.
+
+## Canceled surveys
+
+<Callout type="warning" title="Canceled answers are stored">
+
+When the participant leaves a survey, the package stores the answers given so far, although the dialog says "Your answers will not be saved." Say so in your consent text, or change the dialog text with the `discard_confirmation_body` translation key.
+
+</Callout>
+
+A canceled result has the status `canceled` and no `endDate`, and CAMS adds no completed app task measurement for it. The task stays available, so a participant who starts it again produces another measurement for the same task. For the translation keys, see [Change the package texts](/docs/flutter-plugins/research-package/localization#change-the-package-texts).
+
+## Completed app task
+
+When a task is done, CAMS adds a [`CompletedAppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CompletedAppTask-class.html) measurement with the `__type` `dk.cachet.carp.completedapptask.<type>`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `taskName` | `String` | The `name` of the `RPAppTask` |
+| `taskData` | `Data?` | The same `RPTaskResultData` as in the survey measurement. Omitted when `null`. |
+| `taskType` | `String` | `survey`, `cognition` or `informed_consent` |
+| `completedAt` | `DateTime` | When the task was marked as done, in UTC |
+
+CAMS adds this measurement in every study deployed on the phone, also for the tasks of other studies.
+
+## Link results to tasks
+
+The survey data does not name the `RPAppTask`. To tell results apart:
+
+- give every Research Package task its own `identifier`, which the result repeats in `result.identifier`;
+- give every `RPAppTask` a unique `name`, which the completed app task repeats in `taskName` for submitted tasks.
+
+`Measurement.taskControl` does not help here: it is not serialized, and it is `null` for a task that CAMS restored after an app restart.
+
+## Read results in the app
+
+Filter the measurements on `RPTaskResultData` and read the answers from the step results. This example sums the choice values of a submitted WHO-5 result:
+
+```dart
+import 'package:research_package/research_package.dart';
+
+/// The sum of the selected choice values in a task result
+int choiceTotal(RPTaskResult result) {
+  var total = 0;
+  for (final stepResult in result.results.values) {
+    if (stepResult is RPStepResult) {
+      final answer = stepResult.results[RPStepResult.DEFAULT_KEY];
+      if (answer is List) {
+        for (final choice in answer.whereType<RPChoice>()) {
+          total += choice.value;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+void printWho5Totals() {
+  SmartPhoneClientManager().measurements
+      .where((measurement) => measurement.data is RPTaskResultData)
+      .listen((measurement) {
+        final data = measurement.data as RPTaskResultData;
+        final result = data.result;
+        if (data.status == SurveyStatus.submitted &&
+            result?.identifier == 'who5_task') {
+          print('WHO-5 total: ${choiceTotal(result!)}');
+        }
+      });
+}
+```
+
+Test for `List`, not `List<RPChoice>`: with `RPLocalizations.delegate` in the app, the submitted answer is a `List<dynamic>` of `RPChoice` objects. After a task is done, `userTask.result` holds the same `RPTaskResultData`. A result decoded from JSON holds raw maps: there, a choice answer is a list of maps with `text` and `value` keys.
+
+## Example data
+
+<Accordions>
+<Accordion title="Submitted survey">
+
+A submitted WHO-5 survey, with four of the five question results left out:
+
+```json
+{
+  "__type": "dk.cachet.carp.survey",
+  "status": "submitted",
+  "result": {
+    "__type": "RPTaskResult",
+    "identifier": "who5_task",
+    "startDate": "2026-10-26T13:02:05.412907",
+    "endDate": "2026-10-26T13:02:41.230518",
+    "results": {
+      "who5_question_1": {
+        "__type": "RPStepResult",
+        "identifier": "who5_question_1",
+        "startDate": "2026-10-26T13:02:05.498120",
+        "endDate": "2026-10-26T13:02:09.871244",
+        "questionTitle": "I have felt cheerful and in good spirits",
+        "results": {
+          "answer": [
+            {
+              "__type": "RPChoice",
+              "text": "Most of the time",
+              "value": 4,
+              "isFreeText": false
+            }
+          ]
+        },
+        "answerFormat": {
+          "__type": "RPChoiceAnswerFormat",
+          "questionType": "SingleChoice",
+          "choices": [
+            { "__type": "RPChoice", "text": "All of the time", "value": 5, "isFreeText": false },
+            { "__type": "RPChoice", "text": "Most of the time", "value": 4, "isFreeText": false },
+            { "__type": "RPChoice", "text": "More than half of the time", "value": 3, "isFreeText": false },
+            { "__type": "RPChoice", "text": "Less than half of the time", "value": 2, "isFreeText": false },
+            { "__type": "RPChoice", "text": "Some of the time", "value": 1, "isFreeText": false },
+            { "__type": "RPChoice", "text": "At no time", "value": 0, "isFreeText": false }
+          ],
+          "answerStyle": "SingleChoice"
+        }
+      }
+    }
+  }
+}
+```
+
+</Accordion>
+<Accordion title="Canceled survey">
+
+The sleep diary from [Building surveys](/docs/sampling-packages/survey/surveys), left after the first question:
+
+```json
+{
+  "__type": "dk.cachet.carp.survey",
+  "status": "canceled",
+  "result": {
+    "__type": "RPTaskResult",
+    "identifier": "sleep_diary",
+    "startDate": "2026-10-27T08:12:40.118326",
+    "results": {
+      "sleep_hours": {
+        "__type": "RPStepResult",
+        "identifier": "sleep_hours",
+        "startDate": "2026-10-27T08:12:43.502114",
+        "endDate": "2026-10-27T08:12:47.660891",
+        "questionTitle": "How many hours did you sleep?",
+        "results": {
+          "answer": "7"
+        },
+        "answerFormat": {
+          "__type": "RPIntegerAnswerFormat",
+          "minValue": 0,
+          "maxValue": 24,
+          "suffix": "hours",
+          "questionType": "Integer"
+        }
+      }
+    }
+  }
+}
+```
+
+</Accordion>
+<Accordion title="Cognitive test result">
+
+The entry of an `RPTappingActivity` with the identifier `tapping` in `results`, with the first two of its 57 interactions:
+
+```json
+{
+  "__type": "RPActivityResult",
+  "identifier": "tapping",
+  "endDate": "2026-10-27T18:04:26.551208",
+  "results": {
+    "result": {
+      "Total taps": 57
+    }
+  },
+  "stepTimes": {
+    "instruction_started": "2026-10-27T18:03:51.902117",
+    "instruction_ended": "2026-10-27T18:04:03.418532",
+    "test_started": "2026-10-27T18:04:03.418611",
+    "test_ended": "2026-10-27T18:04:26.551040",
+    "results_shown": "2026-10-27T18:04:26.551349"
+  },
+  "interactions": [
+    {
+      "time": "2026-10-27T18:04:06.477215",
+      "correctness": "Correct gesture",
+      "type": "Button tap",
+      "description": "Pressed the left button"
+    },
+    {
+      "time": "2026-10-27T18:04:06.702390",
+      "correctness": "Correct gesture",
+      "type": "Button tap",
+      "description": "Pressed the right button"
+    }
+  ]
+}
+```
+
+</Accordion>
+<Accordion title="Completed app task">
+
+The completed app task of a one-question mood survey with a slider:
+
+```json
+{
+  "__type": "dk.cachet.carp.completedapptask.survey",
+  "taskName": "Mood check",
+  "taskData": {
+    "__type": "dk.cachet.carp.survey",
+    "status": "submitted",
+    "result": {
+      "__type": "RPTaskResult",
+      "identifier": "mood_check",
+      "startDate": "2026-10-27T15:30:02.770114",
+      "endDate": "2026-10-27T15:30:09.315827",
+      "results": {
+        "mood": {
+          "__type": "RPStepResult",
+          "identifier": "mood",
+          "startDate": "2026-10-27T15:30:02.853690",
+          "endDate": "2026-10-27T15:30:06.120455",
+          "questionTitle": "How is your mood right now?",
+          "results": {
+            "answer": 6.0
+          },
+          "answerFormat": {
+            "__type": "RPSliderAnswerFormat",
+            "minValue": 0.0,
+            "maxValue": 10.0,
+            "divisions": 10,
+            "prefix": "",
+            "suffix": "",
+            "questionType": "Scale"
+          }
+        }
+      }
+    }
+  },
+  "taskType": "survey",
+  "completedAt": "2026-10-27T14:30:09.322671Z"
+}
+```
+
+</Accordion>
+</Accordions>

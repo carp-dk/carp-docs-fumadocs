@@ -1,0 +1,755 @@
+---
+title: Testing and publishing
+description: Test the JSON, schemes and probes of a sampling package, run it in an app, and publish it on pub.dev.
+---
+
+Test the package on your computer, run it in an app on a phone and publish it on pub.dev. Tests matter more for a sampling package than for most code. A missing JSON registration or a wrong data type compiles and runs, and fails only at the next app start or when the data is uploaded.
+
+## Write the tests
+
+The example package has three test files, with 23 tests in all:
+
+| File | What it tests |
+| --- | --- |
+| `test/json_test.dart` | A JSON round trip of each data class, the configuration class, a measurement and a protocol |
+| `test/package_test.dart` | The measure types, the default sampling schemes, the probes that the package creates and the privacy functions |
+| `test/probes_test.dart` | The data path of both probes, with the barometer of `sensors_plus` mocked |
+
+Each test file runs in its own isolate, so each one initializes CARP Mobile Sensing (CAMS) and registers the package in `setUpAll()`. Initialize CAMS first: before `CarpMobileSensing.ensureInitialized()`, the first use of [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) throws "Null check operator used on a null value".
+
+## Test the JSON round trips
+
+`test/json_test.dart` encodes each class that CAMS stores to a JSON string and decodes it again, as CAMS does when it saves and restores a study:
+
+```dart title="test/json_test.dart"
+import 'dart:convert';
+
+import 'package:barometer_sampling_package/barometer_sampling_package.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_serializable/carp_serializable.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Encodes [object] to a JSON string and decodes it again, like CAMS does
+/// when it stores a protocol or a measurement
+Map<String, dynamic> roundTrip(Object object) =>
+    jsonDecode(jsonEncode(object)) as Map<String, dynamic>;
+
+void main() {
+  setUpAll(() {
+    // CAMS must be initialized before a package is registered
+    CarpMobileSensing.ensureInitialized(); // [!code highlight]
+    SamplingPackageRegistry().register(BarometerSamplingPackage());
+  });
+
+  test('AirPressure round trip', () {
+    final json = roundTrip(AirPressure(pressure: 1013.25));
+    expect(json[Serializable.CLASS_IDENTIFIER], 'com.example.airpressure');
+
+    final data = FromJsonFactory().fromJson<Data>(json); // [!code highlight]
+    expect(data, isA<AirPressure>());
+    expect((data as AirPressure).pressure, 1013.25);
+  });
+
+  test('AirPressureSummary round trip', () {
+    final json = roundTrip(
+      AirPressureSummary(count: 10, mean: 1013.2, min: 1012.9, max: 1013.6),
+    );
+    expect(
+      json[Serializable.CLASS_IDENTIFIER],
+      'com.example.airpressuresummary',
+    );
+
+    final data = FromJsonFactory().fromJson<Data>(json);
+    expect(data, isA<AirPressureSummary>());
+    data as AirPressureSummary;
+    expect(data.count, 10);
+    expect(data.mean, 1013.2);
+    expect(data.min, 1012.9);
+    expect(data.max, 1013.6);
+  });
+
+  test('AirPressureSummarySamplingConfiguration round trip', () {
+    final json = roundTrip(
+      AirPressureSummarySamplingConfiguration(
+        interval: const Duration(minutes: 1),
+        duration: const Duration(seconds: 5),
+        samplingPeriod: const Duration(milliseconds: 500),
+      ),
+    );
+    // The JSON type comes from carp_core's SamplingConfiguration
+    expect(
+      json[Serializable.CLASS_IDENTIFIER],
+      'dk.cachet.carp.common.application.sampling.'
+      'AirPressureSummarySamplingConfiguration',
+    );
+
+    final configuration = FromJsonFactory().fromJson<SamplingConfiguration>(
+      json,
+    );
+    expect(configuration, isA<AirPressureSummarySamplingConfiguration>());
+    configuration as AirPressureSummarySamplingConfiguration;
+    expect(configuration.interval, const Duration(minutes: 1));
+    expect(configuration.duration, const Duration(seconds: 5));
+    expect(configuration.samplingPeriod, const Duration(milliseconds: 500));
+  });
+
+  test('Measurement round trip keeps the data class', () {
+    final measurement = Measurement(
+      sensorStartTime: 1793006130412518,
+      sensorEndTime: 1793006140412518,
+      data: AirPressureSummary(count: 10, mean: 1013.2, min: 1013, max: 1013.4),
+    );
+
+    final restored = Measurement.fromJson(roundTrip(measurement)); // [!code highlight]
+    expect(restored.data, isA<AirPressureSummary>());
+    expect(restored.sensorEndTime, 1793006140412518);
+    expect(
+      restored.dataType.toString(),
+      BarometerSamplingPackage.AIR_PRESSURE_SUMMARY,
+    );
+  });
+
+  test('protocol round trip keeps the sampling configuration', () {
+    final protocol = SmartphoneStudyProtocol(
+      ownerId: 'owner@example.com',
+      name: 'Air pressure',
+    );
+    final phone = Smartphone();
+    protocol.addPrimaryDevice(phone);
+    protocol.addTaskControl(
+      ImmediateTrigger(),
+      BackgroundTask(
+        measures: [
+          Measure(type: BarometerSamplingPackage.AIR_PRESSURE),
+          Measure(
+            type: BarometerSamplingPackage.AIR_PRESSURE_SUMMARY,
+            samplingConfiguration: AirPressureSummarySamplingConfiguration(
+              interval: const Duration(minutes: 1),
+              duration: const Duration(seconds: 5),
+            ),
+          ),
+        ],
+      ),
+      phone,
+    );
+
+    final restored = SmartphoneStudyProtocol.fromJson(roundTrip(protocol)); // [!code highlight]
+    // CAMS also adds a task with its own measures, such as errors
+    final measures = {
+      for (final task in restored.tasks)
+        for (final measure in task.measures ?? <Measure>[])
+          measure.type: measure,
+    };
+    expect(measures, contains(BarometerSamplingPackage.AIR_PRESSURE));
+    expect(
+      measures[BarometerSamplingPackage.AIR_PRESSURE_SUMMARY]
+          ?.overrideSamplingConfiguration,
+      isA<AirPressureSummarySamplingConfiguration>(),
+    );
+  });
+}
+```
+
+- **Decode through the registry:** decode with `FromJsonFactory().fromJson()`, or with `Measurement.fromJson()` for a [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html), never by calling `fromJsonFunction` yourself. Only the registry, [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html), fails when a class is not registered. The data test of CAMS calls the functions directly, so it does not notice that CAMS 2.5.1 never registers its own [`AccelerationFeatures`](https://pub.dev/documentation/carp_mobile_sensing/latest/sampling_packages/AccelerationFeatures-class.html) data class.
+- **Check the JSON type:** `__type` must equal the measure type. Data of another type is never uploaded and never reaches privacy functions or triggers.
+- **Round-trip whole objects:** the measurement test checks that the data class and `sensorEndTime` survive, and the protocol test checks that the summary measure keeps its configuration class. CAMS adds a task with its own measures, such as errors, to each [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html). The test therefore finds the measures by type instead of taking `tasks.first`.
+- **Set every field:** a round trip with `null` in a field cannot fail on that field. The registration test of `carp_polar_package` leaves a field `null` and misses that the field cannot be read back. A study with a Polar sensor therefore fails to load after a restart.
+
+## Test the package declarations
+
+`test/package_test.dart` checks what the package declares to CAMS:
+
+```dart title="test/package_test.dart"
+import 'package:barometer_sampling_package/barometer_sampling_package.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  setUpAll(() {
+    CarpMobileSensing.ensureInitialized();
+    SamplingPackageRegistry().register(BarometerSamplingPackage());
+  });
+
+  group('Measure types', () {
+    test('are in the package namespace', () {
+      for (final type in [
+        BarometerSamplingPackage.AIR_PRESSURE,
+        BarometerSamplingPackage.AIR_PRESSURE_SUMMARY,
+      ]) {
+        final dataType = DataType.fromString(type);
+        expect(dataType.namespace, BarometerSamplingPackage.NAMESPACE);
+        // The type must parse back to itself
+        expect(dataType.toString(), type); // [!code highlight]
+      }
+    });
+
+    test('match the data type of the collected data', () {
+      expect(
+        AirPressure(pressure: 1013).dataType.toString(),
+        BarometerSamplingPackage.AIR_PRESSURE,
+      );
+      expect(
+        AirPressureSummary(
+          count: 1,
+          mean: 1013,
+          min: 1013,
+          max: 1013,
+        ).dataType.toString(),
+        BarometerSamplingPackage.AIR_PRESSURE_SUMMARY,
+      );
+    });
+
+    test('are added to CarpDataTypes on registration', () {
+      final types = CarpDataTypes().types;
+      expect(
+        types[BarometerSamplingPackage.AIR_PRESSURE]?.timeType,
+        DataTimeType.POINT,
+      );
+      expect(
+        types[BarometerSamplingPackage.AIR_PRESSURE_SUMMARY]?.timeType,
+        DataTimeType.TIME_SPAN,
+      );
+    });
+  });
+
+  group('Default sampling schemes', () {
+    test('AIR_PRESSURE reads once per second', () {
+      final scheme = SamplingPackageRegistry()
+          .samplingSchemes[BarometerSamplingPackage.AIR_PRESSURE]!;
+      final configuration = scheme.defaultSamplingConfiguration;
+      expect(configuration, isA<IntervalSamplingConfiguration>());
+      expect(
+        (configuration as IntervalSamplingConfiguration).interval,
+        const Duration(seconds: 1),
+      );
+      expect((scheme.dataType as CamsDataTypeMetaData).permissions, isEmpty);
+    });
+
+    test('AIR_PRESSURE_SUMMARY reads 10 seconds every 5 minutes', () {
+      final scheme = SamplingPackageRegistry()
+          .samplingSchemes[BarometerSamplingPackage.AIR_PRESSURE_SUMMARY]!;
+      final configuration = scheme.defaultSamplingConfiguration;
+      expect(configuration, isA<AirPressureSummarySamplingConfiguration>());
+      configuration as AirPressureSummarySamplingConfiguration;
+      expect(configuration.interval, const Duration(minutes: 5));
+      expect(configuration.duration, const Duration(seconds: 10));
+      expect(configuration.samplingPeriod, const Duration(seconds: 1));
+      expect((scheme.dataType as CamsDataTypeMetaData).permissions, isEmpty);
+    });
+  });
+
+  group('Probes', () {
+    test('are created for each measure type', () {
+      final registry = SamplingPackageRegistry();
+      expect(
+        registry.create(BarometerSamplingPackage.AIR_PRESSURE),
+        isA<AirPressureProbe>(),
+      );
+      expect(
+        registry.create(BarometerSamplingPackage.AIR_PRESSURE_SUMMARY),
+        isA<AirPressureSummaryProbe>(),
+      );
+      expect(BarometerSamplingPackage().create('com.example.unknown'), isNull); // [!code highlight]
+    });
+
+    test('use the phone as their device', () {
+      final probe = SamplingPackageRegistry().create(
+        BarometerSamplingPackage.AIR_PRESSURE,
+      )!;
+      expect(probe.deviceManager, isA<SmartphoneDeviceManager>()); // [!code highlight]
+    });
+  });
+
+  group('Privacy', () {
+    final schema = DataTransformerSchemaRegistry().lookup(
+      PrivacySchema.DEFAULT,
+    )!;
+
+    test('rounds AirPressure to whole hectopascals', () {
+      final data = schema.transform(AirPressure(pressure: 1013.62));
+      expect((data as AirPressure).pressure, 1014);
+      // Rounding again changes nothing
+      expect((schema.transform(data) as AirPressure).pressure, 1014); // [!code highlight]
+    });
+
+    test('rounds AirPressureSummary to whole hectopascals', () {
+      final data = schema.transform(
+        AirPressureSummary(count: 3, mean: 1013.43, min: 1012.71, max: 1013.5),
+      );
+      data as AirPressureSummary;
+      expect(
+        [data.count, data.mean, data.min, data.max],
+        [3, 1013, 1013, 1014],
+      );
+    });
+  });
+
+  test('AirPressureSummary.fromReadings', () {
+    final summary = AirPressureSummary.fromReadings([1013.0, 1012.5, 1014.5]);
+    expect(summary.count, 3);
+    expect(summary.mean, closeTo(1013.333, 0.001));
+    expect(summary.min, 1012.5);
+    expect(summary.max, 1014.5);
+  });
+}
+```
+
+- **Measure types:** each type must parse back to itself. CAMS splits a type at the first occurrence of its name, so `com.example.example` would come back as `com.example`. The second test checks that each data class has the type of its measure.
+- **Default sampling schemes:** the tests read the defaults from `SamplingPackageRegistry().samplingSchemes`, the combined map that probes use, and check that the measures declare no permissions.
+- **Probes:** the registry creates the right probe for each type and gives it the device manager of the phone, and `create()` of the package returns `null` for an unknown type.
+- **Privacy:** the tests apply the default privacy schema, and the first test applies it twice, because CAMS may transform a measurement more than once. See [Privacy and data formats](/docs/mobile-sensing/building-sampling-packages/privacy-and-formats).
+
+## Test the probes
+
+`test/probes_test.dart` runs both probes against a mocked barometer. `sensors_plus` talks to the platform over two channels: a method channel that sets the sampling period, and an event channel that delivers the readings. The tests mock both:
+
+```dart title="test/probes_test.dart"
+import 'package:barometer_sampling_package/barometer_sampling_package.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// The platform channels of sensors_plus
+const methodChannel = MethodChannel('dev.fluttercommunity.plus/sensors/method');
+const barometerChannel = EventChannel(
+  'dev.fluttercommunity.plus/sensors/barometer',
+);
+
+/// The sampling periods, in microseconds, that sensors_plus asked for
+final samplingPeriods = <int>[];
+
+/// How often the barometer stream was started and stopped
+var listens = 0;
+var cancels = 0;
+
+TestDefaultBinaryMessenger get messenger =>
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+/// Mocks the sensors_plus method channel, which sets the sampling period
+void mockMethodChannel() =>
+    messenger.setMockMethodCallHandler(methodChannel, (call) async { // [!code highlight]
+      if (call.method == 'setBarometerSamplingPeriod') {
+        samplingPeriods.add(call.arguments as int);
+      }
+      return null;
+    });
+
+/// Mocks a barometer that sends [pressures] each time a listener starts
+///
+/// sensors_plus sends each reading as `[pressure in hPa, microseconds]`;
+/// with [errorCode], the barometer fails as on an Android phone without one
+void mockBarometer(List<double> pressures, {String? errorCode}) {
+  mockMethodChannel();
+  messenger.setMockStreamHandler( // [!code highlight]
+    barometerChannel,
+    MockStreamHandler.inline(
+      onListen: (arguments, events) {
+        listens++;
+        if (errorCode != null) {
+          events.error(code: errorCode, message: 'Sensor not found');
+        }
+        final now = DateTime.now().microsecondsSinceEpoch.toDouble();
+        for (final pressure in pressures) {
+          events.success(Float64List.fromList([pressure, now])); // [!code highlight]
+        }
+      },
+      onCancel: (arguments) => cancels++,
+    ),
+  );
+}
+
+/// Mocks a barometer that cannot start, as sensors_plus does on iOS without
+/// one: the `listen` call fails, and the stream itself stays silent
+void mockMissingIosBarometer() {
+  mockMethodChannel();
+  messenger.setMockMethodCallHandler(MethodChannel(barometerChannel.name), (
+    call,
+  ) async {
+    if (call.method == 'listen') {
+      listens++;
+      throw PlatformException(
+        code: 'UNAVAILABLE',
+        message: 'Barometer is not available on this device',
+      );
+    }
+    cancels++;
+    return null;
+  });
+}
+
+/// An AirPressureProbe that waits only briefly for the first reading
+class QuickAirPressureProbe extends AirPressureProbe {
+  @override
+  Duration get firstReadingTimeout => const Duration(milliseconds: 300);
+}
+
+/// Creates the probe for [measure], initialized without a deployment
+Probe createProbe(Measure measure) =>
+    SamplingPackageRegistry().create(measure.type)!..initialize(measure); // [!code highlight]
+
+/// Resumes [probe] and waits until CAMS has set its new state
+Future<ExecutorState> resume(Probe probe) async {
+  final state = probe.stateEvents.first;
+  probe.resume();
+  return state.timeout(const Duration(seconds: 15));
+}
+
+/// A summary measure with short windows
+Measure summaryMeasure() => Measure(
+  type: BarometerSamplingPackage.AIR_PRESSURE_SUMMARY,
+  samplingConfiguration: AirPressureSummarySamplingConfiguration(
+    interval: const Duration(milliseconds: 300),
+    duration: const Duration(milliseconds: 100),
+    samplingPeriod: const Duration(milliseconds: 500),
+  ),
+);
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    CarpMobileSensing.ensureInitialized();
+    SamplingPackageRegistry().register(BarometerSamplingPackage());
+  });
+
+  setUp(() {
+    samplingPeriods.clear();
+    listens = 0;
+    cancels = 0;
+  });
+
+  group('AirPressureProbe', () {
+    late Probe probe;
+    tearDown(() => probe.pause());
+
+    test('emits one AirPressure per reading', () async {
+      mockBarometer([1013.25, 1013.5, 1013.75]);
+      probe = createProbe(Measure(type: BarometerSamplingPackage.AIR_PRESSURE));
+      final measurements = probe.measurements.take(3).toList();
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      final data = (await measurements.timeout(
+        const Duration(seconds: 5),
+      )).map((measurement) => measurement.data).toList();
+      expect(data, everyElement(isA<AirPressure>()));
+      expect(data.map((data) => (data as AirPressure).pressure), [
+        1013.25,
+        1013.5,
+        1013.75,
+      ]);
+      // The default configuration asks for one reading per second
+      expect(samplingPeriods, everyElement(1000000));
+      // The check stopped its own listener before the probe started
+      expect([listens, cancels], [2, 1]);
+    });
+
+    test('takes the sampling period from the measure', () async {
+      mockBarometer([1013.25]);
+      probe = createProbe(
+        Measure(
+          type: BarometerSamplingPackage.AIR_PRESSURE,
+          samplingConfiguration: IntervalSamplingConfiguration(
+            interval: const Duration(milliseconds: 200),
+          ),
+        ),
+      );
+      final measurement = probe.measurements.first;
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      await measurement.timeout(const Duration(seconds: 5));
+      expect(samplingPeriods, isNotEmpty);
+      expect(samplingPeriods, everyElement(200000));
+    });
+
+    test('does not start without a barometer on Android', () async {
+      mockBarometer([], errorCode: 'NO_SENSOR');
+      probe = createProbe(Measure(type: BarometerSamplingPackage.AIR_PRESSURE));
+      final errors = <Object>[];
+      probe.measurements.listen(null, onError: errors.add);
+
+      expect(await resume(probe), ExecutorState.PausedButShouldBeResumed);
+      // CAMS stores the error as a dk.cachet.carp.error measurement
+      expect(
+        errors.single,
+        'AirPressureProbe - Cannot read the barometer: '
+        'PlatformException(NO_SENSOR, Sensor not found, null, null)',
+      );
+    });
+
+    test('starts anyway when the barometer stays silent', () async {
+      mockBarometer([]);
+      probe = QuickAirPressureProbe()
+        ..initialize(Measure(type: BarometerSamplingPackage.AIR_PRESSURE));
+      final errors = <Object>[];
+      probe.measurements.listen(null, onError: errors.add);
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      expect(errors, isEmpty);
+      // The probe listens again after the check
+      expect([listens, cancels], [2, 1]);
+    });
+
+    test('starts anyway without a barometer on iOS', () async {
+      mockMissingIosBarometer();
+      final reported = <FlutterErrorDetails>[];
+      final onError = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      addTearDown(() => FlutterError.onError = onError);
+
+      probe = QuickAirPressureProbe()
+        ..initialize(Measure(type: BarometerSamplingPackage.AIR_PRESSURE));
+      final errors = <Object>[];
+      probe.measurements.listen(null, onError: errors.add);
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Flutter logs the failed listen calls, but the probe gets no error
+      expect(reported, hasLength(2));
+      expect(reported.first.exception, isA<PlatformException>());
+      expect(errors, isEmpty);
+    });
+  });
+
+  group('AirPressureSummaryProbe', () {
+    late Probe probe;
+    tearDown(() => probe.pause());
+
+    test('emits one AirPressureSummary per window', () async {
+      mockBarometer([1012.5, 1013.0, 1014.5]);
+      probe = createProbe(summaryMeasure());
+      final measurements = probe.measurements.take(2).toList();
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      for (final measurement in await measurements.timeout(
+        const Duration(seconds: 5),
+      )) {
+        expect(
+          measurement.sensorEndTime,
+          greaterThan(measurement.sensorStartTime),
+        );
+        final summary = measurement.data as AirPressureSummary;
+        expect(summary.count, 3);
+        expect(summary.mean, closeTo(1013.333, 0.001));
+        expect(summary.min, 1012.5);
+        expect(summary.max, 1014.5);
+      }
+      expect(samplingPeriods, isNotEmpty);
+      expect(samplingPeriods, everyElement(500000));
+    });
+
+    test('does not start without a barometer on Android', () async {
+      mockBarometer([], errorCode: 'NO_SENSOR');
+      probe = createProbe(summaryMeasure());
+      final errors = <Object>[];
+      probe.measurements.listen(null, onError: errors.add);
+
+      expect(await resume(probe), ExecutorState.PausedButShouldBeResumed);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      // One error, and no windows that would each add another one
+      expect(errors, hasLength(1));
+      expect(listens, 1);
+    });
+
+    test('runs one window timer when resumed twice', () async {
+      mockBarometer([1013.0]);
+      probe = createProbe(summaryMeasure());
+      final summaries = <Measurement>[];
+      probe.measurements.listen(summaries.add);
+
+      expect(await resume(probe), ExecutorState.Resumed);
+      probe.resume();
+      await Future<void>.delayed(const Duration(milliseconds: 1050));
+      // Windows end at about 400, 700 and 1000 ms
+      expect(summaries.length, inInclusiveRange(2, 4));
+    });
+  });
+}
+```
+
+- **Mock both channels:** `sensors_plus` sets the sampling period without waiting for the result, so a test without the mock of the method channel fails with an unhandled `MissingPluginException`.
+- **Send readings in the format of the plugin:** the event channel sends each reading as a `Float64List` of the pressure in hectopascals and the time in microseconds, which `sensors_plus` turns into a [`BarometerEvent`](https://pub.dev/documentation/sensors_plus/latest/sensors_plus/BarometerEvent-class.html).
+- **Simulate a missing barometer:** `events.error()` with the code `NO_SENSOR` reproduces an Android phone without a barometer. `mockMissingIosBarometer()` makes the native `listen` call fail as on iOS, and the test replaces `FlutterError.onError` to count the reports.
+- **Create probes without a study:** `createProbe()` creates a probe through the registry and initializes it with only a measure. The probe then takes its configuration from the measure, or else from the package default.
+- **Wait for the state:** `resume()` returns the next state on `stateEvents`, which CAMS sets when `onResume()` completes.
+- **Shorten timeouts:** `QuickAirPressureProbe` overrides `firstReadingTimeout`, so a test of a silent barometer takes 300 milliseconds instead of 5 seconds.
+- **Test the resume guard:** the last test resumes the window probe twice and checks that the windows do not double.
+
+Check the values, not only the types. A test that checks only the type of the data passes while the values are wrong. `carp_movesense_package` tests its motion data this way, and misses that it fills the gyroscope and magnetometer values with accelerometer values.
+
+If your measures declare permissions, a probe does not start in a host test. The permission check needs the platform code of `permission_handler`, so the probe reports a `MissingPluginException` and returns `false` from `onResume()`. In a test subclass, override `hasRequiredPermissions()` to return `true`, as the [`probes_test.dart`](https://github.com/carp-dk/carp.sensing-flutter/blob/main/carp_mobile_sensing/test/probes_test.dart) of CAMS does.
+
+## Run the tests
+
+Generate the JSON code, then analyze and test the package from its folder:
+
+```bash
+dart run build_runner build
+flutter analyze
+# -> No issues found!
+flutter test
+# -> 00:03 +23: All tests passed!
+```
+
+The tests also print CAMS log lines. The warnings "Cannot read the barometer" and "No barometer reading yet" come from the tests that simulate a missing barometer.
+
+## Run the package in an app
+
+The example app in `example/` registers the package, deploys a protocol with both measures and prints each measurement as JSON. To set it up, see [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class). Run it on a phone with a barometer, on Android and on iOS, because the platforms report a missing sensor differently:
+
+```bash
+cd example
+flutter run
+```
+
+For each reading, the console shows a line like the first one below. From about 40 seconds after the start, it also shows a line like the second one for each window:
+
+```text
+{"sensorStartTime":1793083703208532,"data":{"__type":"com.example.airpressure","pressure":1013.2471923828125}}
+{"sensorStartTime":1793083733211070,"sensorEndTime":1793083743212514,"data":{"__type":"com.example.airpressuresummary","count":10,"mean":1013.243,"min":1013.21,"max":1013.27}}
+```
+
+The first measurement of a study is the `dk.cachet.carp.triggeredtask` data that CAMS adds when the task starts. CAMS also prints `[CAMS INFO]` and `[CAMS WARNING]` lines, because its default log level shows both.
+
+## Publish the package
+
+Publish the package on pub.dev when its tests pass and it runs on a phone.
+
+<Callout type="warning" title="Publishing is permanent">
+
+pub.dev does not let you unpublish a package. Within 7 days of publication, you can retract a version so that new apps do not adopt it, but it stays listed.
+
+</Callout>
+
+<Steps>
+<Step title="Choose the final names">
+
+Replace `com.example` with a reverse domain name that you control, and give the package and its classes their final names. Every protocol and stored measurement holds the measure types, and the JSON type of a configuration class holds its class name. A later change breaks the studies and data that use the old names.
+
+</Step>
+<Step title="Complete the pubspec">
+
+Remove `publish_to: none`, which keeps the example private, and the comment line above it. Then add the URL of the repository:
+
+```yaml title="pubspec.yaml"
+name: barometer_sampling_package
+description: A CARP Mobile Sensing sampling package that collects air pressure from the phone's barometer.
+version: 0.1.0
+publish_to: none # [!code --]
+repository: https://github.com/your-org/barometer_sampling_package # [!code ++]
+```
+
+Keep the dependency constraints of the example. `carp_mobile_sensing: ^2.5.1` accepts every 2.x version from 2.5.1 on. For a plugin that CAMS also uses, such as `sensors_plus`, use the constraint of CAMS. An app gets only one version of each package. If your package requires another major version than CAMS does, `flutter pub get` fails in every app that uses both.
+
+Use semantic versioning. A change that stored protocols or data cannot handle, such as a new measure type string or a renamed field, needs a new major version.
+
+</Step>
+<Step title="Add a license">
+
+pub.dev requires a `LICENSE` file in the package folder. Replace the placeholder text that `flutter create` writes with a real license; the CARP packages use the MIT license. The dry run in a later step fails without a `LICENSE` file but accepts the placeholder text, so check the file yourself.
+
+</Step>
+<Step title="Write the README and the changelog">
+
+pub.dev shows the README on the page of the package. Describe what an app developer needs:
+
+- the measure types, with their data and default configurations;
+- the setup that an app needs on Android and iOS, such as `NSMotionUsageDescription` for the barometer;
+- the registration order: `CarpMobileSensing.ensureInitialized()`, then `register()`, then `configure()`;
+- the permissions that each measure asks for, and the privacy functions with the `privacySchemaName` that turns them on;
+- the limits, such as the missing data on the iOS Simulator.
+
+Add a section for each version to the changelog, newest first:
+
+```text title="CHANGELOG.md"
+## 0.1.0
+
+- Initial release with the `com.example.airpressure` and `com.example.airpressuresummary` measures.
+```
+
+</Step>
+<Step title="Check the package">
+
+```bash
+flutter analyze
+flutter test
+dart pub publish --dry-run
+# -> Package has 0 warnings.
+```
+
+The dry run lists the files that it would upload, including the example app, and validates the package. pub.dev also scores the package with pub points, for example for its documentation and its static analysis. To see the score before you publish, run [`pana`](https://pub.dev/packages/pana) on a copy of the package folder, as [Scoring](https://pub.dev/help/scoring) on pub.dev describes.
+
+</Step>
+<Step title="Publish the package">
+
+```bash
+dart pub publish
+```
+
+`dart pub publish` asks you to sign in with a Google account, which pub.dev uses to manage who can upload new versions of the package.
+
+</Step>
+</Steps>
+
+## Tell the CARP team
+
+To have the package listed with the other sampling packages in [Measure types](/docs/mobile-sensing/measure-types), tell the CARP team about it on [Discord](https://discord.gg/sswpqGvnf5) or in an issue in [carp.sensing-flutter](https://github.com/carp-dk/carp.sensing-flutter/issues). Report problems in CAMS itself the same way, including the defects that this guide works around.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No air pressure data on the iOS Simulator">
+
+Run the app on a phone. The iOS Simulator has no barometer: `sensors_plus` reports this only in the Flutter log, and after 5 seconds both probes log that they have no reading yet and keep listening:
+
+```text
+══╡ EXCEPTION CAUGHT BY SERVICES LIBRARY ╞══════════════════════════════════════════════════════════
+The following PlatformException was thrown while activating platform stream on channel
+dev.fluttercommunity.plus/sensors/barometer:
+PlatformException(UNAVAILABLE, Barometer is not available on this device, null, null)
+...
+flutter: [CAMS WARNING] AirPressureProbe - No barometer reading yet. The phone may have no barometer, or the user has not allowed motion access yet. Listening anyway.
+flutter: [CAMS WARNING] AirPressureSummaryProbe - No barometer reading yet. The phone may have no barometer, or the user has not allowed motion access yet. Listening anyway.
+Another exception was thrown: PlatformException(UNAVAILABLE, Barometer is not available on this device, null, null)
+```
+
+</Accordion>
+<Accordion title="Null check operator used on a null value at startup">
+
+Call `CarpMobileSensing.ensureInitialized()` before the first use of `SamplingPackageRegistry()`, in the tests and in the app. See [Sampling package class](/docs/mobile-sensing/building-sampling-packages/sampling-package-class).
+
+</Accordion>
+<Accordion title="MissingPluginException in a probe test">
+
+Mock the platform channel that the message names:
+
+| Channel in the message | Cause and fix |
+| --- | --- |
+| `dev.fluttercommunity.plus/sensors/method` | The method channel of `sensors_plus` is not mocked. Mock it as well as the event channel, as `mockMethodChannel()` in `test/probes_test.dart` does. |
+| `flutter.baseflow.com/permissions/methods` | The measure declares permissions. Override `hasRequiredPermissions()` in a test subclass of the probe. |
+
+</Accordion>
+<Accordion title="A warning says that resuming the deployment executor is ignored">
+
+No fix is needed. In CAMS 2.5.1, the warning "Trying to resume a SmartphoneDeploymentExecutor" with "Ignoring this." appears when the app calls `resume()` right after `configure()` or `tryDeployment()`. The probes start anyway, because CAMS resumes the tasks of the phone when the device manager of the phone connects.
+
+</Accordion>
+<Accordion title="A study is gone after the app restarts">
+
+Register the missing class. The log line "Failed to load studies" means that CAMS failed to decode a stored deployment, usually because a class in it is not registered. CAMS then drops that study and every study stored after it. Register every data, configuration and device class of the package in `onRegister()`, and add a JSON round trip test for each one.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Common pitfalls" href="/docs/mobile-sensing/building-sampling-packages/pitfalls" icon="Warning">
+
+The rules that keep a sampling package from losing data.
+
+</Card>
+</Cards>

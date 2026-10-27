@@ -1,0 +1,7 @@
+{
+  "title": "Polar Sampling",
+  "description": "carp_polar_package",
+  "icon": "EcgHeart",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "connecting", "---Reference---", "measure-types", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_polar_package)", "[API reference](https://pub.dev/documentation/carp_polar_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_polar_package)"]
+}

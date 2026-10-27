@@ -1,0 +1,208 @@
+---
+title: Localization
+description: Translate the texts of Research Package and of your tasks with JSON translation files and RPLocalizations.
+icon: Translate
+---
+
+Research Package shows two kinds of text. Its own texts include **NEXT** and the leave dialog, and the texts of your tasks include questions and consent sections.
+
+[`RPLocalizations`](https://pub.dev/documentation/research_package/latest/ui/RPLocalizations-class.html) translates both. The package includes its texts in seven languages, and your app adds a translation file per language for the texts of its tasks.
+
+## How translation works
+
+To register `RPLocalizations.delegate` and Flutter's own delegates in your `MaterialApp`, see [Installation](/docs/flutter-plugins/research-package/installation). For the language of the app, the delegate loads two sets of translations. A key in the second set replaces the same key in the first:
+
+1. the texts of the package for the language;
+2. your app's file `assets/lang/<language_code>.json`.
+
+Every text that a task shows passes through `RPLocalizations`. A text that is a key in the translations shows its translation, and any other text shows as written. Step titles, questions, choices and consent texts can therefore be keys, such as `sleep.question`, or plain text.
+
+Only the language code of the locale counts: `pt_BR` reads `pt.json`, and `zh_Hant` reads `zh.json`. Flutter loads only the first delegate of each type, so register one `RPLocalizations` delegate.
+
+Without an `RPLocalizations` delegate, buttons and dialogs show their English texts, but consent sections without a `title` show their keys, such as `title.overview`. `onSubmit` then also receives the result without translations; see [Translated results](/docs/flutter-plugins/research-package/results#translated-results).
+
+## Package languages
+
+The package texts exist in these languages:
+
+| Language | Code |
+| --- | --- |
+| Chinese (Simplified) | `zh` |
+| Danish | `da` |
+| English | `en` |
+| French | `fr` |
+| Hungarian | `hu` |
+| Portuguese | `pt` |
+| Spanish | `es` |
+
+For other languages, see [Add a language](#add-a-language). The texts of Flutter's own widgets, such as the date picker, come from the `flutter_localizations` delegates.
+
+## Write translation files
+
+Create one file per language in `supportedLocales`, named after the language code, in `assets/lang/`, and declare the folder as an asset in `pubspec.yaml`. Without the file for the current language, `RPLocalizations.delegate` fails to load, and the app does not show its first screen.
+
+A file is a JSON object of keys and texts. Nested objects are allowed: the key of a nested text is its path with dots, so `{"sleep": {"question": "..."}}` and `{"sleep.question": "..."}` define the same key.
+
+This Danish file translates a survey question and changes the label of **NEXT**:
+
+```json title="assets/lang/da.json"
+{
+  "sleep": {
+    "question": "Hvor godt sov du i nat?",
+    "choices": {
+      "well": "Godt",
+      "poorly": "Dårligt"
+    }
+  },
+  "NEXT": "VIDERE"
+}
+```
+
+The task uses the keys in place of texts:
+
+```dart
+final sleepQuality = RPQuestionStep(
+  identifier: 'sleepQuality',
+  title: 'sleep.question',
+  answerFormat: RPChoiceAnswerFormat(
+    answerStyle: RPChoiceAnswerStyle.SingleChoice,
+    choices: [
+      RPChoice(text: 'sleep.choices.well', value: 1),
+      RPChoice(text: 'sleep.choices.poorly', value: 0),
+    ],
+  ),
+);
+```
+
+The English file `assets/lang/en.json` needs the same keys. A text without a translation shows as the key itself.
+
+<Callout type="tip" title="Use the English texts as keys">
+
+Write the tasks in English and use the English texts as the keys of the other languages, such as `"How well did you sleep?": "Hvor godt sov du?"`. The English file then needs no entries, and a missing translation shows in English.
+
+</Callout>
+
+## Change the package texts
+
+Your files can redefine the keys of the package, as `"NEXT": "VIDERE"` does above. To change the label of **NEXT** for one task or one step only, set its `nextButtonText` instead; see [Running tasks](/docs/flutter-plugins/research-package/running-tasks). The package uses these keys:
+
+| Key | English text | Shown in |
+| --- | --- | --- |
+| `NEXT` | NEXT | The bottom bar, the visual consent step and the signature page |
+| `BACK` | BACK | The bottom bar of navigable tasks and the visual consent step |
+| `DONE` | DONE | The completion step |
+| `SEE_SUMMARY` | SEE SUMMARY | The last section of the visual consent step |
+| `AGREE` | AGREE | The review step and its confirmation dialog |
+| `DISAGREE` | DISAGREE | The review step |
+| `CANCEL` | CANCEL | The leave dialog and the confirmation dialog of the review step |
+| `LEAVE` | LEAVE | The leave dialog |
+| `of` | of | The position in the top bar, such as "2 of 5" |
+| `discard_confirmation` | Leave survey? | The title of the leave dialog |
+| `discard_confirmation_body` | Your answers will not be saved. | The text of the leave dialog |
+| `cancel_confirmation` | Leave consent form? | The title of the leave dialog of a consent task |
+| `cancel_confirmation_body` | You have not given your consent yet. | The text of the leave dialog of a consent task |
+| `learn_more` | Learn more | The link to a detail text, and the title of its page |
+| `review_form` | Review this form below, and tap AGREE if you're ready to continue. | The header of the review step |
+| `first_name` | First Name | The signature page |
+| `last_name` | Last Name | The signature page |
+| `sign_with_finger` | Please sign using your finger on the line below | The signature page |
+| `clear` | Clear | The signature page |
+| `choose_one_option` | Choose one option | Above the choices of a single choice question |
+| `choose_one_or_more_options` | Choose one or more options | Above the choices of a multiple choice question |
+| `tap_to_answer` | Tap to answer | The empty field of an integer or decimal question |
+| `input_number` | Input a number | The error for text that is not a number |
+| `between` | Should be between | The error for a number out of range, such as "Should be between 0 and 10" |
+| `and` | and | The error for a number out of range |
+| `select_image` | Select an image | An image choice question without a selection |
+| `title.overview` and the other `title.` keys | The default titles of consent sections | Consent sections without a `title`; see [Section types](/docs/flutter-plugins/research-package/informed-consent#section-types) |
+
+The package files also hold keys that no screen uses, such as `YES`, `NO` and `CONTINUE`. Your app may use them for its own texts.
+
+Two texts are their own keys: **Skip this question** on optional question steps and **Skip these questions** on optional form steps. To translate them, add the English text as a key, such as `"Skip this question": "Spring spørgsmålet over"`. The dialog that appears when a video fails to load is always in English.
+
+## Translate your own texts
+
+Your widgets can use the same translations through `RPLocalizations.of(context)`. Its `translate()` also fills in placeholders and picks plural forms. With this file:
+
+```json title="assets/lang/en.json"
+{
+  "home": {
+    "greeting": "Hello {{name}}",
+    "tasks_zero": "No tasks today",
+    "tasks_one": "{{count}} task left",
+    "tasks_other": "{{count}} tasks left"
+  }
+}
+```
+
+`greeting` holds "Hello Anna" and `tasks` holds "3 tasks left":
+
+```dart
+final locale = RPLocalizations.of(context);
+final greeting = locale?.translate('home.greeting', args: {'name': 'Anna'});
+final tasks = locale?.translate('home.tasks', count: 3);
+```
+
+The two arguments work like this:
+
+- **`args`:** fills in each `{{name}}` placeholder with the value of `name`. Spaces inside the braces do not matter, and a placeholder without a value stays as written.
+- **`count`:** picks the key with the suffix `_zero`, `_one`, `_two`, `_few`, `_many` or `_other` by the plural rules of the language, and fills in `{{count}}`. A form for the exact number wins in every language: `_zero` for 0, `_one` for 1 and `_two` for 2. A missing form falls back to `_other`, and a missing `_two` tries `_few` first.
+
+Texts in tasks are translated without arguments, so a placeholder in a step title stays as written.
+
+## Load translations from other sources
+
+`RPLocalizations.delegate` reads your translations from `assets/lang/`. For other sources, create an [`RPLocalizationsDelegate`](https://pub.dev/documentation/research_package/latest/ui/RPLocalizationsDelegate-class.html) with a list of loaders, and pass it in `localizationsDelegates` in place of `RPLocalizations.delegate`:
+
+```dart
+final translations = RPLocalizationsDelegate(
+  loaders: [
+    const AssetLocalizationLoader(basePath: 'assets/i18n'),
+    MapLocalizationLoader({
+      'en': {'NEXT': 'Continue'},
+      'da': {'NEXT': 'Fortsæt'},
+    }),
+  ],
+);
+```
+
+The package texts load first, and each loader replaces the keys of the ones before it:
+
+| Loader | Loads |
+| --- | --- |
+| `AssetLocalizationLoader` | The file `<base_path>/<language_code>.json` from the app assets. Default `basePath`: `assets/lang`. A missing file stops the delegate from loading. |
+| `MapLocalizationLoader` | Translations from a Dart map, keyed by language code. A language without an entry gets none. |
+| Your own `LocalizationLoader` | The map that its `load(Locale locale)` returns, for example with translations from your server. |
+
+To load the translations again, for example after a download, call `reload()` on the delegate and rebuild the `MaterialApp`. Without translation files, use `RPLocalizationsDelegate(loaders: const [])`, which loads only the package texts.
+
+## Add a language
+
+For a language that the package does not include, such as German, the delegate prints a warning and loads only your file. A package text without a translation then shows its key, such as `learn_more` or `SEE_SUMMARY`, not the English text.
+
+In your file for that language, translate every package key. For the keys, see [Change the package texts](#change-the-package-texts).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The app shows a blank screen at startup">
+
+Add a translation file for every language in `supportedLocales`, and declare `assets/lang/` as an asset. Without the file for the current language, `RPLocalizations.delegate` fails to load. Without translation files, use `RPLocalizationsDelegate(loaders: const [])` instead.
+
+</Accordion>
+<Accordion title="Buttons show keys such as learn_more">
+
+Translate the package keys in your file for the language. The package does not include the language of the app. See [Add a language](#add-a-language).
+
+</Accordion>
+<Accordion title="Consent sections show keys such as title.overview">
+
+Register an `RPLocalizations` delegate in `localizationsDelegates`. Without it, the default titles of consent sections stay keys.
+
+</Accordion>
+<Accordion title="A translation does not appear">
+
+Check that the key in the task matches the path in the file, with dots between the levels of a nested object. Also check that the app registers only one `RPLocalizations` delegate: Flutter ignores the others.
+
+</Accordion>
+</Accordions>

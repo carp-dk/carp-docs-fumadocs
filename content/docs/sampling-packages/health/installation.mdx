@@ -1,0 +1,203 @@
+---
+title: Installation
+description: Add carp_health_package to a CAMS app and configure Google Health Connect on Android and HealthKit on iOS.
+icon: Download
+---
+
+Setting up the package takes four stages: add the packages, configure Google Health Connect on Android, configure HealthKit on iOS, and register the package.
+
+## Add the packages
+
+The package runs on CARP Mobile Sensing (CAMS), so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first. Then add the packages:
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_health_package
+```
+
+`carp_health_package` exports the `health` plugin, so your app can use [`HealthDataType`](https://pub.dev/documentation/health/latest/health/HealthDataType.html) and the other plugin classes without a `health` dependency of its own.
+
+## Configure Android
+
+On Android, the package reads from Health Connect. Add five settings to the CAMS setup:
+
+<Steps>
+<Step title="Set minSdk to 26 or later">
+
+The `health` plugin and the Health Connect client need API level 26 (Android 8.0) or later, and Flutter projects default to 24. In `android/app/build.gradle.kts`, replace the default:
+
+```kotlin title="android/app/build.gradle.kts"
+android {
+    defaultConfig {
+        minSdk = flutter.minSdkVersion // [!code --]
+        minSdk = 26 // [!code ++]
+        // ... the other defaultConfig settings
+    }
+}
+```
+
+The Health Connect client also needs `compileSdk` 36 or later and Android Gradle plugin 8.9.1 or later.
+
+</Step>
+<Step title="Extend FlutterFragmentActivity">
+
+The plugin opens the Health Connect permission screen with the AndroidX activity result API, which `FlutterActivity` does not support. Change the base class of `MainActivity`:
+
+```kotlin title="android/app/src/main/kotlin/<package_path>/MainActivity.kt"
+import io.flutter.embedding.android.FlutterActivity // [!code --]
+import io.flutter.embedding.android.FlutterFragmentActivity // [!code ++]
+
+class MainActivity : FlutterActivity() // [!code --]
+class MainActivity : FlutterFragmentActivity() // [!code ++]
+```
+
+</Step>
+<Step title="Declare the read permissions">
+
+Health Connect grants access per record type, and it grants only the permissions that the app declares. Above `<application>`, declare the read permission of each data type that the protocol collects. For steps and heart rate:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.health.READ_STEPS" />
+<uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+```
+
+CAMS only reads, so `WRITE_STEPS` and the other write permissions are not needed. For the permission of every data type, see [Data types](/docs/sampling-packages/health/data-types). To read data from more than 30 days before the participant granted access, see [Request history access (Android)](/docs/sampling-packages/health/permissions#request-history-access-android).
+
+<Callout type="warning">
+
+The health service collects nothing until every data type is granted, and Health Connect cannot grant a permission that the manifest does not declare. Declare the permission of every data type in the protocol.
+
+</Callout>
+
+</Step>
+<Step title="Let the app find Health Connect">
+
+On Android 11 or later, an app sees another app only when it declares it. Add Health Connect to the `<queries>` element that the Flutter template already contains:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<queries>
+    <!-- ... the existing PROCESS_TEXT intent -->
+    <package android:name="com.google.android.apps.healthdata" /> <!-- [!code ++] -->
+    <intent> <!-- [!code ++] -->
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" /> <!-- [!code ++] -->
+    </intent> <!-- [!code ++] -->
+</queries>
+```
+
+</Step>
+<Step title="Link the Health Connect permission screen">
+
+The Health Connect permission screen links to your app's privacy policy, and it opens your app through an intent filter or an activity alias. Inside the `<activity>` element of `.MainActivity`, add the intent filter:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<intent-filter>
+    <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+</intent-filter>
+```
+
+Inside `<application>`, add the activity alias:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<activity-alias
+    android:name="ViewPermissionUsageActivity"
+    android:exported="true"
+    android:targetActivity=".MainActivity"
+    android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+    </intent-filter>
+</activity-alias>
+```
+
+Both open `MainActivity`, so the app must show its privacy policy, or lead to it, when it opens this way. Google may require this to approve an app that asks for health permissions.
+
+</Step>
+</Steps>
+
+For the Android setup of the `health` plugin itself, such as the Health Connect install flow, see [Android](/docs/flutter-plugins/health/platform-setup/android). That page also declares write permissions, which CAMS does not need.
+
+## Configure iOS
+
+On iOS, the package reads from Apple Health through HealthKit. The `health` plugin needs iOS 15.0 or later, which the CAMS setup already sets. It works with both Swift Package Manager and CocoaPods.
+
+HealthKit access does not go through `permission_handler`, so the package needs no Podfile macros. Add two settings to the CAMS setup:
+
+<Steps>
+<Step title="Add the HealthKit capability">
+
+Open `ios/Runner.xcworkspace` in Xcode, select **Runner → Signing & Capabilities**, click **+ Capability** and add **HealthKit**. Xcode adds the `com.apple.developer.healthkit` entitlement to the app.
+
+</Step>
+<Step title="Add the usage descriptions">
+
+HealthKit shows the read description when it asks the participant for access. CAMS only reads, but the `health` plugin documents both keys, so add both to the top-level `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSHealthShareUsageDescription</key>
+<string>This app reads your steps and heart rate from Apple Health for a research study.</string>
+<key>NSHealthUpdateUsageDescription</key>
+<string>This app does not write data to Apple Health.</string>
+```
+
+</Step>
+</Steps>
+
+For the iOS setup of the `health` plugin itself, see [iOS](/docs/flutter-plugins/health/platform-setup/ios).
+
+## Register the sampling package
+
+Register the package in `main()`, before you call `configure()` on [`SmartPhoneClientManager`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager-class.html):
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_health_package/health_package.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(HealthSamplingPackage()); // [!code ++]
+
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering the package:
+
+- makes the `dk.cachet.carp.health` measure type known to CAMS;
+- adds the [`HealthService`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthService-class.html) device and its [`HealthServiceManager`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthServiceManager-class.html), which asks for access and holds the `health` plugin that reads the data;
+- lets the app run each [`HealthAppTask`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthAppTask-class.html) as a task that the participant starts;
+- registers the package's classes for JSON, so that CAMS can load protocols and data that contain them.
+
+`configure()` restores the studies saved in earlier runs of the app, so the package must be registered before it.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Build fails with a minSdkVersion error">
+
+Set `minSdk` to 26 or later in `android/app/build.gradle.kts`, as in [Configure Android](#configure-android). The `health` plugin and the Health Connect client declare API level 26 as their minimum, so the manifest merge fails for a lower value.
+
+</Accordion>
+<Accordion title="Build fails with an AAR metadata error">
+
+Raise `compileSdk` to 36 or later in `android/app/build.gradle.kts`, and the `com.android.application` plugin to 8.9.1 or later in `android/settings.gradle.kts`. The Health Connect client requires both versions.
+
+</Accordion>
+<Accordion title="Log warns about Health Connect on SDK level below 34">
+
+Ask the participant to install Health Connect from Google Play, for example with `Health().installHealthConnect()`, which opens its store page. On Android 13 and earlier, Health Connect is a separate app, and CAMS logs this warning when it configures the health service.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/health/quickstart" icon="Bolt">
+
+Build an app that reads steps and heart rate every hour.
+
+</Card>
+</Cards>

@@ -1,0 +1,275 @@
+---
+title: Tasks and steps
+description: The task classes and every step type, with their parameters and what each screen shows.
+icon: AccountTree
+---
+
+A **task** is an ordered list of steps that the participant works through, and a **step** is one screen of it. [`RPUITask`](https://pub.dev/documentation/research_package/latest/ui/RPUITask-class.html) shows a task one step at a time and collects one result for the whole run. See [Running tasks](/docs/flutter-plugins/research-package/running-tasks).
+
+Research Package has these step types:
+
+| Step | Shows | Result |
+| --- | --- | --- |
+| [`RPInstructionStep`](#instruction-step) | Text, with an optional image, video or audio player | None |
+| [`RPQuestionStep`](#question-step) | One question | [`RPStepResult`](https://pub.dev/documentation/research_package/latest/model/RPStepResult-class.html) |
+| [`RPFormStep`](#form-step) | Several questions on one scrolling page | `RPStepResult` with one result per question |
+| [`RPTimerStep`](#timer-step) | A countdown | None |
+| [`RPCompletionStep`](#completion-step) | A closing message with a **DONE** button | None |
+| [`RPVisualConsentStep`](#consent-steps) | The sections of a consent document, one page each | [`RPPermissionResult`](https://pub.dev/documentation/research_package/latest/model/RPPermissionResult-class.html), when the step asks for permissions |
+| [`RPConsentReviewStep`](#consent-steps) | The whole consent document, with **AGREE** and a signature | [`RPConsentSignatureResult`](https://pub.dev/documentation/research_package/latest/model/RPConsentSignatureResult-class.html) |
+| [`RPActivityStep`](#activity-step) | An interactive test, drawn by a subclass | [`RPActivityResult`](https://pub.dev/documentation/research_package/latest/model/RPActivityResult-class.html) |
+
+## Task classes
+
+`RPUITask` shows two task classes:
+
+| Class | Order of the steps | Use it for |
+| --- | --- | --- |
+| [`RPOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPOrderedTask-class.html) | The order of the list | Surveys and consent flows that every participant goes through the same way |
+| [`RPNavigableOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPNavigableOrderedTask-class.html) | The order of the list, changed by navigation rules | Surveys that skip or select steps based on earlier answers |
+
+Both take these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the task. The [`RPTaskResult`](https://pub.dev/documentation/research_package/latest/model/RPTaskResult-class.html) of each run gets the same identifier. |
+| `steps` | `List<RPStep>` | Yes | — | The steps, in the order the participant sees them. |
+| `closeAfterFinished` | `bool` | No | `true` | Whether `RPUITask` closes its route after the last step. See [Finish a task](/docs/flutter-plugins/research-package/running-tasks#finish-a-task). |
+
+For navigation rules, see [Branching](/docs/flutter-plugins/research-package/branching).
+
+Three rules apply when you build a task:
+
+- **Unique identifiers:** the result keys each step result by step identifier, so two steps with one identifier share one entry.
+- **One object per step:** `RPOrderedTask` finds the next step by the position of the current one in the list. A step object that appears twice makes the task loop.
+- **A new task for each run:** some objects change while a task runs. A free-text choice stores the typed text in the task, and a reorganizer rule rewrites the step list.
+
+## Common step fields
+
+Every step class extends [`RPStep`](https://pub.dev/documentation/research_package/latest/model/RPStep-class.html), which has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | Identifies the step. Results and navigation rules refer to the step by it. |
+| `title` | `String` | The heading of the screen. A question step shows it as the question. |
+| `text` | `String?` | The body text of instruction and completion steps. Question, form and timer steps do not show it. |
+| `optional` | `bool` | Whether the participant can skip the step. Only question and form steps read it. Default: `false`. |
+| `footnote` | `String?` | Small centered text at the bottom of instruction, question, form and timer steps, such as a copyright notice. |
+| `nextButtonText` | `String?` | The label of **NEXT** while this step is on screen. It wins over the `nextButtonText` of `RPUITask`. |
+
+Each of these texts can be a translation key or plain text. A step shows the translation when one exists, and the text as written otherwise. See [Localization](/docs/flutter-plugins/research-package/localization).
+
+Only `RPStep` and `RPInstructionStep` take `nextButtonText` as a constructor parameter. For other steps, set it with a cascade:
+
+```dart
+final readyCheck = RPQuestionStep(
+  identifier: 'readyCheck',
+  title: 'Are you in a quiet place?',
+  answerFormat: RPChoiceAnswerFormat(
+    answerStyle: RPChoiceAnswerStyle.SingleChoice,
+    choices: [
+      RPChoice(text: 'Yes', value: 1),
+      RPChoice(text: 'No', value: 0),
+    ],
+  ),
+)..nextButtonText = 'Start the test';
+```
+
+## Instruction step
+
+[`RPInstructionStep`](https://pub.dev/documentation/research_package/latest/model/RPInstructionStep-class.html) shows information without asking anything: a title, a text and optionally an image, a video or an audio player. **NEXT** is enabled from the start, and the step records no result.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step. |
+| `title` | `String` | Yes | — | The heading of the screen. |
+| `text` | `String?` | No | — | The text under the title. |
+| `detailText` | `String?` | No | — | A longer text behind a **Learn more** button, shown on a page of its own. |
+| `imagePath` | `String?` | No | — | An image above the title. |
+| `videoPath` | `String?` | No | — | A video above the title. |
+| `audioPath` | `String?` | No | — | An audio player above the title. |
+| `footnote` | `String?` | No | — | Small text at the bottom of the screen. |
+| `nextButtonText` | `String?` | No | — | The label of **NEXT** on this step. |
+| `optional` | `bool` | No | `false` | Not used by this step. |
+
+<Callout type="info" title="Version 3.2.0 in CAMS apps">
+
+In `research_package` 3.2.0, an instruction step without `text` fails to build. Set `text` when your app uses that version.
+
+</Callout>
+
+An instruction step with a recording and a **Learn more** page:
+
+```dart
+final intro = RPInstructionStep(
+  identifier: 'intro',
+  title: 'Breathing exercise',
+  text: 'Listen to the recording, then answer three questions.',
+  detailText:
+      'The recording guides you through four minutes of slow breathing.',
+  audioPath: 'audio/breathing.mp3',
+  footnote: 'Recording by the study team',
+);
+```
+
+The three media paths take either an asset path or an `http` or `https` URL. For an asset, the image and the video take the full asset key, and the audio takes a path relative to `assets/`:
+
+| Field | Asset path | What the participant sees |
+| --- | --- | --- |
+| `imagePath` | `assets/images/sleep.png` | The image, scaled to fit a box as tall as the screen. The title and the text follow below it, so the participant scrolls to read them. |
+| `videoPath` | `assets/video/intro.mp4` | A video that plays and pauses on a tap, with a seek bar and a full-screen button. On a load error, a "Connection Error" dialog offers to retry. |
+| `audioPath` | `audio/breathing.mp3` for `assets/audio/breathing.mp3` | A seek bar with play, pause and stop buttons. |
+
+Neither the video nor the audio starts by itself. To add the files to your app, see [Add media and sound assets](/docs/flutter-plugins/research-package/installation#add-media-and-sound-assets).
+
+## Question step
+
+[`RPQuestionStep`](https://pub.dev/documentation/research_package/latest/model/RPQuestionStep-class.html) asks one question. Its answer format decides what the participant enters and what type the answer has. See [Answer formats](/docs/flutter-plugins/research-package/answer-formats).
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step and its result. |
+| `title` | `String` | Yes | — | The question. |
+| `answerFormat` | `RPAnswerFormat` | Yes | — | How the participant answers, as a subclass of [`RPAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPAnswerFormat-class.html). |
+| `optional` | `bool` | No | `false` | Adds a **Skip this question** button. |
+| `footnote` | `String?` | No | — | Small text at the bottom of the screen. |
+| `autoSkip` | `bool` | No | `false` | Skips the question automatically. See the known issue below. |
+| `timeout` | `Duration` | No | `Duration(seconds: 0)` | Meant as the time before `autoSkip` skips the question, but not used. |
+| `autoFocus` | `bool` | No | `false` | Not used. To open the keyboard, set `autoFocus` on [`RPTextAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPTextAnswerFormat-class.html). |
+
+A question that the participant may skip:
+
+```dart
+final sleepHours = RPQuestionStep(
+  identifier: 'sleepHours',
+  title: 'How many hours did you sleep last night?',
+  answerFormat: RPIntegerAnswerFormat(
+    minValue: 0,
+    maxValue: 24,
+    suffix: 'hours',
+  ),
+  optional: true,
+  footnote: 'Do not count naps.',
+);
+```
+
+The screen shows the question and the input of the answer format. **NEXT** is enabled while the question has a valid answer. The step records an `RPStepResult` with the answer under the key `answer`, and **Skip this question** records one whose answer is `null`.
+
+<Callout type="warning" title="Known issue">
+
+With `autoSkip: true`, a question step skips itself about one second after it appears, whatever `timeout` says. Leave `autoSkip` off on question steps. For a timed question, put it in a form step, whose countdown follows `timeout`.
+
+</Callout>
+
+## Form step
+
+[`RPFormStep`](https://pub.dev/documentation/research_package/latest/model/RPFormStep-class.html) shows several questions on one scrolling page, each with its own answer format. Use it for questions that belong together, such as demographics.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step and its result. |
+| `title` | `String` | Yes | — | The heading above the questions. |
+| `questions` | `List<RPQuestionStep>` | Yes | — | The questions, each with its own identifier. |
+| `optional` | `bool` | No | `false` | Adds a **Skip these questions** button, which skips the whole form. |
+| `autoSkip` | `bool` | No | `false` | Starts a countdown of `timeout` that ends the form by itself. The countdown is not shown. |
+| `timeout` | `Duration` | No | `Duration(seconds: 0)` | The length of the countdown, in whole seconds. |
+| `saveResultsOnAutoSkip` | `bool` | No | `false` | What happens when the countdown ends: `true` submits the answers given so far, and `false` skips the form with every answer set to `null`. |
+| `forceWait` | `bool` | No | `false` | With `autoSkip`, keeps **NEXT** disabled until the countdown ends. |
+| `footnote` | `String?` | No | — | Small text at the bottom of the screen. |
+
+A form with one required and one optional question:
+
+```dart
+final aboutYou = RPFormStep(
+  identifier: 'aboutYou',
+  title: 'About you',
+  questions: [
+    RPQuestionStep(
+      identifier: 'age',
+      title: 'How old are you?',
+      answerFormat: RPIntegerAnswerFormat(
+        minValue: 18,
+        maxValue: 110,
+        suffix: 'years',
+      ),
+    ),
+    RPQuestionStep(
+      identifier: 'occupation',
+      title: 'What is your occupation?',
+      answerFormat: RPTextAnswerFormat(hintText: 'For example, nurse'),
+      optional: true,
+    ),
+  ],
+);
+```
+
+The form behaves as follows:
+
+- **NEXT** is enabled once every question that is not optional has an answer. In a form whose questions are all optional, it is enabled after the first answer.
+- From each question, the form uses only `identifier`, `title`, `answerFormat` and `optional`. The `autoSkip`, `timeout` and `footnote` of a question have no effect inside a form.
+- `forceWait` works only together with `autoSkip`. Without the countdown, **NEXT** never becomes enabled.
+- The form records one `RPStepResult` under its own identifier, which holds one `RPStepResult` per question. For the result of this form, see [JSON format](/docs/flutter-plugins/research-package/results#json-format).
+
+## Timer step
+
+[`RPTimerStep`](https://pub.dev/documentation/research_package/latest/model/RPTimerStep-class.html) makes the participant wait, for example between two exercises. It shows the title and the remaining time as minutes and seconds, and it enables **NEXT** when the countdown reaches zero. The step records no result.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step. |
+| `title` | `String` | Yes | — | The text above the countdown. |
+| `timeout` | `Duration` | Yes | — | The waiting time, in whole seconds. |
+| `showTime` | `bool` | No | `true` | Whether the remaining time is shown. |
+| `autoSkip` | `bool` | No | `false` | Moves on to the next step when the countdown ends. |
+| `playSound` | `bool` | No | `false` | Plays `assets/audio/RPTimerStepSound.mp3` from your app when the countdown ends. |
+| `footnote` | `String?` | No | — | Small text at the bottom of the screen. |
+| `optional` | `bool` | No | `false` | Not used by this step. |
+
+A two-minute rest that moves on by itself:
+
+```dart
+final rest = RPTimerStep(
+  identifier: 'rest',
+  title: 'Sit still for two minutes',
+  timeout: const Duration(minutes: 2),
+  autoSkip: true,
+);
+```
+
+The countdown shows no hours, so keep `timeout` under one hour. The package does not bundle the sound for `playSound` into your app. See [Add media and sound assets](/docs/flutter-plugins/research-package/installation#add-media-and-sound-assets).
+
+## Completion step
+
+[`RPCompletionStep`](https://pub.dev/documentation/research_package/latest/model/RPCompletionStep-class.html) ends a task with a title, a text, a checkmark animation and a **DONE** button. It hides the bottom bar and records no result. When it is the last step, **DONE** finishes the task.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step. |
+| `title` | `String` | Yes | — | The heading of the screen. |
+| `text` | `String?` | No | — | The message under the title. Always set it: the screen fails to build when `text` is `null`. |
+| `optional` | `bool` | No | `false` | Not used by this step. |
+
+A closing screen:
+
+```dart
+final done = RPCompletionStep(
+  identifier: 'done',
+  title: 'Thank you',
+  text: 'Your answers are saved. You can close the app.',
+);
+```
+
+## Consent steps
+
+[`RPVisualConsentStep`](https://pub.dev/documentation/research_package/latest/model/RPVisualConsentStep-class.html) and [`RPConsentReviewStep`](https://pub.dev/documentation/research_package/latest/model/RPConsentReviewStep-class.html) make up an informed consent flow, and both show an [`RPConsentDocument`](https://pub.dev/documentation/research_package/latest/model/RPConsentDocument-class.html):
+
+| Step | Parameters | Result |
+| --- | --- | --- |
+| `RPVisualConsentStep` | `identifier`, `consentDocument` and `askPermission` (default `false`) | `RPPermissionResult`, when the step asks for permissions |
+| `RPConsentReviewStep` | `identifier`, `title`, `consentDocument`, `text` and `reasonForConsent` | `RPConsentSignatureResult` |
+
+A task that contains a consent review step is a consent task: it has no close button, and the participant leaves it with **DISAGREE**. Both steps hide the bottom bar and bring their own buttons. See [Informed consent](/docs/flutter-plugins/research-package/informed-consent).
+
+## Activity step
+
+[`RPActivityStep`](https://pub.dev/documentation/research_package/latest/model/RPActivityStep-class.html) is the base class of interactive tests, such as the cognitive tests in `cognition_package`. A subclass draws the test and records an `RPActivityResult`; the base class itself shows an empty screen. See [Activity steps](/docs/flutter-plugins/research-package/activity-steps).

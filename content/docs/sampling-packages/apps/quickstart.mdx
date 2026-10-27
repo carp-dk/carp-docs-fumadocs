@@ -1,0 +1,169 @@
+---
+title: Quickstart
+description: Build a Flutter app that collects the installed apps and the app usage of the last day and prints each measurement.
+icon: Bolt
+---
+
+The finished app collects the installed apps and the app usage of the past day once a day, and prints each measurement as JSON.
+
+## Prerequisites
+
+- The package and its Android setup, as described in [Installation](/docs/sampling-packages/apps/installation).
+- An Android phone. On iOS, the measures do not run.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_apps_package/apps.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(AppsSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone as the primary device
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Installed apps and app usage',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Collect the installed apps and app usage once a day
+  protocol.addTaskControl(
+    PeriodicTrigger(period: const Duration(days: 1)),
+    BackgroundTask(
+      measures: [
+        Measure(type: AppsSamplingPackage.APPS), // [!code highlight]
+        Measure(
+          type: AppsSamplingPackage.APP_USAGE, // [!code highlight]
+          samplingConfiguration: HistoricSamplingConfiguration( // [!code highlight]
+            past: const Duration(days: 1), // [!code highlight]
+          ),
+        ),
+      ],
+    ),
+    phone,
+  );
+
+  // 4. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 5. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the two measure types and their data classes known to CARP Mobile Sensing (CAMS). Register before `configure()`. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Creates a protocol with the phone as its only device. `SQLiteDataEndPoint` stores the measurements in a SQLite database on the phone. |
+| **3. Measures** | Both measures are one-time measures, so the `PeriodicTrigger` collects them when sampling starts and then once a day. The `HistoricSamplingConfiguration` makes the first app usage window cover the past day and each later window start where the previous one ended. |
+| **4. Deploy** | Adds the protocol as a study, deploys it and resumes sampling. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **5. Measurements** | Prints every measurement as JSON. |
+
+## Grant usage access
+
+App usage needs the **Usage access** setting, which no permission dialog asks for:
+
+<Steps>
+<Step title="Run the app">
+
+```bash
+flutter run
+```
+
+Both measures collect as soon as sampling starts.
+
+</Step>
+<Step title="Turn on usage access">
+
+When Android opens the **Usage access** settings screen, select the app and allow access. The first app usage measurement, taken before access was granted, has an empty `usage` map.
+
+</Step>
+<Step title="Restart the app">
+
+The trigger then fires again, and both measures collect with access granted.
+
+</Step>
+</Steps>
+
+## Check the data
+
+The installed apps arrive as one `dk.cachet.carp.apps` measurement that lists every app. An app usage measurement looks like this, formatted for readability:
+
+```json
+{
+  "sensorStartTime": 1792918804700012,
+  "sensorEndTime": 1793005204812345,
+  "data": {
+    "__type": "dk.cachet.carp.appusage",
+    "start": "2026-10-25T09:00:04.700012Z",
+    "end": "2026-10-26T09:00:04.812345Z",
+    "usage": {
+      "com.spotify.music": {
+        "name": "music",
+        "packageName": "com.spotify.music",
+        "usage": 2712000000,
+        "startDate": "2026-10-25T00:00:00.000",
+        "endDate": "2026-10-26T09:58:12.000",
+        "lastForeground": "2026-10-26T08:41:27.000"
+      }
+    }
+  }
+}
+```
+
+In the JSON, each app's `usage` is in microseconds: `2712000000` is 45 minutes and 12 seconds.
+
+To use the data in the app, check the type of `measurement.data`:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is AppUsage) {
+    data.usage.forEach((packageName, info) {
+      print('$packageName: ${info.usage.inMinutes} min');
+    });
+  }
+});
+```
+
+## Next steps
+
+<Cards>
+<Card title="Installed apps" href="/docs/sampling-packages/apps/installed-apps" icon="Apps">
+
+The apps installed on an Android phone, with version and update time.
+
+</Card>
+<Card title="App usage" href="/docs/sampling-packages/apps/app-usage" icon="Timer">
+
+Foreground time per app over a time window, from Android usage statistics.
+
+</Card>
+</Cards>

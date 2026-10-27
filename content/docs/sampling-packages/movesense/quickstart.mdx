@@ -1,0 +1,204 @@
+---
+title: Quickstart
+description: Build an app that finds a Movesense sensor, connects to it and prints its heart rate and ECG measurements.
+icon: Bolt
+---
+
+The finished app connects to the first Movesense sensor it finds and prints each heart rate and ECG measurement as JSON.
+
+## Prerequisites
+
+- The setup in [Installation](/docs/sampling-packages/movesense/installation), including the CARP Mobile Sensing (CAMS) setup it builds on.
+- A Movesense MD, Active HR+ or HR2 sensor with its strap or electrodes.
+- An Android phone or iPhone with Bluetooth turned on. Emulators and simulators do not work.
+
+## Complete example
+
+The example finds the sensor with the scan of the Movesense plugin, so add the plugin as a direct dependency:
+
+```bash
+flutter pub add carp_movesense_flutter
+```
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_movesense_package/carp_movesense_package.dart';
+import 'package:carp_movesense_flutter/carp_movesense_flutter.dart' show Mds;
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(MovesenseSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone and a Movesense sensor
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Heart rate and ECG from a Movesense sensor',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  final movesense = MovesenseDevice(); // [!code highlight]
+  protocol
+    ..addPrimaryDevice(phone)
+    ..addConnectedDevice(movesense, phone);
+
+  // 3. Collect heart rate and ECG while the sensor is connected
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: MovesenseSamplingPackage.HR), // [!code highlight]
+        Measure(type: MovesenseSamplingPackage.ECG), // [!code highlight]
+      ],
+    ),
+    movesense,
+  );
+
+  // 4. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 5. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  // 6. Find a Movesense sensor, bind it and connect to it
+  final manager = client.deviceController.getDeviceManager(
+    MovesenseDevice.DEVICE_TYPE,
+  ) as MovesenseDeviceManager;
+  manager.statusEvents.listen((status) => print('Movesense: ${status.name}'));
+  await manager.requestPermissions();
+  Mds.startScan((name, address) {
+    if (name == null || address == null) return;
+    Mds.stopScan();
+    manager.pair(bleAddress: address, bleName: name); // [!code highlight]
+    manager.connect(); // [!code highlight]
+  });
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the Movesense measure types and the sensor known to CAMS. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Adds a [`MovesenseDevice`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseDevice-class.html) as a connected device of the phone. The protocol names a role, not a specific sensor. |
+| **3. Task** | Runs `HR` and `ECG` on the sensor. Both are event-based measures, so an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html) starts them and they stream while the sensor is connected. |
+| **4. Deploy** | Configures CAMS, deploys the protocol on the phone and resumes sampling. The sensor's task waits until the sensor connects. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **5. Print** | Prints every measurement as JSON. |
+| **6. Connect** | Asks for the Bluetooth permissions, scans for sensors that advertise the Movesense services, binds the first one with `pair()` and connects to it. |
+
+The Movesense plugin also has a class named `MovesenseDevice`, so the example imports only `Mds` from it. With several sensors nearby, the example takes the first one it finds; to choose a sensor, see [Connecting a device](/docs/sampling-packages/movesense/connecting).
+
+## Run the app
+
+<Steps>
+<Step title="Put on the sensor">
+
+Wear the sensor on its strap or electrodes, so that it can measure heart rate and ECG.
+
+</Step>
+<Step title="Start the app on your phone">
+
+```bash
+flutter run
+```
+
+On Android, the app asks for the nearby devices and location permissions; on iOS, it asks for Bluetooth access. Allow them.
+
+</Step>
+<Step title="Check the console">
+
+The console shows the status `paired`, then `connecting` and `connected`, and then one JSON object per measurement. ECG measurements hold batches of raw samples, and heart rate measurements look like this:
+
+```json
+{
+  "sensorStartTime": 1793006600894110,
+  "data": {
+    "__type": "dk.cachet.carp.movesense.hr",
+    "hr": 60.79999923706055,
+    "rr": 976
+  }
+}
+```
+
+Each probe skips the sensor's first 10 notifications to let the sensor stabilize, so the output of each measure starts with the 11th. The output also includes a `dk.cachet.carp.triggeredtask` measurement, which CAMS adds each time the trigger starts the task.
+
+</Step>
+</Steps>
+
+To work with the values in code, check the type of the data:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is MovesenseHR) {
+    print('${data.hr} bpm, RR interval ${data.rr} ms');
+  }
+});
+```
+
+For all the fields, see [Measure types](/docs/sampling-packages/movesense/measure-types).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The status changes to disconnected right after connect()">
+
+On Android, check that the nearby devices and location permissions are allowed. See [Installation](/docs/sampling-packages/movesense/installation#troubleshooting).
+
+</Accordion>
+<Accordion title="The scan finds no sensor">
+
+Check that Bluetooth is on. The app needs the nearby devices permission on Android 12 or later, and the location permission on Android 11 and lower. On Android 11 and lower, scans may also return nothing while location is turned off in the phone's settings.
+
+</Accordion>
+<Accordion title="A subscription fails with status 408">
+
+Collect fewer streams at once, and connect again if the measures stop. The sensor may not keep up when it streams heart rate, ECG and inertial measurement unit (IMU) data at the same time. See [Sampling and timestamps](/docs/sampling-packages/movesense/measure-types#sampling-and-timestamps).
+
+</Accordion>
+<Accordion title="The log shows Failed to load studies after a restart">
+
+The example keeps working, because it creates a new study at every start. The message comes from a known issue in version 3.1.0: CAMS cannot read back the stored registration of a Movesense sensor. See [Restore the binding after a restart](/docs/sampling-packages/movesense/connecting#restore-the-binding-after-a-restart).
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Connecting a device" href="/docs/sampling-packages/movesense/connecting" icon="Bluetooth">
+
+Find, bind and connect a sensor, and follow its status.
+
+</Card>
+<Card title="Measure types" href="/docs/sampling-packages/movesense/measure-types" icon="Dataset">
+
+The six measure types, with their fields, units and example data.
+
+</Card>
+<Card title="Triggers" href="/docs/mobile-sensing/domain-model#triggers" icon="Schedule">
+
+Start tasks on a schedule or when an event occurs.
+
+</Card>
+</Cards>

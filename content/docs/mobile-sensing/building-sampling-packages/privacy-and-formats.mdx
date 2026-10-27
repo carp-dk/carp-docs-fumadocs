@@ -1,0 +1,311 @@
+---
+title: Privacy and data formats
+description: Add privacy functions that coarsen sensitive data, and transformers that convert data to a format such as Open mHealth.
+---
+
+CARP Mobile Sensing (CAMS) runs each measurement's data through **data transformers**, functions that take a [`Data`](https://pub.dev/documentation/carp_core/latest/common/Data-class.html) object and return one. It does so before it stores the measurement or passes it to the app.
+
+A sampling package supplies transformers for its own data types: privacy functions protect sensitive values, and format transformers convert data to another data format. The barometer example adds two privacy functions that round air pressure to whole hectopascals (hPa).
+
+CAMS groups transformers in **schemas**, one for each namespace, keyed by data type. It applies two schemas to every measurement, in this order:
+
+| Schema | Selected by | Default |
+| --- | --- | --- |
+| Privacy schema | `privacySchemaName` of the protocol | None: data is kept as collected |
+| Data format | `dataFormat` of the protocol's data endpoint | [`NameSpace.CARP`](https://pub.dev/documentation/carp_core/latest/common/NameSpace/CARP-constant.html): data is kept as collected |
+
+Each schema looks up the transformer for the type of the data and leaves data without one unchanged. For how a study protocol selects the schemas, see [Data transformation and privacy](/docs/mobile-sensing/privacy).
+
+## Write a privacy function
+
+A privacy function is a [`DataTransformer`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformer.html), that is, a `Data Function(Data)`. The barometer example rounds air pressure to whole hectopascals:
+
+```dart title="lib/barometer_privacy.dart"
+part of 'barometer_sampling_package.dart';
+
+// Air pressure drops by about 0.12 hPa per meter of altitude near sea level,
+// so exact readings can show which floor of a building the phone is on.
+// Rounding to whole hectopascals coarsens altitude to about 8 meters, and
+// rounding twice gives the same value, so applying it again is safe
+
+/// Rounds the pressure of [AirPressure] data to whole hectopascals
+///
+/// Registered in the default [PrivacySchema] for the
+/// [BarometerSamplingPackage.AIR_PRESSURE] measure
+Data roundAirPressure(Data data) { // [!code highlight]
+  if (data is AirPressure) data.pressure = data.pressure.roundToDouble(); // [!code highlight]
+  return data;
+}
+
+/// Rounds the mean, minimum and maximum of [AirPressureSummary] data to
+/// whole hectopascals
+///
+/// Registered in the default [PrivacySchema] for the
+/// [BarometerSamplingPackage.AIR_PRESSURE_SUMMARY] measure
+Data roundAirPressureSummary(Data data) { // [!code highlight]
+  if (data is AirPressureSummary) { // [!code highlight]
+    data
+      ..mean = data.mean.roundToDouble()
+      ..min = data.min.roundToDouble()
+      ..max = data.max.roundToDouble();
+  }
+  return data;
+}
+```
+
+One floor of a building is about 3 m high, or 0.36 hPa, so raw readings can tell floors apart. Weather changes of several hectopascals a day stay visible after rounding.
+
+- Test the class with `is`, and return any other data unchanged. `carp_connectivity_package` asserts the class and then casts. In a release build, where asserts are off, the cast throws a `TypeError` if data of another class ever has the same type.
+- Change the object in place or return a new one: CAMS replaces the measurement's data with the result.
+
+## Register the privacy functions
+
+The barometer package adds its functions to the default privacy schema in `onRegister()` of `lib/barometer_package.dart`, keyed by the measure types:
+
+```dart
+  @override
+  void onRegister() {
+    // Register the classes that CAMS deserializes from JSON
+    FromJsonFactory().registerAll([
+      AirPressure(pressure: 0),
+      AirPressureSummary(count: 0, mean: 0, min: 0, max: 0),
+      AirPressureSummarySamplingConfiguration(
+        interval: Duration.zero,
+        duration: Duration.zero,
+      ),
+    ]);
+
+    // Add the privacy functions to the default privacy schema
+    DataTransformerSchemaRegistry().lookup(PrivacySchema.DEFAULT)! // [!code highlight]
+      ..add(AIR_PRESSURE, roundAirPressure) // [!code highlight]
+      ..add(AIR_PRESSURE_SUMMARY, roundAirPressureSummary); // [!code highlight]
+  }
+```
+
+- [`DataTransformerSchemaRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/DataTransformerSchemaRegistry-class.html) registers the default [`PrivacySchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PrivacySchema-class.html) as soon as it is created, so `lookup()` always finds it. `add()` replaces a function that was added for the same type before.
+- The key must be the data's type, which is the data class's `jsonType`. CAMS looks a function up by the type of the data, not of the measure. The barometer data classes return the measure types from `jsonType`, so the two are the same.
+- Never register a new `PrivacySchema`: `register()` replaces the schema of that name, and the functions that the packages added to it are gone.
+
+## Turn on privacy in the protocol
+
+Privacy functions run only in studies whose protocol names the privacy schema:
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Air pressure',
+  dataEndPoint: SQLiteDataEndPoint(),
+  privacySchemaName: PrivacySchema.DEFAULT, // [!code ++]
+);
+```
+
+Without `privacySchemaName`, CAMS uses the CARP schema, which has no transformers, and stores the data as collected. Say so in your README, and list the fields that each function changes. The READMEs of `carp_communication_package` and `carp_connectivity_package` describe their privacy protection but do not say that it needs `privacySchemaName`.
+
+The `privacySchemaName` and the `dataFormat` must name registered schemas. CAMS looks both up with a null check, so an unknown name makes the transformation throw for every measurement.
+
+## Make privacy functions safe to repeat
+
+CAMS transforms a measurement once for every listener of the study's measurement stream, each time on the same [`Measurement`](https://pub.dev/documentation/carp_core/latest/data/Measurement-class.html) object. The data manager is one listener, and an app that listens to [`SmartPhoneClientManager().measurements`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SmartPhoneClientManager/measurements.html) adds another. A privacy function therefore often runs twice on the same data, and a package cannot prevent it.
+
+Write functions that give the same result when they run again. Rounding does, and the barometer example's tests in `test/package_test.dart` apply the default schema twice to check it:
+
+```dart
+  group('Privacy', () {
+    final schema = DataTransformerSchemaRegistry().lookup(
+      PrivacySchema.DEFAULT,
+    )!;
+
+    test('rounds AirPressure to whole hectopascals', () {
+      final data = schema.transform(AirPressure(pressure: 1013.62));
+      expect((data as AirPressure).pressure, 1014);
+      // Rounding again changes nothing // [!code highlight]
+      expect((schema.transform(data) as AirPressure).pressure, 1014); // [!code highlight]
+    });
+    // ...
+  });
+```
+
+Hashing does not give the same result: a second run hashes the hash, so the data manager and the app can get different values.
+
+## Limits of privacy functions
+
+- **Hashing is not anonymization:** an unsalted SHA-1 hash of a phone number, as `carp_communication_package` stores, can be reversed by hashing every possible number and comparing. Prefer removing or coarsening a value, as the barometer example does, and do not call hashed data anonymous.
+- **Only the measurement's own data:** CAMS transforms the data of each measurement by its type, not the data nested in it. A user task's result can be stored twice: as a measurement and inside the [`CompletedAppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CompletedAppTask-class.html) of its task, as the survey package does. A function keyed by the result's type protects only the first copy.
+
+## Convert data to another format
+
+A format transformer converts data to a data class in another namespace. The registry creates a schema for each of these namespaces:
+
+| Schema | Namespace | Holds |
+| --- | --- | --- |
+| [`CARPTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/CARPTransformerSchema-class.html) | `dk.cachet.carp` (`NameSpace.CARP`) | No transformers: the default data format |
+| [`OMHTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/OMHTransformerSchema-class.html) | `org.openmhealth` (`NameSpace.OMH`) | Open mHealth (OMH) transformers that packages add |
+| [`FHIRTransformerSchema`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/FHIRTransformerSchema-class.html) | `org.hl7.fhir` (`NameSpace.FHIR`) | Fast Healthcare Interoperability Resources (FHIR) transformers that packages add |
+| `PrivacySchema` | `default-privacy-schema` (`PrivacySchema.DEFAULT`) | Privacy functions that packages add |
+
+The example below converts the readings of a blood pressure package to OMH data points of the [`openmhealth_schemas`](https://pub.dev/packages/openmhealth_schemas) package. It is built like the location and activity transformers of the [context package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_context_package). The [Movisens package](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_movisens_package) converts heart rate and step counts the same way, and adds a FHIR transformer for heart rate.
+
+`BloodPressureReading` is the package's data class, with `systolic` and `diastolic` in millimeters of mercury (mmHg), for the measure type `com.example.bloodpressure`.
+
+Adding a format takes four steps:
+
+<Steps>
+<Step title="Add the format's package">
+
+```bash
+flutter pub add openmhealth_schemas
+```
+
+Import it in the library file. It also defines `Acceleration`, `HeartRate`, `Measure` and `StepCount`, which `carp_core` defines too, so hide them:
+
+```dart
+import 'package:openmhealth_schemas/openmhealth_schemas.dart'
+    hide Acceleration, HeartRate, Measure, StepCount;
+```
+
+</Step>
+<Step title="Write the data class of the format">
+
+```dart
+/// An Open mHealth (OMH) blood pressure data point, made from a
+/// [BloodPressureReading]
+@JsonSerializable(includeIfNull: false, explicitToJson: true)
+class OMHBloodPressureDataPoint extends Data {
+  /// The OMH data point: a header and a blood pressure body
+  DataPoint datapoint;
+
+  OMHBloodPressureDataPoint(this.datapoint);
+
+  /// Converts [reading] to an OMH blood pressure data point
+  factory OMHBloodPressureDataPoint.fromReading(BloodPressureReading reading) =>
+      OMHBloodPressureDataPoint(
+        DataPoint(
+          body: BloodPressure(
+            systolicBloodPressure: SystolicBloodPressure(
+              unit: BloodPressureUnit.MM_OF_MERCURY,
+              value: reading.systolic,
+            ),
+            diastolicBloodPressure: DiastolicBloodPressure(
+              unit: BloodPressureUnit.MM_OF_MERCURY,
+              value: reading.diastolic,
+            ),
+          ),
+          provenance: DataPointAcquisitionProvenance(
+            sourceName: 'Example blood pressure monitor',
+            modality: DataPointModality.SENSED,
+          ),
+        ),
+      );
+
+  /// The transformer that the package adds to the OMH schema
+  static DataTransformer get transformer => // [!code highlight]
+      (data) => data is BloodPressureReading // [!code highlight]
+      ? OMHBloodPressureDataPoint.fromReading(data)
+      : data;
+
+  // Every OMH data point has the data type org.openmhealth.data-point
+  @override
+  String get jsonType => '${NameSpace.OMH}.${SchemaSupport.DATA_POINT}'; // [!code highlight]
+
+  @override
+  Function get fromJsonFunction => _$OMHBloodPressureDataPointFromJson;
+  factory OMHBloodPressureDataPoint.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson<OMHBloodPressureDataPoint>(json);
+  @override
+  Map<String, dynamic> toJson() => _$OMHBloodPressureDataPointToJson(this);
+}
+```
+
+Its `jsonType` puts the data in the OMH namespace, and its transformer returns any other data unchanged, like a privacy function.
+
+</Step>
+<Step title="Add the transformer in onRegister()">
+
+```dart
+@override
+void onRegister() {
+  // ...
+  DataTransformerSchemaRegistry()
+      .lookup(NameSpace.OMH)!
+      .add(BLOOD_PRESSURE, OMHBloodPressureDataPoint.transformer);
+}
+```
+
+Add to the schema that the registry created. Never register `OMHTransformerSchema` again: `register()` replaces the schema with an empty one, and the transformers that other packages added are gone.
+
+</Step>
+<Step title="Select the format in the protocol">
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Blood pressure in Open mHealth format',
+  dataEndPoint: SQLiteDataEndPoint(dataFormat: NameSpace.OMH),
+);
+```
+
+</Step>
+</Steps>
+
+<Accordions>
+<Accordion title="Example data">
+
+A blood pressure measurement after the OMH transformer, as the data manager stores it:
+
+```json
+{
+  "sensorStartTime": 1793086326042377,
+  "data": {
+    "__type": "org.openmhealth.data-point",
+    "datapoint": {
+      "header": {
+        "id": "fbbf37b0-d1d8-11f1-92fc-bb572c71a5c2",
+        "creation_date_time": "2026-10-27T08:35:29.195733",
+        "schema_id": {
+          "namespace": "omh",
+          "name": "blood-pressure",
+          "version": "1.0"
+        },
+        "acquisition_provenance": {
+          "source_name": "Example blood pressure monitor",
+          "modality": "sensed"
+        }
+      },
+      "body": {
+        "systolic_blood_pressure": {
+          "value": 118.0,
+          "unit": "mmHg"
+        },
+        "diastolic_blood_pressure": {
+          "value": 76.0,
+          "unit": "mmHg"
+        }
+      }
+    }
+  }
+}
+```
+
+`openmhealth_schemas` writes the header's `creation_date_time` in the phone's local time, without an offset.
+
+</Accordion>
+</Accordions>
+
+## Effects of a data format
+
+- Data types without a transformer in the schema stay in the CARP format.
+- Transformed data has the type `org.openmhealth.data-point`, and the data manager stores it under that type.
+- [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html)s and `measurementsByType()` see the transformed data, so they no longer match it to the original measure type.
+- [`CarpDataManager`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataManager-class.html) uploads data to CARP Web Services (CAWS) only when its type is a measure type of the deployment, which transformed data does not have. Use a data format only with a data manager that keeps the data on the phone, such as the SQLite or file data manager.
+- Every OMH data point has the same type, so [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html) can hold only one class for it. Neither CAMS nor the context package registers one, so `Measurement.fromJson()` cannot read stored OMH data back.
+- The privacy schema runs first, so a format transformer gets data that the privacy functions have already changed.
+
+## Next step
+
+<Cards>
+<Card title="Testing and publishing" href="/docs/mobile-sensing/building-sampling-packages/testing-and-publishing" icon="CheckCircle">
+
+Test the package with a mocked sensor and publish it.
+
+</Card>
+</Cards>

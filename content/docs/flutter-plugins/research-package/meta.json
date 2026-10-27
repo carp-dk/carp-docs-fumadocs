@@ -1,0 +1,7 @@
+{
+  "title": "Research Package",
+  "description": "research_package",
+  "icon": "Assignment",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Concepts---", "tasks-and-steps", "answer-formats", "results", "---Guides---", "running-tasks", "informed-consent", "branching", "permissions", "localization", "theming", "json", "activity-steps", "---Reference---", "migration", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/research_package)", "[API reference](https://pub.dev/documentation/research_package/latest/)", "[GitHub](https://github.com/carp-dk/research.package)"]
+}

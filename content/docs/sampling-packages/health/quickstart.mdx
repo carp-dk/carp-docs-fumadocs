@@ -1,0 +1,192 @@
+---
+title: Quickstart
+description: Build an app that reads steps and heart rate from Google Health Connect or Apple Health every hour.
+icon: Bolt
+---
+
+Build an app that asks for access to steps and heart rate, reads them every hour, and prints each data point as JSON.
+
+## Prerequisites
+
+- The setup from [Installation](/docs/sampling-packages/health/installation), with the `READ_STEPS` and `READ_HEART_RATE` permissions in the Android manifest.
+- A phone with steps or heart rate data from the last 30 days in Google Health Connect or Apple Health. The phone itself, a watch or a fitness app can record it.
+- On Android 13 and earlier, the Health Connect app from Google Play. See [Health Connect](/docs/flutter-plugins/health/health-connect).
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_health_package/health_package.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(HealthSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone and a health service
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Hourly steps and heart rate',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+  final healthService = HealthService();
+  protocol.addConnectedDevice(healthService, phone); // [!code highlight]
+
+  // 3. Read steps and heart rate every hour
+  protocol.addTaskControl(
+    PeriodicTrigger(period: const Duration(hours: 1)),
+    BackgroundTask(
+      measures: [
+        HealthSamplingPackage.getHealthMeasure([ // [!code highlight]
+          HealthDataType.STEPS,
+          HealthDataType.HEART_RATE,
+        ]),
+      ],
+    ),
+    healthService,
+  );
+
+  // 4. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 5. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: askForHealthAccess,
+            child: Text('Allow access to health data'),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// 6. Ask for access, then reconnect the health service
+Future<void> askForHealthAccess() async {
+  final manager = SmartPhoneClientManager().deviceController.getDeviceManager(
+    HealthService.DEVICE_TYPE,
+  );
+  if (manager == null) return;
+
+  // iOS does not report read access, so always ask there
+  if (Platform.isIOS || !await manager.hasPermissions()) {
+    await manager.requestPermissions(); // [!code highlight]
+  }
+  await manager.disconnect();
+  await manager.connect(); // [!code highlight]
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the health measure type, [`HealthService`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthService-class.html) and its manager known to CARP Mobile Sensing (CAMS). `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | `HealthService` is a connected device that stands for Health Connect or Apple Health on the phone. A protocol with health measures always needs one, and tasks that target it run only while it is connected. |
+| **3. Hourly read** | `getHealthMeasure()` creates a `dk.cachet.carp.health` measure for the two types. Its first read goes 30 days back, and each later read starts where the previous one ended. The measure is one-time, so the `PeriodicTrigger` repeats it: once when the health service connects, then every hour while the app runs. |
+| **4. Deploy** | Deploying adds the measure's data types to the health service manager and tries to connect the service. On Android, the service connects only when every type is already granted; on iOS, it connects right away. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **5. Print** | Prints every measurement, including a `dk.cachet.carp.triggeredtask` measurement each time the trigger fires. |
+| **6. Access** | `requestPermissions()` shows the permission screen for the data types of all health measures. Connecting the service then resumes its task control, so the first read with the new access runs right away instead of an hour later. On iOS, the service is already connected, so the function disconnects it first. |
+
+## Run the app
+
+Run the app on a phone and tap **Allow access to health data**:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+Health Connect shows its permission screen with steps and heart rate. Allow both: the health service connects only when every data type is allowed, and then the first read starts.
+
+</Tab>
+<Tab value="iOS">
+
+HealthKit shows its access sheet with steps and heart rate. Allow both. iOS does not tell the app what the participant chose, so a type that stays off returns no data and no error.
+
+</Tab>
+</Tabs>
+
+## Check the data
+
+The console prints one line for each data point from the last 30 days, and every hour the data recorded since the previous read. A step count from Health Connect looks like this, formatted for readability:
+
+```json
+{
+  "sensorStartTime": 1769410800000000,
+  "sensorEndTime": 1769414400000000,
+  "data": {
+    "__type": "dk.cachet.carp.health",
+    "uuid": "85328732-41d3-53b2-a81e-007f33bee353",
+    "value": {
+      "__type": "NumericHealthValue",
+      "numericValue": 1982
+    },
+    "unit": "COUNT",
+    "healthDataType": "STEPS",
+    "dateFrom": "2026-01-26T07:00:00.000Z",
+    "dateTo": "2026-01-26T08:00:00.000Z",
+    "platform": "GOOGLE_HEALTH_CONNECT",
+    "deviceId": "unknown",
+    "sourceId": "",
+    "sourceName": "com.sec.android.app.shealth"
+  }
+}
+```
+
+`sensorStartTime` and `sensorEndTime` are the start and end of the sample in microseconds since 1970, not the time of the read. For every field, see [Health data](/docs/sampling-packages/health/health-data).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No data on Android">
+
+Allow both data types: tap the button again, or allow them in the Health Connect app and tap the button once more. The health service connects only when every type is allowed; until then, the log shows "has not the permissions required to connect". Also check that the manifest declares both permissions and that Health Connect has data from the last 30 days.
+
+</Accordion>
+<Accordion title="No data on iOS">
+
+Check that the participant allowed steps and heart rate in the access sheet. HealthKit does not report a type that is off; the participant can turn it on later in the Apple Health app. HealthKit also refuses reads while the phone is locked, and the next read then covers the missed time.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Collecting data" href="/docs/sampling-packages/health/collecting-data" icon="Download">
+
+Collect with background measures or health app tasks, and choose triggers.
+
+</Card>
+<Card title="Permissions" href="/docs/sampling-packages/health/permissions" icon="Lock">
+
+Ask for access to health data and connect the health service.
+
+</Card>
+<Card title="Health data" href="/docs/sampling-packages/health/health-data" icon="Dataset">
+
+The fields, value classes and units of health data measurements.
+
+</Card>
+</Cards>

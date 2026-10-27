@@ -1,0 +1,148 @@
+---
+title: Bluetooth scanning
+description: The BLUETOOTH measure, which lists the Bluetooth Low Energy devices near the phone in periodic scan windows.
+icon: Bluetooth
+---
+
+`dk.cachet.carp.bluetooth` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone on Android and iOS, through the [`flutter_blue_plus`](https://pub.dev/packages/flutter_blue_plus) plugin. Add it as `Measure(type: ConnectivitySamplingPackage.BLUETOOTH)`. By default, it scans for 10 seconds every 10 minutes and records one measurement per scan window.
+
+The measure finds Bluetooth Low Energy (BLE) devices only. Devices that use only Bluetooth Classic, such as many headphones, speakers and keyboards, do not appear.
+
+## Add the measure to a protocol
+
+Start the measure with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html), so that it scans in windows until the study pauses. To change the windows or filter the scan, set a [`BluetoothScanPeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BluetoothScanPeriodicSamplingConfiguration-class.html) on the measure. This example scans for 15 seconds every 5 minutes and finds only devices that advertise the heart rate service (`180D`):
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: ConnectivitySamplingPackage.BLUETOOTH,
+        samplingConfiguration: BluetoothScanPeriodicSamplingConfiguration( // [!code highlight]
+          interval: const Duration(minutes: 5), // [!code highlight]
+          duration: const Duration(seconds: 15), // [!code highlight]
+          withServices: ['180D'], // heart rate service // [!code highlight]
+        ), // [!code highlight]
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+Without filters, a [`PeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicSamplingConfiguration-class.html) with `interval` and `duration` works too.
+
+## Configuration
+
+`BluetoothScanPeriodicSamplingConfiguration` has these properties:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `interval` | `Duration` | — | Required. Time between the starts of two scan windows. |
+| `duration` | `Duration` | — | Required. Length of each scan window. |
+| `withServices` | `List<String>` | `[]` | Service UUIDs to scan for. An empty list means no filter. |
+| `withRemoteIds` | `List<String>` | `[]` | Device ids to scan for. An empty list means no filter. |
+
+Without a configuration, the measure scans for 10 seconds every 10 minutes, without filters. Longer and more frequent windows find more devices and use more battery. Keep `interval` longer than 6 seconds, because Android lets an app start at most five scans in 30 seconds.
+
+Each entry in `withServices` must be a hexadecimal UUID: 16-bit such as `180D`, 32-bit or 128-bit such as `0000180d-0000-1000-8000-00805f9b34fb`, with or without dashes. Any other value, such as a service name, throws a `FormatException` when a window starts, and the measure records nothing.
+
+The ids in `withRemoteIds` are the `bluetoothDeviceId` values from the data: MAC addresses on Android. On iOS, the ids change over time, so they are not stable filters there.
+
+## Scan windows
+
+The measure scans in these stages:
+
+1. The first window starts one `interval` after the measure starts, not right away.
+2. During the window, the measure collects every advertisement it receives. Each device appears once, with the values of its latest advertisement.
+3. When the window ends, the measure stops the scan and records one measurement, with the window's start and end in `startScan` and `endScan`.
+4. If the scan fails, for example because Bluetooth is off or a permission is missing, the window records an error instead. The error has the `__type` `dk.cachet.carp.error` and a `message` that starts with `Error scanning for bluetooth - `.
+5. When the study pauses, the current window is dropped without a measurement.
+
+<Callout type="warning" title="Known issue">
+
+Each window after the first also lists the devices of the previous window, because `flutter_blue_plus` replays its latest scan result when the measure starts listening. A device that has left therefore appears in one more window, with its old `rssi`. Take this into account when you count devices per window.
+
+</Callout>
+
+## Permissions
+
+The measure needs these permissions, which CARP Mobile Sensing (CAMS) and `flutter_blue_plus` ask for. Bluetooth must also be turned on:
+
+| Platform | Permissions | Who asks |
+| --- | --- | --- |
+| Android 12 or later | `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT` | CAMS asks for `BLUETOOTH_SCAN` before the measure starts. `flutter_blue_plus` asks for `BLUETOOTH_CONNECT` when the first scan starts, unless the app asked for it before. |
+| Android 11 and lower | `BLUETOOTH` and `BLUETOOTH_ADMIN` in the manifest, precise location and Location Services | `flutter_blue_plus` asks for location when the first scan starts. |
+| iOS | Bluetooth | CAMS asks for Bluetooth access before the measure starts. |
+
+On Android, the measure starts only when the Bluetooth scan permission is granted. To ask for `BLUETOOTH_CONNECT` together with the other permissions, add it to a `permissionRequester`, as the [quickstart](/docs/sampling-packages/connectivity/quickstart) does. For the manifest entries, see [Installation](/docs/sampling-packages/connectivity/installation).
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- `bluetoothDeviceId` is the MAC address of the device.
+- `withServices` and `withRemoteIds` filter in the operating system.
+- An app can start at most five scans in 30 seconds.
+
+</Tab>
+<Tab value="iOS">
+
+- A scan without a service filter finds nothing while the app is in the background or the screen is off. The measure therefore collects only while the app is in the foreground. For what iOS allows in the background, see Apple's [Core Bluetooth Background Processing for iOS Apps](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html).
+- `bluetoothDeviceId` is a random UUID that iOS changes over time. It cannot be matched with Android ids or followed over long periods.
+- The first window after the app starts can record an error, because Bluetooth is not ready yet when the first scan starts.
+- iBeacons do not appear, because iOS shows them only through Core Location. To detect iBeacons, see [Beacons](/docs/sampling-packages/connectivity/beacons).
+
+</Tab>
+</Tabs>
+
+## Name hashing
+
+The default privacy schema replaces `bluetoothDeviceName` and `advertisementName` of every device with their SHA-1 hashes. Empty names are hashed too: the SHA-1 hash of an empty string is `da39a3ee5e6b4b0d3255bfef95601890afd80709`.
+
+`bluetoothDeviceId` is stored as collected, so on Android the MAC addresses of the devices stay in the data. Turn the schema on with `privacySchemaName: PrivacySchema.DEFAULT` on the [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html).
+
+## Data
+
+Each measurement holds a [`Bluetooth`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/Bluetooth-class.html) object with the `__type` `dk.cachet.carp.bluetooth`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `startScan` | `DateTime` | Start of the scan window, in the phone's local time without a time zone offset. |
+| `endScan` | `DateTime?` | End of the scan window, in local time. |
+| `scanResult` | `List<BluetoothDevice>` | The devices found, each once. Empty when no device was found. |
+
+Each entry in `scanResult` is a [`BluetoothDevice`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BluetoothDevice-class.html):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `advertisementName` | `String` | The local name in the device's advertisement, or an empty string. Hashed with the default privacy schema. |
+| `bluetoothDeviceId` | `String` | The device id: the MAC address on Android, a changing UUID on iOS. |
+| `bluetoothDeviceName` | `String` | The name that the phone's operating system knows for the device, or an empty string. Hashed with the default privacy schema. |
+| `connectable` | `bool` | Whether the device accepts connections. |
+| `txPowerLevel` | `int?` | Advertised transmit power in dBm. Left out of the JSON when the device does not advertise it. |
+| `rssi` | `int` | Received signal strength in dBm. Values closer to 0 mean a stronger signal. |
+
+The measurement's `sensorStartTime` is the end of the window, when the measurement is recorded. On Android, without the privacy schema, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.bluetooth",
+  "startScan": "2026-10-26T15:30:00.004512",
+  "endScan": "2026-10-26T15:30:10.011873",
+  "scanResult": [
+    {
+      "advertisementName": "Polar H10 1234ABCD",
+      "bluetoothDeviceId": "A0:9E:1A:12:34:56",
+      "bluetoothDeviceName": "Polar H10 1234ABCD",
+      "connectable": true,
+      "txPowerLevel": 4,
+      "rssi": -67
+    }
+  ]
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

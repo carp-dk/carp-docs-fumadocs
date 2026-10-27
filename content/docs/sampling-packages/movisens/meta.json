@@ -1,0 +1,7 @@
+{
+  "title": "Movisens Sampling",
+  "description": "carp_movisens_package",
+  "icon": "FitnessTracker",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "connecting", "---Reference---", "measure-types", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_movisens_package)", "[API reference](https://pub.dev/documentation/carp_movisens_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_movisens_package)"]
+}

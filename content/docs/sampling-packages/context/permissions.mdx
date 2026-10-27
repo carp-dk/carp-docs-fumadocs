@@ -1,0 +1,115 @@
+---
+title: Permissions and background
+description: Which permissions each context measure needs, and how collection continues while the app is in the background.
+icon: Lock
+---
+
+The context measures depend on two permissions: physical activity for `ACTIVITY`, and location for all the others. CARP Mobile Sensing (CAMS) asks for them one at a time when it deploys a study, unless you configure it with `askForPermissions: false`.
+
+## Permissions per measure
+
+| Measure | Permission | Without it |
+| --- | --- | --- |
+| `ACTIVITY` | **Physical activity** on Android, **Motion & Fitness** on iOS | The measure collects nothing. |
+| `LOCATION` | Location all the time, with precise location | The measure collects nothing, also while the app is in use. |
+| `GEOFENCE`, `MOBILITY` | Location all the time, with precise location | On Android, the measures collect nothing. On iOS, they collect only while the app is in use, if the participant allowed location while in use. |
+| `WEATHER`, `AIR_QUALITY` | Location while in use, with precise location | The service stays disconnected, and the measure collects nothing. |
+
+Every measure except `ACTIVITY` needs **precise** location. The package treats approximate location as no location access, so with approximate location none of the three services connects.
+
+## Location while in use and all the time
+
+Both platforms grant location access all the time in a second step, after location while in use. CAMS asks in that order:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- On Android 10 (API level 29) and later, background location is a separate permission, `ACCESS_BACKGROUND_LOCATION`, which the manifest must declare.
+- On Android 11 and later, the location dialog has no **Allow all the time** option. The participant selects it on the app's location settings page instead. See [Request background location](https://developer.android.com/develop/sensors-and-location/location/permissions/background).
+- On Android 12 and later, the participant chooses between precise and approximate location in the first dialog.
+- Google Play has a policy for apps that use background location. See [Understanding location in the background permissions](https://support.google.com/googleplay/android-developer/answer/9799150).
+
+</Tab>
+<Tab value="iOS">
+
+- The first prompt grants location while the app is in use. Its **Precise** switch must stay on.
+- The second prompt asks to extend access to all the time, and the participant taps **Change to Always Allow**. iOS shows this prompt only once.
+- A participant who keeps location while in use must choose **Always** in the app's location settings later. The package never opens the settings; to send participants there, call `openAppSettings()` from [`permission_handler`](https://pub.dev/packages/permission_handler) in your app.
+
+</Tab>
+</Tabs>
+
+When the participant changes a location permission in the settings, restart the app. The package turns background location on, and CAMS connects the services, when the app starts.
+
+## Foreground service notifications (Android)
+
+On Android, each background service shows an ongoing notification. A study with `ACTIVITY` and the location measures can show three:
+
+| Notification | Shows when | Text |
+| --- | --- | --- |
+| CAMS background service | `SmartPhoneClientManager` is configured with `enableBackgroundMode: true`, the default | Set in `configure()`. See [Background sensing](/docs/mobile-sensing/best-practices#background-sensing). |
+| Location service | Background location turns on, until the app stops | "CARP Location Service" by default. Set it with the notification parameters of [`LocationService`](/docs/sampling-packages/context/services#locationservice). |
+| Activity recognition | `ACTIVITY` starts | "Activity recognition", with the text "Detecting your activity." The package cannot change it. |
+
+## Background collection
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- While background location is on, the `location` plugin runs a foreground service of type `location`. Locations then keep arriving while the app is in the background.
+- The package turns background location on when the location service connects, and only if the participant has allowed location all the time by then.
+- Battery optimization and vendor-specific power saving may still stop the app. See [Background sensing](/docs/mobile-sensing/best-practices#background-sensing).
+
+</Tab>
+<Tab value="iOS">
+
+- Background location needs the `location` background mode in `Info.plist` and location access **Always**. The package turns it on when the location service connects, and only if **Always** is granted by then.
+- While the app uses location in the background, the status bar shows the location indicator.
+- Background location also keeps the app running, so other measures, such as `ACTIVITY`, keep collecting. See [Background sensing](/docs/mobile-sensing/best-practices#background-sensing).
+- Collection stops when the participant or iOS terminates the app, and starts again only when the app starts.
+- The package leaves automatic pausing on in Core Location, so iOS may pause location updates when the phone has not moved for a while.
+
+</Tab>
+</Tabs>
+
+## Custom permission flows
+
+To explain each permission in your own screens first, configure CAMS with `askForPermissions: false`, and ask for location before you deploy the study:
+
+```dart
+final client = SmartPhoneClientManager();
+await client.configure(askForPermissions: false);
+
+// After your own screens that explain why the study needs location
+await LocationManager().requestPermission();
+
+final study = await client.addStudyFromProtocol(protocol);
+await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+client.resume();
+```
+
+`requestPermission()` asks for location while in use and then all the time, through the CAMS permission queue. Ask before `tryDeployment()`: CAMS connects the services when it deploys the study, and a service that cannot connect then stays disconnected until the app restarts.
+
+Even with `askForPermissions: false`, `LOCATION` asks for location all the time when it starts without that access.
+
+For `ACTIVITY`, ask for `Permission.activityRecognition` on Android and `Permission.sensors` on iOS with `permission_handler`. Do not ask for `Permission.activityRecognition` on iOS: `permission_handler` has no iOS implementation for it, so the request shows no dialog and returns `permanentlyDenied`.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The location service never connects">
+
+Check that the participant has allowed location with precise location, and that location services are on in the phone's settings. Then restart the app. To see the status, listen to the service's device manager as shown in [Connection rules](/docs/sampling-packages/context/services#connection-rules).
+
+</Accordion>
+<Accordion title="The Allow all the time option is missing">
+
+Look for the option on the app's location settings page: on Android 11 and later, the dialog does not offer it. If the settings page does not offer it either, add `ACCESS_BACKGROUND_LOCATION` to `android/app/src/main/AndroidManifest.xml`. See [Installation](/docs/sampling-packages/context/installation).
+
+</Accordion>
+<Accordion title="Location stops in the background">
+
+Restart the app after the participant allows location all the time. Background location turns on only if that access is granted when the location service connects. On iOS, also check that `UIBackgroundModes` in `Info.plist` contains `location`.
+
+</Accordion>
+</Accordions>

@@ -1,0 +1,7 @@
+{
+  "title": "eSense Sampling",
+  "description": "carp_esense_package",
+  "icon": "Headphones",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "connecting", "---Reference---", "measure-types", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_esense_package)", "[API reference](https://pub.dev/documentation/carp_esense_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_esense_package)"]
+}

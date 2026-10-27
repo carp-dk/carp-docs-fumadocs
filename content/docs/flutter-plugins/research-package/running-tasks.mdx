@@ -1,0 +1,219 @@
+---
+title: Running tasks
+description: Show a task with RPUITask, handle onSubmit and onCancel, and customize the top and bottom bars.
+icon: Play
+---
+
+[`RPUITask`](https://pub.dev/documentation/research_package/latest/ui/RPUITask-class.html) shows a task as a full-screen page: a top bar, one screen per step and a bottom bar with **NEXT**. It builds the screens of the steps, collects their results and calls your callbacks when the task ends.
+
+## Show a task
+
+Push `RPUITask` on a route of its own, with a task that you build when the participant starts it. In this example, `buildSurvey()` and `saveResult()` are your own functions:
+
+```dart
+void startSurvey(BuildContext context) {
+  final task = buildSurvey();
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => RPUITask(
+        task: task,
+        onSubmit: (RPTaskResult result) => saveResult(result),
+        onCancel: (RPTaskResult? result) => print('Survey left'),
+      ),
+    ),
+  );
+}
+```
+
+Three rules keep a run consistent:
+
+- **Build the task once per run:** do not build it in a `build()` method that may run again. A new task object in the middle of a run sends the participant back to the first step after the next **NEXT**.
+- **Build a new task for the next run:** some objects in a task change while it runs. See [Task classes](/docs/flutter-plugins/research-package/tasks-and-steps#task-classes).
+- **Show one task at a time:** all `RPUITask` widgets share global streams. A task on a route below the visible one advances along with it.
+
+## `RPUITask` parameters
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `task` | `RPOrderedTask` | Yes | — | The task to show, linear or navigable. |
+| `onSubmit` | `void Function(RPTaskResult)?` | No | — | Called after the last step with the result of the run. |
+| `onCancel` | `void Function(RPTaskResult?)?` | No | — | Called when the participant leaves the task, with the result so far. |
+| `carouselBarImage` | `Image?` | No | The CARP logo | The image at the left of the top bar. |
+| `carouselBarBackgroundColor` | `Color?` | No | The scaffold background color of the theme | The background of the top bar. |
+| `carouselBarHorizontalPadding` | `double?` | No | `0` | The horizontal padding of the top bar. |
+| `carouselBarVerticalPadding` | `double?` | No | `0` | The vertical padding of the top bar. |
+| `carouselBarBuilder` | `RPCarouselBarBuilder?` | No | — | Builds a top bar that replaces the default one. |
+| `bottomNavigationBuilder` | `RPBottomNavigationBuilder?` | No | — | Builds a bottom bar that replaces the default one. |
+| `nextButtonText` | `String?` | No | `'NEXT'` | The label of **NEXT** on every step, as a translation key or plain text. The `nextButtonText` of a step wins over it. |
+| `nextButtonStyle` | `ButtonStyle?` | No | — | A style for **NEXT**, merged over the default style. |
+
+## Finish a task
+
+When the participant finishes the last step, `RPUITask`:
+
+1. sets the `endDate` of the task result;
+2. calls `onSubmit` with the result, translated when the app registers `RPLocalizations`;
+3. pops its route, if `closeAfterFinished` of the task is `true` and the navigator can pop.
+
+The last step finishes when the participant taps **DONE** on a completion step, or **NEXT** or a skip button on any other last step. For what the result holds, see [Results](/docs/flutter-plugins/research-package/results).
+
+<Callout type="warning" title="Do not pop in the callbacks">
+
+`RPUITask` pops its route after `onSubmit` and after **LEAVE** in the leave dialog. A `Navigator.pop()` in `onSubmit` or `onCancel` adds a second pop. Unless the page below the task is the first route of the navigator, that pop closes it too.
+
+</Callout>
+
+To show something else after the task, set `closeAfterFinished: false` on the task and navigate in `onSubmit`. The task then stays on its last screen until your app replaces it, for example with a summary page:
+
+```dart
+void startSurvey(BuildContext context, List<RPStep> steps) {
+  final task = RPOrderedTask(
+    identifier: 'dailyCheckIn',
+    closeAfterFinished: false,
+    steps: steps,
+  );
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) => RPUITask(
+        task: task,
+        onSubmit: (RPTaskResult result) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(builder: (_) => SummaryPage(result)),
+          );
+        },
+      ),
+    ),
+  );
+}
+```
+
+When `RPUITask` is the only route, for example the `home` of the app, it pops nothing, and your callbacks decide what comes next.
+
+## Leave a task
+
+The close button in the top bar opens the leave dialog, with the title "Leave survey?" and the text "Your answers will not be saved." It has two buttons:
+
+- **CANCEL** closes the dialog and keeps the task, and so does a tap outside the dialog.
+- **LEAVE** calls `onCancel` with the result so far, then closes the dialog and pops the task route.
+
+Whatever the dialog says, `onCancel` receives the answers given so far, and your app decides whether to keep them. The partial result has no `endDate`.
+
+The system back button and back gesture do nothing while a task is on screen.
+
+A consent task, which contains an [`RPConsentReviewStep`](https://pub.dev/documentation/research_package/latest/model/RPConsentReviewStep-class.html), has no close button. The participant leaves it with **DISAGREE**, which opens the leave dialog with the title "Leave consent form?" instead. See [Leave a consent task](/docs/flutter-plugins/research-package/informed-consent#leave-a-consent-task).
+
+To end a task without the dialog, for example after a time limit, pop its route from your own code. `RPUITask` then calls neither callback.
+
+## Customize the top bar
+
+The default top bar shows `carouselBarImage` at the left, the position in the middle and the close button at the right. The position, such as "2 of 5", counts every step, also instructions and the completion step. In an [`RPNavigableOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPNavigableOrderedTask-class.html), the bar leaves the position out, because branching changes the number of steps.
+
+Replace the CARP logo with your own image, at a height that fits the bar:
+
+```dart
+final page = RPUITask(
+  task: task,
+  carouselBarImage: Image.asset('assets/images/logo.png', height: 16),
+  carouselBarBackgroundColor: Colors.white,
+);
+```
+
+`carouselBarBuilder` replaces the whole bar and ignores the four `carouselBar` parameters. It receives the zero-based index of the step on screen and the number of steps in the task. To remove the bar, return `const SizedBox.shrink()`.
+
+A custom bar has no close button of its own. To offer one, call `showCancelConfirmationDialog()` on the state of the task through a `GlobalKey`:
+
+```dart
+final taskKey = GlobalKey<RPUITaskState>();
+
+final page = RPUITask(
+  key: taskKey,
+  task: task,
+  carouselBarBuilder: (context, stepIndex, stepCount) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('Step ${stepIndex + 1} of $stepCount'),
+        IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Leave',
+          onPressed: () => taskKey.currentState?.showCancelConfirmationDialog(),
+        ),
+      ],
+    ),
+  ),
+);
+```
+
+In an `RPNavigableOrderedTask`, the number of steps is an upper bound, because branching may skip some of them.
+
+## Customize the bottom bar
+
+The default bottom bar holds **NEXT**, which is enabled when the step on screen allows it, such as a question with a valid answer. An `RPNavigableOrderedTask` also shows **BACK** from the second step on. The bar is hidden on completion and consent steps, which bring their own buttons.
+
+`nextButtonText` changes the label of **NEXT** on every step. `nextButtonStyle` is merged over the default style, so a style that sets only a `shape` keeps the primary color as the background.
+
+The label stays white unless the style sets a `foregroundColor`. For colors and text styles, see [Theming](/docs/flutter-plugins/research-package/theming).
+
+`bottomNavigationBuilder` replaces the whole bar and ignores `nextButtonText` and `nextButtonStyle`. It is called on every step, also on completion and consent steps, and it receives an [`RPTaskNavigation`](https://pub.dev/documentation/research_package/latest/ui/RPTaskNavigation-class.html):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `onNext` | `VoidCallback?` | Moves to the next step. It is `null` while the step has no valid answer, so a button with it as `onPressed` is disabled. |
+| `onBack` | `VoidCallback?` | Moves to the previous step. It is `null` on the first step, and unlike the default bar it also works in an `RPOrderedTask`. |
+| `onCancel` | `VoidCallback` | Opens the leave dialog. |
+| `canProceed` | `bool` | Whether `onNext` is set. |
+| `currentStep` | `RPStep?` | The step on screen. |
+| `stepIndex` | `int` | The zero-based index of the step on screen. |
+| `stepCount` | `int` | The number of steps in the task. |
+
+A bottom bar with **Back** and **Next** buttons:
+
+```dart
+final page = RPUITask(
+  task: task,
+  bottomNavigationBuilder: (context, navigation) {
+    // Completion and consent steps bring their own buttons
+    final step = navigation.currentStep;
+    if (step is RPCompletionStep ||
+        step is RPVisualConsentStep ||
+        step is RPConsentReviewStep) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          TextButton(onPressed: navigation.onBack, child: const Text('Back')),
+          FilledButton(onPressed: navigation.onNext, child: const Text('Next')),
+        ],
+      ),
+    );
+  },
+);
+```
+
+## Observe a running task
+
+`RPUITask` has no callback per step. To follow a task while it runs, for example to save answers as they come in, listen to the global [`blocTask`](https://pub.dev/documentation/research_package/latest/model/blocTask.html):
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `stepResult` | `Stream<RPResult>` | Every step result as a step records it. A question records its result on every change of the answer, such as every keystroke in a text field. |
+| `stepStatus` | `Stream<RPStepStatus>` | The `Finished`, `Skipped`, `Back` and `Canceled` events that drive the task. |
+| `taskProgress` | `Stream<RPTaskProgress>` | The position among the question steps, as `current` and `total`. It updates only in a linear `RPOrderedTask`, not in an `RPNavigableOrderedTask`. |
+| `lastTaskResult` | `RPTaskResult?` | The result of the running task, without translation. |
+
+This listener prints each step result as the step records it:
+
+```dart
+final subscription = blocTask.stepResult.listen((RPResult result) {
+  print('${result.identifier} changed at ${result.endDate}');
+});
+
+// ... when the task has ended
+await subscription.cancel();
+```
+
+Cancel your subscriptions when the task ends. Do not call `dispose()` on `blocTask` or `blocQuestion`: every later task uses the same objects.

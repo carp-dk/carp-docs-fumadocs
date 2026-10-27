@@ -1,0 +1,185 @@
+---
+title: Location
+description: How the LOCATION measure collects location fixes, continuously or once per trigger, and the data it produces.
+icon: MyLocation
+---
+
+`dk.cachet.carp.location` (`ContextSamplingPackage.LOCATION`) collects location fixes from the phone's location service through the [`location`](https://pub.dev/packages/location) plugin. It is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the [`LocationService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationService-class.html), on Android and iOS. It needs location access all the time, with precise location, on both platforms.
+
+## Collect location continuously
+
+Start `LOCATION` with an `ImmediateTrigger` and target the task at the location service:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.LOCATION)]),
+  locationService,
+);
+```
+
+The measure then reports every location that the service delivers, until the study stops. How often that is depends on the `LocationService`. See [Distance and interval](#distance-and-interval).
+
+## Collect one location per trigger
+
+To collect a single location each time a trigger fires, override the sampling configuration with `once: true` and use a trigger that repeats:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(minutes: 15)),
+  BackgroundTask(
+    measures: [
+      Measure(type: ContextSamplingPackage.LOCATION)
+        ..overrideSamplingConfiguration = LocationSamplingConfiguration(
+          once: true,
+        ),
+    ],
+  ),
+  locationService,
+);
+```
+
+On each trigger, the probe waits up to 6 seconds for a new location. Otherwise it uses the last location that the app received, which may be old. If the app has received no location at all, for example right after it starts, the probe reports an error instead of a location.
+
+The probe pauses itself 5 seconds after each run, and the next trigger resumes it.
+
+## Configuration
+
+[`LocationSamplingConfiguration`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationSamplingConfiguration-class.html) has one property:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `once` | `bool` | `false` | Whether to collect one location per trigger instead of a continuous stream. |
+
+The measure has no default sampling configuration, so it collects continuously unless you override it. Accuracy, distance and interval are settings of the `LocationService`, not of the measure, and they apply to `GEOFENCE` and `MOBILITY` too.
+
+## Accuracy levels
+
+The `accuracy` of the `LocationService` is a [`GeolocationAccuracy`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/GeolocationAccuracy.html). The `location` plugin turns each value into these platform settings:
+
+| Value | Android priority | iOS accuracy |
+| --- | --- | --- |
+| `powerSave` | `PRIORITY_PASSIVE` | `kCLLocationAccuracyKilometer` |
+| `low` | `PRIORITY_LOW_POWER` | `kCLLocationAccuracyHundredMeters` |
+| `balanced` | `PRIORITY_BALANCED_POWER_ACCURACY` | `kCLLocationAccuracyNearestTenMeters` |
+| `high` | `PRIORITY_HIGH_ACCURACY` | `kCLLocationAccuracyBest` |
+| `navigation` | `PRIORITY_HIGH_ACCURACY` | `kCLLocationAccuracyBestForNavigation` |
+| `reduced` | `PRIORITY_LOW_POWER` | `kCLLocationAccuracyReduced` |
+
+The default is `balanced`. Higher accuracy uses GPS more and drains the battery faster. With `powerSave`, Android delivers only the locations that other apps ask for, so the measure may get none.
+
+## Distance and interval
+
+The `distance` and `interval` of the `LocationService` set how often a location arrives:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+The fused location provider gets `interval` as the update interval and half of it as the fastest interval. It gets `distance` as the smallest movement between two updates. A phone that moves less than `distance` gets no new location.
+
+</Tab>
+<Tab value="iOS">
+
+`distance` becomes the distance filter of Core Location, and `0` turns the filter off. The plugin applies `interval` itself: it drops each location that arrives sooner than `interval` after the last one it delivered. It also drops locations that are more than 15 seconds old.
+
+</Tab>
+</Tabs>
+
+With the defaults, a location arrives about once a minute, but only after the phone has moved 10 meters.
+
+## Read locations in the app
+
+To use the locations in the app, filter the measurements stream for [`Location`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/Location-class.html) data:
+
+```dart
+client.measurements
+    .where((measurement) => measurement.data is Location)
+    .map((measurement) => measurement.data as Location)
+    .listen(
+      (location) => print('${location.latitude}, ${location.longitude}'),
+    );
+```
+
+To get the position once outside a task, call `LocationManager().getLocation()`. See [`LocationManager`](/docs/sampling-packages/context/services#locationmanager).
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- `altitude` is the altitude above mean sea level from the GPS data when it is available, and otherwise the altitude above the WGS 84 ellipsoid.
+- `heading` is the bearing, which Android reports as `0` when a fix has no bearing.
+- `elapsedRealtimeUncertaintyNanos` needs Android 10 (API level 29) or later, and `satellites` is set only when the plugin knows the satellite count.
+- `isMock` is `true` for locations from a mock location app.
+
+</Tab>
+<Tab value="iOS">
+
+- `altitude` is the altitude above mean sea level from Core Location.
+- `heading` is the course, that is, the direction of travel. Core Location reports a negative value when it cannot determine the course.
+- `speed` and `speedAccuracy` are `null` when Core Location reports them as invalid.
+- `headingAccuracy`, `elapsedRealtimeNanos`, `elapsedRealtimeUncertaintyNanos` and `satellites` are never set.
+- `isMock` is `true` for locations that software simulates.
+
+</Tab>
+</Tabs>
+
+## Privacy
+
+Location data can reveal where a participant lives and works. The package defines no privacy transformer for it, so the default privacy schema leaves locations unchanged. See [Data transformation and privacy](/docs/mobile-sensing/privacy).
+
+## Open mHealth format
+
+CARP Mobile Sensing (CAMS) can convert each location to an [Open mHealth](https://www.openmhealth.org/) geoposition data point. To get this format, set `dataFormat: NameSpace.OMH` on the data endpoint:
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Daily mobility',
+  dataEndPoint: SQLiteDataEndPoint(dataFormat: NameSpace.OMH),
+);
+```
+
+The geoposition holds the latitude and longitude, with `GPS` as the positioning system; the other fields are dropped. The app's measurements stream carries the data points too, so the code in [Read locations in the app](#read-locations-in-the-app) gets no `Location` data.
+
+## Data
+
+Each measurement holds a `Location` with the type `dk.cachet.carp.location`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `latitude` | `double` | Latitude in degrees, WGS 84. |
+| `longitude` | `double` | Longitude in degrees, WGS 84. |
+| `altitude` | `double?` | Altitude in meters. See [Platform differences](#platform-differences). |
+| `accuracy` | `double?` | Horizontal accuracy: the radius of uncertainty in meters. |
+| `verticalAccuracy` | `double?` | Vertical accuracy in meters. |
+| `speed` | `double?` | Speed in m/s. |
+| `speedAccuracy` | `double?` | Accuracy of `speed` in m/s. |
+| `heading` | `double?` | Direction of travel in degrees. |
+| `headingAccuracy` | `double?` | Accuracy of `heading` in degrees. Android only. |
+| `time` | `DateTime?` | Time of the fix, in the phone's local time without a UTC offset. |
+| `isMock` | `bool?` | Whether the location comes from a mock location app or a simulation. |
+| `elapsedRealtimeNanos` | `double?` | Time of the fix in nanoseconds since the phone started. Android only. |
+| `elapsedRealtimeUncertaintyNanos` | `double?` | Uncertainty of `elapsedRealtimeNanos` in nanoseconds. Android only. |
+| `satellites` | `int?` | Number of satellites used for the fix. Android only. |
+| `provider` | `String?` | Not set by the package, so always `null`. |
+
+Fields without a value are left out of the JSON. A location from an iPhone looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.location",
+  "latitude": 55.786025,
+  "longitude": 12.524159,
+  "altitude": 41.8,
+  "accuracy": 8.9,
+  "verticalAccuracy": 6.1,
+  "speed": 1.4,
+  "speedAccuracy": 0.7,
+  "heading": 212.5,
+  "time": "2026-10-26T10:15:29.412",
+  "isMock": false
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

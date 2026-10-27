@@ -1,0 +1,124 @@
+---
+title: Activity recognition
+description: How the ACTIVITY measure reports the participant's physical activity from the phone's activity recognition.
+icon: DirectionsWalk
+---
+
+`dk.cachet.carp.activity` (`ContextSamplingPackage.ACTIVITY`) reports the participant's physical activity, such as walking or cycling, as the phone's activity recognition detects it. The [`activity_recognition_flutter`](https://pub.dev/packages/activity_recognition_flutter) plugin provides the events, from Google Play services on Android and Core Motion on iOS. `ACTIVITY` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone itself, on Android and iOS.
+
+## Add the measure to a protocol
+
+Start `ACTIVITY` once with an `ImmediateTrigger` and target the task at the phone:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.ACTIVITY)]),
+  phone,
+);
+```
+
+The measure has no sampling configuration, and it reports events until the study stops. When CARP Mobile Sensing (CAMS) deploys the study, it asks for the **Physical activity** permission on Android and **Motion & Fitness** on iOS.
+
+## Activity types
+
+Each event holds one [`ActivityType`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/ActivityType.html):
+
+| Type | Meaning | Android | iOS |
+| --- | --- | --- | --- |
+| `STILL` | The phone is not moving. | Yes | Yes |
+| `WALKING` | The participant is walking. | Yes | Yes |
+| `RUNNING` | The participant is running. | Yes | Yes |
+| `ON_FOOT` | The participant is walking or running, and Android cannot tell which. | Yes | No |
+| `ON_BICYCLE` | The participant is cycling. | Yes | Yes |
+| `IN_VEHICLE` | The phone is in a vehicle, such as a car. | Yes | Yes |
+| `UNKNOWN` | The activity is not recognized. The package drops these events. | No | No |
+
+## Confidence and filtering
+
+Each event carries a confidence in percent. The package drops events with a confidence below 50%, `UNKNOWN` events and Android's `TILTING` events, which report that the phone was tilted. The 50% threshold is the constant `ActivityProbe.minimumConfidence`, so it cannot be changed.
+
+How often events arrive and what the confidence means depend on the platform:
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- The plugin asks Google Play services for a detection every 5 seconds and reports each one, also when the activity has not changed. Google Play services may stop reporting while the phone stays still, and resume when it moves.
+- Each event is the most probable activity of a detection, with a confidence from 0 to 100.
+- The phone must have Google Play services.
+
+</Tab>
+<Tab value="iOS">
+
+- Core Motion reports an event when the motion activity changes.
+- Core Motion has three confidence levels, which the plugin maps to 10, 50 and 100, so only 50 and 100 pass the filter.
+- Core Motion can report several activities at once, for example stationary and automotive in a car at a red light. The plugin picks the first in the order stationary, walking, running, automotive and cycling, so that event becomes `STILL`.
+- The iOS Simulator has no activity recognition.
+
+</Tab>
+</Tabs>
+
+## Background collection
+
+On Android, the plugin runs its own foreground service while `ACTIVITY` collects, so events keep arriving while the app is in the background. The service shows an ongoing notification titled "Activity recognition", with the text "Detecting your activity." The package cannot change it.
+
+On iOS, events arrive only while the app runs. Background location is the usual way to keep the app running. See [Background collection](/docs/sampling-packages/context/permissions#background-collection).
+
+## Trigger tasks on an activity
+
+To start a task when the participant does a given activity, use a [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) with an [`Activity`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/Activity-class.html) condition. The condition matches every event of the same type, whatever the confidence. This task collects one location each time the participant is detected running:
+
+```dart
+protocol.addTaskControl(
+  SamplingEventTrigger(
+    measureType: ContextSamplingPackage.ACTIVITY,
+    triggerCondition: Activity(type: ActivityType.RUNNING, confidence: 0),
+  ),
+  BackgroundTask(
+    measures: [
+      Measure(type: ContextSamplingPackage.LOCATION)
+        ..overrideSamplingConfiguration = LocationSamplingConfiguration(
+          once: true,
+        ),
+    ],
+  ),
+  locationService,
+);
+```
+
+The trigger listens to the study's `ACTIVITY` measurements, so the protocol must also collect `ACTIVITY`. It fires on every matching event, which on Android can be every 5 seconds while the participant runs. Trigger a task that is cheap to repeat.
+
+A `SamplingEventTrigger` is saved with the protocol, so it also works in protocols that come from CARP Web Services (CAWS). For the other triggers, see [Triggers](/docs/mobile-sensing/domain-model#triggers).
+
+## Limitations
+
+- `sensorStartTime` is the time the event reached the app. The platform's own detection time is not kept.
+- On Android, the activity recognition notification cannot be changed or hidden.
+- On iOS, the package reports no `ON_FOOT` events and only two confidence values.
+
+## Open mHealth format
+
+With a data endpoint whose `dataFormat` is `NameSpace.OMH`, CAMS turns each activity into an [Open mHealth](https://www.openmhealth.org/) physical activity data point. Its activity name is the activity type, such as `WALKING`.
+
+Triggers then get the data point instead of the `Activity`, so a `SamplingEventTrigger` on `ACTIVITY` never fires. For an example data endpoint, see [Location](/docs/sampling-packages/context/location#open-mhealth-format).
+
+## Data
+
+Each measurement holds an `Activity` with the type `dk.cachet.carp.activity`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `type` | `ActivityType` | The recognized activity. See [Activity types](#activity-types). |
+| `confidence` | `int` | The confidence of the recognition in percent, from 50 to 100. |
+
+An activity event looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.activity",
+  "confidence": 92,
+  "type": "WALKING"
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

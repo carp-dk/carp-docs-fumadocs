@@ -1,0 +1,136 @@
+---
+title: Measure types
+description: The two eSense measure types, their timestamps and fields, and how to convert the raw motion values.
+icon: Dataset
+---
+
+`carp_esense_package` has two measure types in the `dk.cachet.carp.esense` namespace: button events and the inertial measurement unit (IMU) data of the left earbud. Add each one to a protocol as `Measure(type: ESenseSamplingPackage.<constant>)`, in a task that runs on an [`ESenseDevice`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseDevice-class.html):
+
+| Measure type | Constant | Kind | Android | iOS |
+| --- | --- | --- | --- | --- |
+| [`dk.cachet.carp.esense.button`](#button-events) | `ESENSE_BUTTON` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.esense.sensor`](#motion) | `ESENSE_SENSOR` | Event-based | Yes | Yes |
+
+Both are event-based; see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures). They stream from the moment their task starts until it is paused.
+
+Add them to a `BackgroundTask` with an `ImmediateTrigger`, and they start when the earbud connects. For a known issue after a lost link, see [Handle disconnections](/docs/sampling-packages/esense/connecting#handle-disconnections).
+
+Unlike most CARP Mobile Sensing (CAMS) data, the eSense data uses snake case JSON keys, such as `device_name` for the Dart field `deviceName`. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Sampling rate
+
+The motion data follows the `samplingRate` of the `ESenseDevice`, in hertz from 1 to 100 (default `10`). Neither measure has a sampling configuration, so `overrideSamplingConfiguration` has no effect, and button events do not depend on the rate.
+
+The earbud treats the rate as a hint: depending on the Bluetooth Low Energy (BLE) connection, motion events may arrive faster or slower. The [eSense BLE specification](https://www.esense.io/share/eSense-BLE-Specification.pdf) notes that high rates may need a shorter BLE connection interval. The achievable rate also drops when the earbud plays music or records audio at the same time.
+
+## Timestamps
+
+The earbud has no clock, so all times in eSense data are phone times:
+
+| Field | Button events | Motion |
+| --- | --- | --- |
+| `sensorStartTime` | When CAMS created the measurement, in microseconds since the Unix epoch | When the phone received the packet, in microseconds since the Unix epoch |
+| `timestamp` | When CAMS created the event, in ISO 8601 local time without a UTC offset | When the phone received the packet, in ISO 8601 local time with millisecond precision |
+| `sensorEndTime` | Not set | Not set |
+
+`packet_index` numbers the motion packets in the order the earbud sends them. It starts at 0 when the plugin starts listening to the sensor, so compare it only within one connection.
+
+On Android, it runs from 0 to 255 and then starts again at 0. Use it to order packets and to find lost packets within a connection.
+
+## Button events
+
+`dk.cachet.carp.esense.button` records an event each time the participant presses the button of the earbud, and another one when they release it.
+
+Each measurement is an [`ESenseButton`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseButton-class.html) with these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `DateTime` | Time when CAMS created the event, in ISO 8601 local time. |
+| `deviceName` | `String` | The name of the earbud. JSON key `device_name`. |
+| `pressed` | `bool` | `true` when the button is pressed, `false` when it is released. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.esense.button",
+  "timestamp": "2026-10-26T15:03:13.250397",
+  "device_name": "eSense-0332",
+  "pressed": true
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Motion
+
+`dk.cachet.carp.esense.sensor` streams the IMU of the left earbud: three accelerometer axes and three gyroscope axes per packet, at the `samplingRate` of the device.
+
+Each measurement is an [`ESenseSensor`](https://pub.dev/documentation/carp_esense_package/latest/esense/ESenseSensor-class.html) with these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `DateTime` | Time when the phone received the packet, in ISO 8601 local time with millisecond precision. |
+| `deviceName` | `String` | The name of the earbud. JSON key `device_name`. |
+| `packetIndex` | `int?` | Sequence number of the packet within the current connection. JSON key `packet_index`. |
+| `accel` | `List<int>?` | Raw accelerometer values on the x, y and z axes. |
+| `gyro` | `List<int>?` | Raw gyroscope values on the x, y and z axes. |
+
+<Callout type="warning" title="Known issue">
+
+The eSense libraries that `esense_flutter` 1.2.0 uses decode two values wrongly, and CAMS stores the values as it receives them:
+
+- On Android, every `accel` and `gyro` value whose low byte is at least `0x80` is 256 too low. At the default ranges, that is 0.03 g or 3.9 degrees per second. Add 256 to such a value and wrap the result to a signed 16-bit integer, for example with `(value + 256).toSigned(16)` in Dart.
+- On iOS, every `packet_index` is 256 too high. Subtract 256.
+
+</Callout>
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.esense.sensor",
+  "timestamp": "2026-10-26T15:03:12.123",
+  "device_name": "eSense-0332",
+  "packet_index": 42,
+  "accel": [-415, 8126, 1024],
+  "gyro": [12, -7, 3]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Unit conversion
+
+`accel` and `gyro` hold raw signed 16-bit values. To convert them, divide each value by the scale factor of the range that the IMU uses:
+
+| Range | Scale factor |
+| --- | --- |
+| Accelerometer ±2 g | 16384 |
+| Accelerometer ±4 g | 8192 |
+| Accelerometer ±8 g | 4096 |
+| Accelerometer ±16 g | 2048 |
+| Gyroscope ±250 degrees per second | 131 |
+| Gyroscope ±500 degrees per second | 65.5 |
+| Gyroscope ±1000 degrees per second | 32.8 |
+| Gyroscope ±2000 degrees per second | 16.4 |
+
+The [eSense BLE specification](https://www.esense.io/share/eSense-BLE-Specification.pdf) gives ±4 g and ±500 degrees per second as the default ranges, with a 5 Hz low-pass filter on both sensors. CAMS does not change these settings and cannot read them. With an earbud in its default configuration, convert the values like this:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is ESenseSensor && data.accel != null && data.gyro != null) {
+    // Scale factors of the default ranges, ±4 g and ±500 degrees per second
+    final accel = data.accel!.map((value) => value / 8192).toList(); // g
+    final gyro = data.gyro!.map((value) => value / 65.5).toList(); // deg/s
+    print('Packet ${data.packetIndex}: $accel g, $gyro deg/s');
+  }
+});
+```
+
+On Android, correct the raw values first; see the known issue under [Motion](#motion). For the orientation of the axes, see the [eSense user documentation](https://www.esense.io/share/eSense-User-Documentation.pdf).

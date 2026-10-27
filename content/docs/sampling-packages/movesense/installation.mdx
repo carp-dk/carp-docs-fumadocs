@@ -1,0 +1,163 @@
+---
+title: Installation
+description: Add carp_movesense_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+Setting up the Movesense package takes four steps on top of the CARP Mobile Sensing (CAMS) setup:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_movesense_package
+```
+
+The package needs CAMS, so complete [Installation](/docs/mobile-sensing/installation) for CAMS first.
+
+The package brings in the [`carp_movesense_flutter`](https://pub.dev/packages/carp_movesense_flutter) plugin, which bundles the Movesense mobile library (MDS) for Android and iOS. There is no Movesense SDK to download.
+
+<Callout type="info">
+
+If you upgrade from version 2.x of the package, remove the manual Movesense setup. On Android, delete the `android/libs/mdslib-*.aar` file and the `flatDir` repository that points to it. On iOS, delete the `pod 'Movesense'` line in `ios/Podfile`: keeping the pod links the library twice.
+
+</Callout>
+
+If your code imports `package:carp_movesense_flutter/carp_movesense_flutter.dart`, for example to scan for sensors with `Mds`, also add the plugin as a direct dependency:
+
+```bash
+flutter pub add carp_movesense_flutter
+```
+
+</Step>
+<Step title="Configure Android">
+
+The plugin and RxAndroidBle, the Bluetooth library that the Movesense library uses, add these permissions to your app's manifest:
+
+| Permission | Android versions | Purpose |
+| --- | --- | --- |
+| `BLUETOOTH_SCAN` | 12 or later | Find the sensor. The `neverForLocation` flag tells Android that the app does not derive location from scans. |
+| `BLUETOOTH_CONNECT` | 12 or later | Connect to the sensor. |
+| `BLUETOOTH`, `BLUETOOTH_ADMIN` | 11 and lower | Use Bluetooth before Android 12. |
+| `ACCESS_FINE_LOCATION` | 11 and lower | Get scan results before Android 12. |
+| `ACCESS_COARSE_LOCATION` | All | Pass the location check that CAMS makes before it connects a Bluetooth device, on every Android version. |
+
+You do not add any permissions yourself. On Android 12 or later, approximate location passes the CAMS check, unless your app declares `ACCESS_FINE_LOCATION` for those versions; see [Troubleshooting](#troubleshooting).
+
+The plugin needs `minSdk` 24 or later. If `android/app/build.gradle.kts` sets a lower `minSdk`, raise it to 24.
+
+The bundled library contains native code for `arm64-v8a`, `armeabi-v7a` and `x86`, but not for `x86_64`. Test on a physical phone, which Bluetooth needs anyway.
+
+</Step>
+<Step title="Configure iOS">
+
+Add the Bluetooth usage description and the `bluetooth-central` background mode to `ios/Runner/Info.plist`, inside the top-level `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>The study connects to your Movesense sensor to record your heart rate and ECG.</string>
+<key>UIBackgroundModes</key>
+<array>
+  <string>bluetooth-central</string>
+</array>
+```
+
+iOS shows the text in its Bluetooth permission dialog, and it terminates an app that uses Bluetooth without the key. The plugin starts Core Bluetooth when the app launches, so iOS may ask for Bluetooth access at the first launch.
+
+The `bluetooth-central` mode keeps data from the sensor coming while the app is in the background. In Xcode, it is **Uses Bluetooth LE accessories** under **Signing & Capabilities → Background Modes**. If `UIBackgroundModes` already exists, add `bluetooth-central` to its array.
+
+The plugin needs iOS 15.0 or later, the same minimum as CAMS. Run the app on an iPhone: the bundled library has no build for the simulator on Apple silicon Macs, and the simulator has no Bluetooth.
+
+<Callout type="info">
+
+With CocoaPods, `permission_handler` reports the Bluetooth permission as denied without asking, unless `ios/Podfile` defines `PERMISSION_BLUETOOTH=1`. CAMS does not check this permission on iOS, so the macro is optional.
+
+</Callout>
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure `SmartPhoneClientManager`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_movesense_package/carp_movesense_package.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(MovesenseSamplingPackage()); // [!code ++]
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering [`MovesenseSamplingPackage`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseSamplingPackage-class.html) makes the six measure types, the `MovesenseDevice` configuration and its device manager known to CAMS. CAMS can then deploy protocols that use the sensor and read them from JSON, including protocols created with CAMS 1.x. `configure()` restores the studies saved on the phone, so the package must be registered before it runs.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The analyzer reports that Smartphone is ambiguous">
+
+Hide `Smartphone` when you import `carp_core`. Both `carp_core` and `carp_mobile_sensing` define the class, and CAMS apps use the one in `carp_mobile_sensing`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+```
+
+</Accordion>
+<Accordion title="The status changes to disconnected right after connect() on Android">
+
+Call `requestPermissions()` on the device manager before `connect()`, and check that the participant allowed the nearby devices and location permissions. The log shows the message "has not the permissions required to connect".
+
+If the app also declares `ACCESS_FINE_LOCATION` for Android 12 or later, the participant must allow precise location. With approximate location only, `permission_handler` reports the location permission as denied.
+
+</Accordion>
+<Accordion title="Precise location is missing on Android 12 or later">
+
+Declare `ACCESS_FINE_LOCATION` with `tools:remove` to drop the limit that the plugin sets:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:remove="android:maxSdkVersion" /> <!-- [!code ++] -->
+    <!-- ... the rest of the manifest -->
+</manifest>
+```
+
+Without `tools:remove`, the manifest merger copies the plugin's `android:maxSdkVersion="30"` onto your entry, so the app cannot get precise location on Android 12 or later.
+
+</Accordion>
+<Accordion title="Linker or module errors in iOS builds with CocoaPods">
+
+Change the `Runner` target in `ios/Podfile` to static frameworks, which some CocoaPods setups need for the statically linked Movesense library:
+
+```ruby title="ios/Podfile"
+target 'Runner' do
+  use_frameworks! # [!code --]
+  use_frameworks! :linkage => :static # [!code ++]
+  use_modular_headers! # [!code ++]
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # ... the rest of the target
+end
+```
+
+Then run `pod install` in the `ios/` folder.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/movesense/quickstart" icon="Bolt">
+
+Build an app that prints heart rate and ECG from a sensor.
+
+</Card>
+</Cards>

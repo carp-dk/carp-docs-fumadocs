@@ -1,0 +1,139 @@
+---
+title: Audio Sampling Package
+description: Collect noise levels and audio recordings from the phone's microphone in a CARP Mobile Sensing study.
+icon: Mic
+---
+
+`carp_audio_package` adds the phone's microphone to a [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) study. It measures the noise level around the participant and records audio to files, for example to study the sound environment or a participant's cough. It also defines data types for videos and images that your app captures.
+
+The package is named after audio for historical reasons, but it is a media package. Its classes are named for media, such as [`MediaSamplingPackage`](https://pub.dev/documentation/carp_audio_package/latest/media/MediaSamplingPackage-class.html), and its library is `package:carp_audio_package/media.dart`. Noise levels come from the [`noise_meter`](https://pub.dev/packages/noise_meter) plugin and recordings from [`flutter_sound`](https://pub.dev/packages/flutter_sound).
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_audio_package" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_audio_package/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_audio_package" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+<Callout type="warning" title="Recording people">
+
+`AUDIO` records everything the microphone picks up, including the voices of people nearby who have not agreed to take part, and stores it unchanged. The study's ethics approval and consent must cover audio recordings. When sound levels are enough, use `NOISE`, which stores no sound.
+
+</Callout>
+
+## Features
+
+<Cards>
+<Card title="Noise" icon="GraphicEq">
+
+The mean, standard deviation, minimum and maximum sound level in decibels for a short window every few minutes. No sound is stored.
+
+</Card>
+<Card title="Audio recordings" icon="Mic">
+
+Recordings from the microphone, stored as AAC files on the phone and started and stopped by the study protocol or by the participant.
+
+</Card>
+<Card title="Video and images" icon="Description">
+
+Data types for videos and images that your app captures, so that they are stored and uploaded with the study data. The package does not use the camera.
+
+</Card>
+</Cards>
+
+## Measure types
+
+| Measure type | Data | Android | iOS |
+| --- | --- | --- | --- |
+| [`dk.cachet.carp.noise`](/docs/sampling-packages/audio/noise) | Sound level statistics in decibels for each sampling window | Yes | Yes |
+| [`dk.cachet.carp.audio`](/docs/sampling-packages/audio/audio) | An audio recording, stored as a file | Yes | Yes |
+| [`dk.cachet.carp.video`](/docs/sampling-packages/audio/video-and-images) | A video that your app records | Yes | Yes |
+| [`dk.cachet.carp.image`](/docs/sampling-packages/audio/video-and-images) | An image that your app captures | Yes | Yes |
+
+`NOISE` is event-based, `AUDIO` records from when its task starts until the task stops, and `VIDEO` and `IMAGE` collect nothing by themselves. For the kinds of measures, see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures).
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| Dart SDK | 3.10 or later |
+| Flutter | 3.44 or later, required by `noise_meter` |
+| `carp_mobile_sensing` | 2.2.0 or later |
+| Android | API level 24 (Android 7.0) or later |
+| iOS | 16.0 or later, required by `audio_streamer`, which `noise_meter` uses |
+
+## How it works
+
+Adding the package to a study takes three steps:
+
+<Steps>
+<Step title="Register the package">
+
+Registering `MediaSamplingPackage` makes the four measure types and their data classes known to CAMS.
+
+</Step>
+<Step title="Add the measures to a protocol">
+
+`NOISE` starts with an `ImmediateTrigger()` and schedules its own sampling windows. Each `AUDIO` recording needs a task that stops, for example after a fixed duration.
+
+</Step>
+<Step title="Deploy the protocol">
+
+CAMS asks the participant for microphone access, samples noise in short windows and adds an audio measurement each time a recording stops.
+
+</Step>
+</Steps>
+
+This example registers the package and samples the noise level for 10 seconds every 5 minutes, the default:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_audio_package/media.dart';
+
+void main() {
+  CarpMobileSensing.ensureInitialized();
+  SamplingPackageRegistry().register(MediaSamplingPackage()); // [!code highlight]
+
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Ambient noise',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // An event-based measure starts once and runs until the study pauses
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(measures: [Measure(type: MediaSamplingPackage.NOISE)]), // [!code highlight]
+    phone,
+  );
+
+  // ... deploy the protocol and start sampling
+}
+```
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/sampling-packages/audio/installation" icon="Download">
+
+Add the package to a CAMS app and configure Android and iOS.
+
+</Card>
+<Card title="Quickstart" href="/docs/sampling-packages/audio/quickstart" icon="Bolt">
+
+Build an app that samples noise and records audio.
+
+</Card>
+<Card title="Noise" href="/docs/sampling-packages/audio/noise" icon="GraphicEq">
+
+Sampling windows, decibel values and the noise data.
+
+</Card>
+<Card title="Audio recordings" href="/docs/sampling-packages/audio/audio" icon="Mic">
+
+Start and stop recordings, and find and upload the files.
+
+</Card>
+</Cards>

@@ -1,0 +1,154 @@
+---
+title: Geofences
+description: How the GEOFENCE measure reports enter, dwell and exit events for circular geofences, and how to trigger tasks on them.
+icon: Fence
+---
+
+`dk.cachet.carp.geofence` (`ContextSamplingPackage.GEOFENCE`) reports when the phone enters, stays in or leaves a **geofence**: a circle around a center position. The package checks each location from the [`LocationService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationService-class.html) against the circle itself, so it does not use the geofencing APIs of Android or iOS. `GEOFENCE` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the location service, on Android and iOS.
+
+## Add a geofence to a protocol
+
+Each `GEOFENCE` measure watches one geofence, which a [`GeofenceSamplingConfiguration`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/GeofenceSamplingConfiguration-class.html) defines. Start the measure with an `ImmediateTrigger` and target the task at the location service:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(type: ContextSamplingPackage.GEOFENCE)
+        ..overrideSamplingConfiguration = GeofenceSamplingConfiguration(
+          name: 'DTU Lyngby',
+          center: GeoPosition(55.786025, 12.524159),
+          radius: 200,
+          dwell: const Duration(minutes: 15),
+        ),
+    ],
+  ),
+  locationService,
+);
+```
+
+<Callout type="warning" title="Configuration required">
+
+`GEOFENCE` has no default configuration. Without a `GeofenceSamplingConfiguration`, the measure fails when it starts and collects nothing.
+
+</Callout>
+
+## Configuration
+
+`GeofenceSamplingConfiguration` has four properties, and all of them are required:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `center` | `GeoPosition` | — | The center of the geofence, as `GeoPosition(latitude, longitude)` in degrees. |
+| `radius` | `double` | — | The radius in meters. |
+| `dwell` | `Duration` | — | How long the phone must stay inside before a `DWELL` event. The event repeats every `dwell` while the phone stays inside. |
+| `name` | `String` | — | A label that every event of this geofence carries. |
+
+## Enter, dwell and exit events
+
+The probe updates the state of the geofence each time a location arrives. A location is inside when its great-circle distance to the center is less than `radius`:
+
+| State before | New location | Event |
+| --- | --- | --- |
+| Unknown, after the measure starts | Inside | `ENTER` |
+| Unknown, after the measure starts | Outside | `EXIT` |
+| Outside | Inside | `ENTER` |
+| Inside | Outside | `EXIT` |
+| Inside | Inside, and `dwell` has passed since the last event | `DWELL` |
+| Inside | Inside, and `dwell` has not passed | None |
+| Outside | Outside | None |
+
+The state is not saved, so every start of the measure begins with an `ENTER` or an `EXIT` event, also after an app restart.
+
+The probe checks the geofence only when a location arrives, so the `LocationService` settings decide the timing. With the default interval, an event can come up to a minute late.
+
+With a `distance` filter, a phone that stays in one place gets few or no new locations, and so few or no `DWELL` events. To get them, set `distance` to `0`.
+
+## Watch several geofences
+
+To watch several geofences, add one `GEOFENCE` measure per geofence, each with its own configuration and name:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(type: ContextSamplingPackage.GEOFENCE)
+        ..overrideSamplingConfiguration = GeofenceSamplingConfiguration(
+          name: 'Home',
+          center: GeoPosition(55.676098, 12.568337),
+          radius: 100,
+          dwell: const Duration(hours: 1),
+        ),
+      Measure(type: ContextSamplingPackage.GEOFENCE)
+        ..overrideSamplingConfiguration = GeofenceSamplingConfiguration(
+          name: 'Clinic',
+          center: GeoPosition(55.696476, 12.565553),
+          radius: 150,
+          dwell: const Duration(minutes: 30),
+        ),
+    ],
+  ),
+  locationService,
+);
+```
+
+All events have the same measure type, so use `name` to tell the geofences apart.
+
+## Trigger tasks on geofence events
+
+A [`Geofence`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/Geofence-class.html) event never matches a `Geofence` condition, so a [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) with such a condition never fires. Use a [`ConditionalSamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ConditionalSamplingEventTrigger-class.html) with a Dart function instead. This task collects the weather each time the participant arrives at DTU Lyngby:
+
+```dart
+protocol.addTaskControl(
+  ConditionalSamplingEventTrigger(
+    measureType: ContextSamplingPackage.GEOFENCE,
+    triggerCondition: (measurement) {
+      final data = measurement.data;
+      return data is Geofence &&
+          data.name == 'DTU Lyngby' &&
+          data.type == GeofenceType.ENTER;
+    },
+  ),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.WEATHER)]),
+  weatherService,
+);
+```
+
+The trigger listens to the study's `GEOFENCE` measurements, so the protocol must also collect the geofence.
+
+<Callout type="warning" title="Not saved with the protocol">
+
+The condition is a Dart function, so CAMS cannot save it with the protocol. The trigger fires only in a protocol that your app creates in Dart code. It never fires in a protocol from CARP Web Services (CAWS) or in a study restored after an app restart.
+
+</Callout>
+
+A `SamplingEventTrigger` without a condition is saved with the protocol, but it fires on every geofence event.
+
+## Limitations
+
+- A geofence keeps the location stream running, so it drains the battery like continuous location.
+- A geofence is only as precise as the locations. Choose a `radius` well above the typical `accuracy` of the locations, or location noise may cause false `ENTER` and `EXIT` events.
+- On Android, `GEOFENCE` needs location access all the time. On iOS, it collects in the background only with location access **Always**.
+
+## Data
+
+Each measurement holds a `Geofence` with the type `dk.cachet.carp.geofence`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `String` | The `name` from the geofence configuration. |
+| `type` | `GeofenceType` | `ENTER`, `EXIT` or `DWELL`. |
+
+An event for the DTU Lyngby geofence looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.geofence",
+  "name": "DTU Lyngby",
+  "type": "ENTER"
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

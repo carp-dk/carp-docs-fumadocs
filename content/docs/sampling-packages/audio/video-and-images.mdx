@@ -1,0 +1,120 @@
+---
+title: Video and images
+description: The video and image measure types for media that your app captures, and how the app adds such media to the study data.
+icon: Description
+---
+
+`VIDEO` (`dk.cachet.carp.video`) and `IMAGE` (`dk.cachet.carp.image`) are measure types for videos and images that your app captures. The package does not capture video or images itself: it has no camera code and no capture screen.
+
+The measures collect nothing on their own. Your app records the media and adds a measurement that refers to the file. CARP Mobile Sensing (CAMS) then stores and uploads it like any other measurement.
+
+The constants are on [`MediaSamplingPackage`](https://pub.dev/documentation/carp_audio_package/latest/media/MediaSamplingPackage-class.html):
+
+| Measure type | Constant | Data class | `mediaType` |
+| --- | --- | --- | --- |
+| `dk.cachet.carp.video` | `VIDEO` | [`VideoMedia`](https://pub.dev/documentation/carp_audio_package/latest/media/VideoMedia-class.html) | `video` |
+| `dk.cachet.carp.image` | `IMAGE` | [`ImageMedia`](https://pub.dev/documentation/carp_audio_package/latest/media/ImageMedia-class.html) | `image` |
+
+## Add the measures to a protocol
+
+When the data goes to CARP Web Services (CAWS), add the measures to a task in the protocol. [`CarpDataManager`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataManager-class.html) uploads only the data types that the protocol's tasks contain. A background task is enough:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(type: MediaSamplingPackage.VIDEO),
+      Measure(type: MediaSamplingPackage.IMAGE),
+    ],
+  ),
+  phone,
+);
+```
+
+The measures start a placeholder probe that adds nothing and stops after 5 seconds. They request no permissions. If an app task asks the participant for the media, add the measure to that task instead.
+
+## Add media from your app
+
+When the app has recorded a video, create a `VideoMedia` for the file and add it to the study's measurements:
+
+```dart
+import 'dart:io';
+
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_audio_package/media.dart';
+
+// Add a video that the app recorded to the study data
+void addVideo(SmartphoneStudy study, File file, DateTime start, DateTime end) {
+  final video = VideoMedia(
+    filename: file.uri.pathSegments.last,
+    startRecordingTime: start.toUtc(),
+    endRecordingTime: end.toUtc(),
+  )..path = file.path;
+
+  final controller = SmartPhoneClientManager().getStudyController(study);
+  controller?.executor.addMeasurement(
+    Measurement(
+      sensorStartTime: start.microsecondsSinceEpoch,
+      sensorEndTime: end.microsecondsSinceEpoch,
+      data: video,
+    ),
+  );
+}
+```
+
+The measurement goes through the study's privacy schema and data manager, like the measurements from the probes. Because its data is a [`FileData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/FileData-class.html) with `upload` set to `true`, `CarpDataManager` also uploads the file. To upload only the measurement and keep the file on the phone, set `upload` to `false` before you add it.
+
+Add an image the same way with `ImageMedia`, with the time of capture as `startRecordingTime`. The app decides where it keeps the files, and `CarpDataManager` deletes each file after the upload unless `deleteWhenUploaded` is `false`.
+
+## App tasks for media
+
+[`AppTask`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppTask-class.html) has three type constants for media tasks:
+
+| Constant | Value |
+| --- | --- |
+| `AppTask.AUDIO_TYPE` | `audio` |
+| `AppTask.VIDEO_TYPE` | `video` |
+| `AppTask.IMAGE_TYPE` | `image` |
+
+The package has no user task for these types. CAMS puts an app task of these types on the task list only when the app registers a [`UserTaskFactory`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/UserTaskFactory-class.html) for the type. Otherwise, CAMS logs a warning and skips the task.
+
+In the user task, add the media measurement as in [Add media from your app](#add-media-from-your-app), and then call `onDone()`. A result passed as `onDone(result: media)` ends up inside the task's completed app task measurement, so `CarpDataManager` does not upload its file.
+
+For how to write the user task and its factory, see [Extending the app task model](/docs/mobile-sensing/app-task-model#extending-the-app-task-model).
+
+## Permissions
+
+The package requests no camera permission. Your app requests the permissions that its capture code needs. The camera needs `CAMERA` on Android and `NSCameraUsageDescription` on iOS, and videos with sound also need the microphone.
+
+## Data
+
+`VideoMedia` and `ImageMedia` have the same fields; a field without a value is left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `path` | `String?` | Absolute path of the file on the phone. |
+| `filename` | `String` | Name of the file. |
+| `upload` | `bool` | Whether a data manager uploads the file as well as this data. Default: `true`. |
+| `metadata` | `Map<String, String>?` | Key-value metadata of the file. Empty by default. |
+| `id` | `String` | A UUID, generated when the object is created. |
+| `mediaType` | `MediaType` | `video` or `image` |
+| `startRecordingTime` | `DateTime?` | When the recording started, or when the image was captured. |
+| `endRecordingTime` | `DateTime?` | When the recording stopped. |
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data). An example of the data for a video:
+
+```json
+{
+  "__type": "dk.cachet.carp.video",
+  "path": "/data/user/0/dk.carp.myapp/app_flutter/videos/walk-test.mp4",
+  "filename": "walk-test.mp4",
+  "upload": true,
+  "metadata": {},
+  "id": "3a2f6b1c-8d4e-4f5a-9b6c-7d8e9f0a1b2c",
+  "mediaType": "video",
+  "startRecordingTime": "2026-10-26T13:20:04.512Z",
+  "endRecordingTime": "2026-10-26T13:20:16.734Z"
+}
+```

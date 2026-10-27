@@ -1,0 +1,262 @@
+---
+title: Measure types
+description: The six measure types in carp_movesense_package and the data each one collects.
+icon: Dataset
+---
+
+`carp_movesense_package` has six measure types in the `dk.cachet.carp.movesense` namespace, which CARP Mobile Sensing (CAMS) collects from a Movesense sensor. Add each one to a protocol as `Measure(type: MovesenseSamplingPackage.<constant>)`, in a task that runs on a [`MovesenseDevice`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseDevice-class.html):
+
+| Measure type | Constant | Kind | Android | iOS |
+| --- | --- | --- | --- | --- |
+| [`dk.cachet.carp.movesense.deviceinformation`](#device-information) | `DEVICE_INFO` | One-time | Yes | Yes |
+| [`dk.cachet.carp.movesense.state`](#taps) | `STATE` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movesense.hr`](#heart-rate) | `HR` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movesense.ecg`](#ecg) | `ECG` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movesense.temperature`](#temperature) | `TEMPERATURE` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movesense.imu`](#motion) | `IMU` | Event-based | Yes | Yes |
+
+The event-based measures stream while the sensor is connected, so start them with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html). The one-time measure collects once per run, so give it a trigger that repeats. See [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures).
+
+The data type of each measurement equals its measure type. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Sampling and timestamps
+
+The measures have no sampling configuration. The package uses fixed rates of 125 Hz for ECG and 13 Hz for the inertial measurement unit (IMU). The sensor decides when it reports heart rate, taps and temperature.
+
+Each event-based probe skips the first 10 notifications after it subscribes, to let the sensor stabilize. A task that starts again, for example from a trigger, skips them again.
+
+`sensorStartTime` is the phone's time when the measurement was created, in microseconds since the epoch. The `timestamp` fields in the data hold the sensor's internal clock in milliseconds, which does not give the time of day. Use `sensorStartTime` to align Movesense data with other data.
+
+Streaming heart rate, ECG and IMU data from one sensor at once may fail with status 408, because the sensor cannot keep up. Collect fewer streams at once, or record ECG in bursts, as in [Taps](#taps).
+
+## Device information
+
+`DEVICE_INFO` reads the sensor's `/Info` resource each time it runs, and collects nothing while the sensor is disconnected. To take a snapshot once a day, use a [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html):
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 1)),
+  BackgroundTask(
+    measures: [Measure(type: MovesenseSamplingPackage.DEVICE_INFO)],
+  ),
+  movesense,
+);
+```
+
+All fields of [`MovesenseDeviceInformation`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseDeviceInformation-class.html) may be `null`, and the JSON leaves out the ones that are. The class has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `manufacturerName` | `String?` | Manufacturer, for example `Movesense Ltd`. |
+| `brandName` | `String?` | Brand name. |
+| `productName` | `String?` | Product name, for example `Movesense`. |
+| `variant` | `String?` | Product variant. |
+| `design` | `String?` | Design, for example `black`. |
+| `hardwareCompatibilityId` | `String?` | Hardware compatibility ID. |
+| `serial` | `String?` | Serial number of the sensor. |
+| `pcbaSerial` | `String?` | Serial number of the circuit board. |
+| `softwareVersion` | `String?` | Firmware version. |
+| `hardwareType` | `String?` | Hardware type: `A1` for the MD, `H3` for the HR+ and `H4` for the HR2. |
+| `additionalVersionInfo` | `String?` | Additional version information. |
+| `apiLevel` | `String?` | API level of the firmware. |
+| `address` | `String?` | Bluetooth address as the sensor reports it, with dashes, for example `0C-8C-DC-1B-23-BF`. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.deviceinformation",
+  "manufacturerName": "Movesense Ltd",
+  "productName": "Movesense",
+  "variant": "Avocado",
+  "design": "black",
+  "hardwareCompatibilityId": "C",
+  "serial": "233830000816",
+  "pcbaSerial": "80413336500828200000100022666H4233",
+  "softwareVersion": "2.1.5",
+  "hardwareType": "H4",
+  "apiLevel": "1",
+  "address": "0C-8C-DC-1B-23-BF"
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Taps
+
+`STATE` reports single taps on the sensor. Movesense sensors deliver one kind of state change at a time, so the probe subscribes only to the tap state, `System/States/4`. The package authors tested this on the MD and HR2.
+
+[`MovesenseStateChange`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseStateChange-class.html) has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `state` | `MovesenseDeviceState` | The new state, as a string. For this measure, `tap`, or `unknown` for a tap notification with an unexpected value. |
+| `timestamp` | `int` | The sensor's internal clock at the tap, in milliseconds. |
+
+[`MovesenseDeviceState`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseDeviceState.html) also has the values `moving`, `notMoving`, `connected`, `disconnected`, `doubleTap`, `acceleration` and `freeFall`, which this measure does not produce. Because the probe skips the first 10 notifications, the first 10 taps after the measure starts are not recorded.
+
+A [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) can start another task on each tap. This protocol records 30 seconds of ECG every time the participant taps the sensor:
+
+```dart
+// Listen for taps while the sensor is connected
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: MovesenseSamplingPackage.STATE)]),
+  movesense,
+);
+
+// Record 30 seconds of ECG after each tap
+protocol.addTaskControl(
+  SamplingEventTrigger(
+    measureType: MovesenseSamplingPackage.STATE,
+    triggerCondition: MovesenseStateChange(MovesenseDeviceState.tap),
+  ),
+  BackgroundTask(
+    measures: [Measure(type: MovesenseSamplingPackage.ECG)],
+    duration: const Duration(seconds: 30),
+  ),
+  movesense,
+);
+```
+
+The trigger compares each `STATE` measurement with `triggerCondition`, and two state changes match when their `state` is the same.
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.state",
+  "state": "tap",
+  "timestamp": 1359384
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Heart rate
+
+`HR` streams the heart rate that the sensor computes from its ECG signal, from the `Meas/HR` resource.
+
+[`MovesenseHR`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseHR-class.html) has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `hr` | `double` | Average heart rate in beats per minute (BPM). |
+| `rr` | `int?` | The first RR interval in the notification, in milliseconds. Left out of the JSON when `null`. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.hr",
+  "hr": 60.79999923706055,
+  "rr": 976
+}
+```
+
+</Accordion>
+</Accordions>
+
+## ECG
+
+`ECG` streams single-channel ECG at 125 Hz from the `Meas/ECG/125` resource. Each measurement holds the batch of samples from one notification. The sensor supports other rates, but the package always uses 125 Hz.
+
+[`MovesenseECG`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseECG-class.html) has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `int` | The sensor's internal clock for the batch, in milliseconds. |
+| `samples` | `List<int>` | Raw ECG samples. One unit is 0.38147 µV, as the [Movesense API reference](https://www.movesense.com/docs/esw/api_reference/) defines for `/Meas/ECG`. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.ecg",
+  "timestamp": 40110192,
+  "samples": [-240, -246, -241, -237, -232, -209, -179, -148, -129, -116, -98, -85, -80, -87, -87, -82]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Temperature
+
+`TEMPERATURE` streams the temperature inside the sensor from the `Meas/Temp` resource, in kelvin. The package supports it on the Movesense MD only.
+
+<Callout type="warning" title="Known issue">
+
+The package creates the temperature probe only if the connected sensor is already identified as a Movesense MD. CAMS creates the probes when it deploys or restores a study, before it connects the sensor. The temperature probe is therefore missing, and `TEMPERATURE` collects no data.
+
+</Callout>
+
+[`MovesenseTemperature`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseTemperature-class.html) has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `int` | The sensor's internal clock for the reading, in milliseconds. |
+| `measurement` | `int` | Temperature in kelvin, with the decimals cut off. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.temperature",
+  "timestamp": 40112000,
+  "measurement": 305
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Motion
+
+`IMU` streams the combined accelerometer, gyroscope and magnetometer resource `Meas/IMU9/13` at 13 Hz, the lowest rate the sensor offers. Each measurement holds the samples from one notification.
+
+<Callout type="warning" title="Known issue">
+
+The package fills `gyroscope` and `magnetometer` with the accelerometer samples of each notification, so all three lists hold accelerometer values. Use only `accelerometer`.
+
+</Callout>
+
+[`MovesenseIMU`](https://pub.dev/documentation/carp_movesense_package/latest/carp_movesense_package/MovesenseIMU-class.html) has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `int` | The sensor's internal clock for the samples, in milliseconds. |
+| `accelerometer` | `List<MovesenseAccelerometerSample>` | Acceleration in m/s², including gravity. |
+| `gyroscope` | `List<MovesenseGyroscopeSample>` | Meant for angular velocity in degrees per second, but holds the accelerometer samples. |
+| `magnetometer` | `List<MovesenseMagnetometerSample>` | Meant for the magnetic field in microtesla (µT), but holds the accelerometer samples. |
+
+Each sample has the fields `x`, `y` and `z`, of type `num`.
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movesense.imu",
+  "timestamp": 40110362,
+  "accelerometer": [
+    { "x": -0.0023929080925881863, "y": 9.150480270385742, "z": -3.2064969539642334 }
+  ],
+  "gyroscope": [
+    { "x": -0.0023929080925881863, "y": 9.150480270385742, "z": -3.2064969539642334 }
+  ],
+  "magnetometer": [
+    { "x": -0.0023929080925881863, "y": 9.150480270385742, "z": -3.2064969539642334 }
+  ]
+}
+```
+
+</Accordion>
+</Accordions>

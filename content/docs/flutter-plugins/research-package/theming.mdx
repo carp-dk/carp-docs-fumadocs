@@ -1,0 +1,106 @@
+---
+title: Theming
+description: Style the Research Package screens through the ThemeData of your app, the CARP theme and the options of RPUITask.
+icon: Palette
+---
+
+Research Package draws its screens with Material widgets, which take their colors, text styles and button styles from the `ThemeData` of your app. To change how a task looks, change the theme, as for any other screen of the app.
+
+## Theme properties
+
+The screens read these properties of the theme:
+
+| Property | Used for |
+| --- | --- |
+| `colorScheme.primary` | **NEXT**, the close button, consent section titles, **Learn more** on consent sections, the progress bar, selected choices, text fields and selected images |
+| `primaryColor` | **BACK** in the visual consent step; **DISAGREE**, **CANCEL**, **Clear**, the section titles and the signature box in the review step |
+| `primaryColorLight` | The buttons of the audio player in instruction steps |
+| `scaffoldBackgroundColor` | The background of every step and of the top bar |
+| `textTheme` | Every text, such as `headlineSmall` for the titles of instruction and form steps, `titleLarge` for questions and `bodySmall` for footnotes |
+| `elevatedButtonTheme` | **NEXT** in the bottom bar and on the signature page |
+| `filledButtonTheme` | **NEXT** and **SEE SUMMARY** in the visual consent step, **AGREE**, and **LEAVE** |
+| `outlinedButtonTheme` | **BACK**, **DISAGREE**, **CANCEL**, **DONE** and **Clear** |
+| `textButtonTheme` | **Learn more** in instruction steps, and the skip buttons of optional questions |
+| `dialogTheme` | The leave dialog and the confirmation dialog of the review step |
+
+In a light Material 3 theme, `primaryColor` is the same color as `colorScheme.primary`, unless the theme sets it.
+
+## Use the CARP theme
+
+[`carp_themes_package`](https://pub.dev/packages/carp_themes_package) holds `carpTheme`, the light theme of CARP apps and of the Research Package example app. It has CARP blue as the primary color, a light gray page background and pill-shaped buttons.
+
+Research Package itself does not use the CARP theme. To use it in your app, add the package:
+
+```bash
+flutter pub add carp_themes_package
+```
+
+Then set `carpTheme` as the theme of the app:
+
+```dart
+import 'package:carp_themes_package/carp_themes_package.dart'; // [!code ++]
+import 'package:flutter/material.dart';
+
+class StudyApp extends StatelessWidget {
+  const StudyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Sleep study',
+    theme: carpTheme, // [!code ++]
+    home: const HomePage(),
+  );
+}
+```
+
+`carpTheme` has no dark variant. It names the `OpenSans` font family but includes no font files. Unless your app adds OpenSans as a font asset, the texts use the platform font.
+
+## Change the bars of a task
+
+`RPUITask` has options for the parts of the top and bottom bars that the theme does not cover:
+
+| Parameter | Changes |
+| --- | --- |
+| `carouselBarImage` | The image at the left of the top bar. Default: the CARP logo. |
+| `carouselBarBackgroundColor` | The background of the top bar. Default: the `scaffoldBackgroundColor` of the theme. |
+| `nextButtonStyle` | The style of **NEXT** in the bottom bar, merged over the default style. The label stays white unless the style sets a `foregroundColor`. |
+| `carouselBarBuilder` and `bottomNavigationBuilder` | The whole top or bottom bar, replaced by your own widget. |
+
+For examples, see [Customize the top bar](/docs/flutter-plugins/research-package/running-tasks#customize-the-top-bar) and [Customize the bottom bar](/docs/flutter-plugins/research-package/running-tasks#customize-the-bottom-bar).
+
+## Fixed colors
+
+Some colors do not come from the theme:
+
+- the summaries of consent sections and the names of data types in the visual consent step, in dark gray (`Colors.grey.shade900`);
+- the track of the consent progress bar, in light gray (`Colors.grey.shade300`);
+- the label of **NEXT** in the bottom bar, in white, unless `nextButtonStyle` sets a `foregroundColor`;
+- the signature, in red;
+- the controls of a video, in white, on a black background in full screen.
+
+## Dark themes
+
+In a dark Material 3 theme, `primaryColor` defaults to `colorScheme.surface`, the color of the page itself. The texts and borders that use `primaryColor` then disappear, such as **DISAGREE** and the signature box. Set `primaryColor` in the dark theme:
+
+```dart
+final scheme = ColorScheme.fromSeed(
+  seedColor: const Color(0xff006398),
+  brightness: Brightness.dark,
+);
+final darkTheme = ThemeData(colorScheme: scheme, primaryColor: scheme.primary);
+```
+
+The dark gray texts of the visual consent step stay dark in every theme, so they are hard to read on a dark page. To show tasks in a light theme in a dark app, wrap `RPUITask` in a `Theme`:
+
+```dart
+final page = Theme(
+  data: carpTheme,
+  child: RPUITask(task: task),
+);
+```
+
+The steps and their dialogs follow this theme. Pages that a step opens on the navigator of the app, such as the **Learn more** pages, follow the theme of the app.
+
+## Upgrade from version 3.1 or earlier
+
+Since version 3.2.0, the screens no longer read `CupertinoTheme.primaryColor`. If your app styled Research Package with a `CupertinoTheme`, set `ThemeData.colorScheme` instead. With `carpTheme`, use `carp_themes_package` 0.2.1 or later, which fixes borders and dividers that showed in black.

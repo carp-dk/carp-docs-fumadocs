@@ -321,7 +321,7 @@ m3e-nav-menu, m3e-nav-menu-item:not(:defined), m3e-card:not(:defined) { display:
 .docs-code-viewport:focus-visible { outline: 2px solid var(--color-fd-ring); outline-offset: -2px; }
 .docs-code-pre { margin: 0; padding: 16px 52px 16px 16px; min-width: 100%; width: max-content; font-family: var(--font-mono); font-size: 13px; line-height: 20px; background: transparent; }
 .docs-code-pre code { display: grid; }
-.docs-code-pre .line { display: block; }
+.docs-code-pre .line { display: block; min-height: 1lh; }
 .docs-table-scroll { overflow-x: auto; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; margin-block: 16px; background: var(--md-sys-color-surface); }
 .docs-table-scroll:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
 .docs-table-scroll table { width: 100%; margin: 0; border-collapse: collapse; text-align: start; }

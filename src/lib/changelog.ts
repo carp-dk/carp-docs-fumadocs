@@ -16,7 +16,19 @@ export const changelogSources: Record<string, ChangelogSource> = {
   'mobile-sensing': { package: 'carp_mobile_sensing', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'carp_mobile_sensing/CHANGELOG.md' },
   'flutter-plugins/health': { package: 'health', repo: 'carp-dk/carp-health-flutter', branch: 'main', file: 'CHANGELOG.md' },
   'flutter-plugins/debug-toolkit': { package: 'carp_debug_flutter', repo: 'carp-dk/carp_debug_flutter', branch: 'main', file: 'CHANGELOG.md' },
+  'flutter-plugins/research-package': { package: 'research_package', repo: 'carp-dk/research.package', branch: 'master', file: 'CHANGELOG.md' },
   'sampling-packages/apple-watch': { package: 'carp_aware_package', repo: 'carp-dk/carp_aware_package', branch: 'main', file: 'CHANGELOG.md' },
+  'sampling-packages/context': { package: 'carp_context_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_context_package/CHANGELOG.md' },
+  'sampling-packages/connectivity': { package: 'carp_connectivity_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_connectivity_package/CHANGELOG.md' },
+  'sampling-packages/communication': { package: 'carp_communication_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_communication_package/CHANGELOG.md' },
+  'sampling-packages/apps': { package: 'carp_apps_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_apps_package/CHANGELOG.md' },
+  'sampling-packages/audio': { package: 'carp_audio_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_audio_package/CHANGELOG.md' },
+  'sampling-packages/survey': { package: 'carp_survey_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_survey_package/CHANGELOG.md' },
+  'sampling-packages/health': { package: 'carp_health_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_health_package/CHANGELOG.md' },
+  'sampling-packages/polar': { package: 'carp_polar_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_polar_package/CHANGELOG.md' },
+  'sampling-packages/esense': { package: 'carp_esense_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_esense_package/CHANGELOG.md' },
+  'sampling-packages/movesense': { package: 'carp_movesense_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_movesense_package/CHANGELOG.md' },
+  'sampling-packages/movisens': { package: 'carp_movisens_package', repo: 'carp-dk/carp.sensing-flutter', branch: 'main', file: 'packages/carp_movisens_package/CHANGELOG.md' },
 };
 
 /** A changelog entry as sent to the client: the date is an ISO string, and missing for unpublished versions. */

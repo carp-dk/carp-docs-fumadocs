@@ -1,0 +1,206 @@
+---
+title: JSON surveys
+description: Write tasks as JSON, load them from an asset or a server, and export tasks and results as JSON.
+icon: Code
+---
+
+Every task, step, answer format and result of Research Package converts to and from JSON. A study can therefore keep its surveys and consent flows outside the app code, for example on a server. The app loads them when the participant starts a task.
+
+## JSON format
+
+The JSON of a task follows its Dart classes:
+
+- Every object has a `__type` key with the name of its Dart class, such as `RPQuestionStep`. This also applies to each choice, consent section, data type and signature.
+- Enum values are their names, which are case-sensitive: `SingleChoice`, `Overview`, `location`.
+- Durations, such as the `timeout` of a timer step, are whole microseconds: 30 seconds is `30000000`.
+- Keys whose value is `null` are left out. Keys that a class does not have are ignored, also when they are misspelled.
+- Dates in results are ISO 8601 strings in local time, without a time zone offset.
+
+## Write a task in JSON
+
+This morning survey has an instruction, two questions and a completion step:
+
+```json title="assets/surveys/morning.json"
+{
+  "__type": "RPOrderedTask",
+  "identifier": "morningSurvey",
+  "steps": [
+    {
+      "__type": "RPInstructionStep",
+      "identifier": "intro",
+      "title": "Good morning",
+      "text": "Two questions about your night."
+    },
+    {
+      "__type": "RPQuestionStep",
+      "identifier": "sleepQuality",
+      "title": "How well did you sleep?",
+      "answerFormat": {
+        "__type": "RPChoiceAnswerFormat",
+        "questionType": "SingleChoice",
+        "answerStyle": "SingleChoice",
+        "choices": [
+          { "__type": "RPChoice", "text": "Well", "value": 2 },
+          { "__type": "RPChoice", "text": "Fairly well", "value": 1 },
+          { "__type": "RPChoice", "text": "Poorly", "value": 0 }
+        ]
+      }
+    },
+    {
+      "__type": "RPQuestionStep",
+      "identifier": "sleepHours",
+      "title": "How many hours did you sleep?",
+      "answerFormat": {
+        "__type": "RPIntegerAnswerFormat",
+        "questionType": "Integer",
+        "minValue": 0,
+        "maxValue": 24,
+        "suffix": "hours"
+      }
+    },
+    {
+      "__type": "RPCompletionStep",
+      "identifier": "done",
+      "title": "Thank you",
+      "text": "Your answers are saved."
+    }
+  ]
+}
+```
+
+Every answer format needs a `questionType` that matches the format, such as `SingleChoice` for a single choice question or `Integer` for an integer question. See [Question types](/docs/flutter-plugins/research-package/answer-formats#question-types). The texts can be translation keys, as in Dart; see [Localization](/docs/flutter-plugins/research-package/localization).
+
+## Required keys
+
+Loading fails when a required key is missing. Besides `__type`, these keys are required:
+
+| Class | Required keys |
+| --- | --- |
+| `RPOrderedTask` | `identifier`, `steps` |
+| `RPNavigableOrderedTask` | `identifier`, `steps`, `stepNavigationRules`, which may be `{}` |
+| `RPInstructionStep`, `RPCompletionStep` | `identifier`, `title` |
+| `RPQuestionStep` | `identifier`, `title`, `answerFormat` |
+| `RPFormStep` | `identifier`, `title`, `questions`, `autoFocus`, and an `answerFormat` of type `RPFormAnswerFormat` |
+| `RPTimerStep` | `identifier`, `title`, `timeout` |
+| `RPVisualConsentStep` | `identifier`, `optional`, `consentDocument`, `title`, which may be `""` |
+| `RPConsentReviewStep` | `identifier`, `title`, `optional`, `consentDocument` |
+| Every answer format | `questionType` |
+| `RPChoiceAnswerFormat` | `answerStyle`, `choices` |
+| `RPChoice` | `text`, `value` |
+| `RPIntegerAnswerFormat`, `RPDoubleAnswerFormat` | `minValue`, `maxValue` |
+| `RPSliderAnswerFormat` | `minValue`, `maxValue`, `divisions` |
+| `RPImageChoiceAnswerFormat` | `choices` |
+| `RPImageChoice` | `imageUrl`, `description` |
+| `RPDateTimeAnswerFormat` | `dateTimeAnswerStyle` |
+| `RPConsentDocument` | `title`, `sections`, `signatures`, which may be `[]` |
+| `RPConsentSection` | `type`, `summary`, and `title` in a `Custom` section |
+| `RPDataTypeSection` | `dataName`, `dataInformation` |
+| `RPConsentSignature` | `identifier` |
+| `RPStepJumpRule` | `answerMap` |
+| `RPDirectStepNavigationRule` | `destinationStepIdentifier` |
+| `RPStepReorganizerRule` | `reorderingMap` |
+
+Other keys get their defaults when they are missing, such as `optional: false`. Loading does not check what the screens need, such as the `text` of a completion step. See [Tasks and steps](/docs/flutter-plugins/research-package/tasks-and-steps) and [Informed consent](/docs/flutter-plugins/research-package/informed-consent).
+
+## Load a task
+
+Load a task from an asset with `RPOrderedTask.fromJson()`:
+
+```dart
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:research_package/research_package.dart';
+
+Future<RPOrderedTask> loadTask(String assetPath) async {
+  ResearchPackage.ensureInitialized();
+  final text = await rootBundle.loadString(assetPath);
+  return RPOrderedTask.fromJson(jsonDecode(text) as Map<String, dynamic>);
+}
+```
+
+`ResearchPackage.ensureInitialized()` registers the classes that `fromJson()` creates, and loading fails without it. `RPOrderedTask.fromJson()` returns the class that `__type` names, so it also loads an `RPNavigableOrderedTask`.
+
+Declare the folder of the task files as an asset:
+
+```yaml title="pubspec.yaml"
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/lang/
+    - assets/surveys/ # [!code ++]
+```
+
+To load a task from a server, decode the body of the response with `jsonDecode()` and pass the map to `RPOrderedTask.fromJson()`. Some objects of a task change while it runs, so create a new task from the JSON for each run.
+
+A mistake in the JSON throws when the task loads:
+
+| Mistake | Error |
+| --- | --- |
+| A `__type` that is missing, misspelled or not registered | `SerializationException` |
+| A required key that is missing, or a value of the wrong type | `TypeError` |
+| An enum value that is missing or misspelled | `ArgumentError` |
+
+Load each task file in a unit test, so that a mistake shows before a participant opens the task.
+
+## Export tasks and results
+
+`jsonEncode()` from `dart:convert` turns a task or a result into JSON, because every model class has a `toJson()` method. For readable output, use a `JsonEncoder` with an indent. Here, `buildMorningSurvey()` is your function that builds the task in Dart:
+
+```dart
+const encoder = JsonEncoder.withIndent('  ');
+final taskJson = encoder.convert(buildMorningSurvey());
+```
+
+The output holds every key, also the ones with default values, such as `optional` and `closeAfterFinished`. It leaves out `customIllustration`, because a widget has no JSON form. Loading the output gives the same task again, so a task built in Dart is a good start for a JSON file.
+
+`onSubmit` can store the result with `jsonEncode(result)`, and `RPTaskResult.fromJson()` reads it back. The answers then stay plain JSON values, such as a list of maps for a choice answer. See [Results](/docs/flutter-plugins/research-package/results#json-format).
+
+## Add your own step classes
+
+`fromJson()` creates only registered classes. Research Package registers its own classes in `ensureInitialized()`, but a subclass of your own, such as an activity step, needs a registration of its own.
+
+The subclass returns a function that creates it from JSON in `fromJsonFunction`, and `FromJsonFactory` from [`carp_serializable`](https://pub.dev/packages/carp_serializable) registers it. Add the package:
+
+```bash
+flutter pub add carp_serializable
+```
+
+Then add the JSON support to the class, here to the `TapCountActivity` from the [activity step example](/docs/flutter-plugins/research-package/activity-steps#write-an-activity-step):
+
+```dart
+import 'package:carp_serializable/carp_serializable.dart';
+import 'package:research_package/research_package.dart';
+
+class TapCountActivity extends RPActivityStep {
+  TapCountActivity({required super.identifier, super.includeInstructions});
+
+  // ... stepBody() as on the Activity steps page
+
+  @override
+  Function get fromJsonFunction => _tapCountActivityFromJson;
+
+  factory TapCountActivity.fromJson(Map<String, dynamic> json) =>
+      FromJsonFactory().fromJson<TapCountActivity>(json);
+}
+
+TapCountActivity _tapCountActivityFromJson(Map<String, dynamic> json) =>
+    TapCountActivity(
+      identifier: json['identifier'] as String,
+      includeInstructions: json['includeInstructions'] as bool? ?? true,
+    );
+```
+
+Register the class at the start of `main()`, next to Research Package:
+
+```dart
+void main() {
+  ResearchPackage.ensureInitialized();
+  FromJsonFactory().register(TapCountActivity(identifier: ''));
+  runApp(const MyApp());
+}
+```
+
+`register()` stores the function under the `__type` of the object, `TapCountActivity`. The class inherits `toJson()` from `RPActivityStep`. A class with fields of its own writes them in its own `toJson()` and reads them in its function.
+
+In a CARP Mobile Sensing (CAMS) study, an `RPAppTask` carries its task in the JSON of the study protocol. The format is the same in `research_package` 3.2.0, which CAMS apps use. See [Building surveys](/docs/sampling-packages/survey/surveys).

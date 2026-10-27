@@ -1,0 +1,172 @@
+---
+title: Quickstart
+description: Build a Flutter app that samples the noise level and records a short audio clip with CARP Mobile Sensing.
+icon: Bolt
+---
+
+The finished app samples the noise level every 5 minutes, records 30 seconds of audio shortly after it starts and prints each measurement.
+
+## Prerequisites
+
+- CARP Mobile Sensing (CAMS) set up as described in [Installation](/docs/mobile-sensing/installation).
+- The package added, with the microphone permission and the iOS settings, as described in [Installation](/docs/sampling-packages/audio/installation).
+- A physical Android or iOS phone.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_audio_package/media.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(MediaSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone as the primary device
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Noise and audio',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Sample the noise level for 10 seconds every 5 minutes
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(measures: [Measure(type: MediaSamplingPackage.NOISE)]), // [!code highlight]
+    phone,
+  );
+
+  // 4. Record 30 seconds of audio, 30 seconds after sampling starts
+  protocol.addTaskControl(
+    DelayedTrigger(delay: const Duration(seconds: 30)),
+    BackgroundTask(
+      measures: [Measure(type: MediaSamplingPackage.AUDIO)], // [!code highlight]
+      duration: const Duration(seconds: 30), // [!code highlight]
+    ),
+    phone,
+  );
+
+  // 5. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 6. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the four measure types and their data classes known to CAMS. Register before `configure()`. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Creates a protocol with the phone as its only device. `SQLiteDataEndPoint` stores the measurements in a SQLite database on the phone, and the recordings stay on the phone as files. |
+| **3. Noise** | `NOISE` is event-based, so an `ImmediateTrigger` starts it once. It then samples a 10-second window every 5 minutes, the default, and adds one measurement per window. |
+| **4. Audio** | `AUDIO` records until its task stops, so the task's `duration` ends the recording after 30 seconds. `DelayedTrigger` fires 30 seconds after each start of sampling. |
+| **5. Deploy** | CAMS asks for microphone access and then starts the triggers. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **6. Print** | `client.measurements` delivers each measurement as it is added. |
+
+To record at regular times or when the participant starts a task, see [Audio recordings](/docs/sampling-packages/audio/audio).
+
+## Run the app
+
+Connect the phone and run:
+
+```bash
+flutter run
+```
+
+Allow microphone access when the app asks. About a minute after the start, the recording stops, and the console prints an audio measurement that refers to the file. Formatted for readability, it looks like this:
+
+```json
+{
+  "sensorStartTime": 1793019630104882,
+  "sensorEndTime": 1793019660211337,
+  "data": {
+    "__type": "dk.cachet.carp.audio",
+    "path": "/data/user/0/dk.carp.myapp/app_flutter/carp/deployments/2b4a5c3e-1f2d-4c6b-8a9e-0d1c2b3a4f5e/data/media/9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60.mp4",
+    "filename": "9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60.mp4",
+    "upload": true,
+    "metadata": {},
+    "id": "9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60",
+    "mediaType": "audio",
+    "startRecordingTime": "2026-10-26T13:00:30.104882Z",
+    "endRecordingTime": "2026-10-26T13:01:00.211337Z"
+  }
+}
+```
+
+The first noise window starts 5 minutes after the start, and its measurement follows 10 seconds later:
+
+```json
+{
+  "sensorStartTime": 1793019900003128,
+  "sensorEndTime": 1793019910004517,
+  "data": {
+    "__type": "dk.cachet.carp.noise",
+    "meanDecibel": 47.83251874509615,
+    "stdDecibel": 3.9171604375130887,
+    "minDecibel": 41.06923398265123,
+    "maxDecibel": 68.72041385620347
+  }
+}
+```
+
+CAMS also adds a `dk.cachet.carp.triggeredtask` measurement each time a trigger fires.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No noise measurement after 5 minutes">
+
+Keep the app running for at least one interval plus one window: the first window starts one interval after the task starts. A window with fewer than two finite readings, such as a window of digital silence, adds no measurement.
+
+</Accordion>
+<Accordion title="No audio measurement">
+
+Wait until the recording stops: the measurement is added when the task pauses the recording, not when it starts. On iOS, check that `permission_handler` has microphone access enabled, as described in [Installation](/docs/sampling-packages/audio/installation).
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Noise" href="/docs/sampling-packages/audio/noise" icon="GraphicEq">
+
+Sampling windows, decibel values and the noise data.
+
+</Card>
+<Card title="Audio recordings" href="/docs/sampling-packages/audio/audio" icon="Mic">
+
+Start and stop recordings, and find and upload the files.
+
+</Card>
+<Card title="Video and images" href="/docs/sampling-packages/audio/video-and-images" icon="Description">
+
+Add videos and images that your app captures to the study data.
+
+</Card>
+</Cards>

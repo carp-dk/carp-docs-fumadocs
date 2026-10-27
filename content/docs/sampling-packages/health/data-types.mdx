@@ -1,0 +1,188 @@
+---
+title: Data types
+description: Every health data type with its platforms, unit and Google Health Connect read permission, and the types that need care.
+icon: Dataset
+---
+
+The `health` plugin 13.3.2 defines 111 values in [`HealthDataType`](https://pub.dev/documentation/health/latest/health/HealthDataType.html). It lists 38 of them for Android and 101 for iOS, and 28 for both.
+
+When a health measure starts, CARP Mobile Sensing (CAMS) removes the types that the current platform does not list and logs a warning. One protocol can therefore name types for both platforms.
+
+## Android permissions
+
+On Android, each data type needs the read permission of its Google Health Connect record type, declared in the manifest and allowed by the participant. For the permission of each type, see [All data types](#all-data-types). Some permissions cover several types:
+
+| Permission | Data types |
+| --- | --- |
+| `READ_SLEEP` | All sleep types |
+| `READ_BLOOD_PRESSURE` | `BLOOD_PRESSURE_SYSTOLIC` and `BLOOD_PRESSURE_DIASTOLIC` |
+| `READ_WEIGHT` and `READ_HEIGHT` | `BODY_MASS_INDEX`, which the plugin computes from weight and height |
+| `READ_EXERCISE` | `WORKOUT` and `WORKOUT_ROUTE` |
+
+For each workout, the plugin also reads the distance, total calories and steps recorded during it, which needs their read permissions. Declare `READ_DISTANCE`, `READ_TOTAL_CALORIES_BURNED` and `READ_STEPS` as well.
+
+To ask the participant for these three permissions, pass `DISTANCE_DELTA`, `TOTAL_CALORIES_BURNED` and `STEPS` to `requestHealthPermissions()` of the health service manager. Routes that other apps recorded appear only after the participant allows exercise routes for your app in the Health Connect app.
+
+## Limitations
+
+The `health` plugin reads the data types of a measure one after another. When one type fails, the run discards the data of every type in the measure. These types fail on some phones:
+
+- `SKIN_TEMPERATURE` fails on Android phones that do not support skin temperature.
+- `ATRIAL_FIBRILLATION_BURDEN`, `SLEEP_WRIST_TEMPERATURE`, `UNDERWATER_DEPTH`, `UV_INDEX` and `WATER_TEMPERATURE` need iOS 16.0 or later and fail on iOS 15.
+- `TOTAL_CALORIES_BURNED` fails on every iPhone.
+
+<Callout type="warning" title="Known issue">
+
+The `health` plugin lists `TOTAL_CALORIES_BURNED` for iOS but cannot read it there. On iOS, CAMS keeps the type, its read fails, and the whole measure collects nothing. Leave the type out of protocols that run on iOS, or put it in a task of its own.
+
+</Callout>
+
+Put a type that may fail in a measure of its own, so that its failure does not stop the others. A `BackgroundTask` keeps only the first measure of each measure type, so give each health measure its own task:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 1)),
+  BackgroundTask(
+    measures: [
+      HealthSamplingPackage.getHealthMeasure([
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+      ]),
+    ],
+  ),
+  healthService,
+);
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 1)),
+  BackgroundTask(
+    measures: [
+      HealthSamplingPackage.getHealthMeasure([HealthDataType.SKIN_TEMPERATURE]),
+    ],
+  ),
+  healthService,
+);
+```
+
+A separate task does not help with access on Android. There, the health service reads nothing until the participant allows every data type of every health measure.
+
+On iOS, `GENDER`, `BIRTH_DATE` and `BLOOD_TYPE` are characteristics of the participant, not samples, and they return one data point on every run. See [Platform differences](/docs/sampling-packages/health/health-data#platform-differences).
+
+## All data types
+
+`NO_UNIT` marks values without a unit, such as `BODY_MASS_INDEX`, and some values in a value class other than `NumericHealthValue`, such as `WORKOUT`. For the fields of each value class, see [Value classes](/docs/sampling-packages/health/health-data#value-classes). For the workout activity types, see [Workout types](/docs/flutter-plugins/health/data-types#workout-types).
+
+The table gives each type's platforms, the unit of its values and its Health Connect read permission, without the `android.permission.health.` prefix:
+
+| Data type | Android | iOS | Unit | Android permission |
+| --- | --- | --- | --- | --- |
+| `ACTIVE_ENERGY_BURNED` | Yes | Yes | `KILOCALORIE` | `READ_ACTIVE_CALORIES_BURNED` |
+| `ACTIVITY_INTENSITY` | Yes | No | `MINUTE` | `READ_ACTIVITY_INTENSITY` |
+| `APPLE_MOVE_TIME` | No | Yes | `SECOND` | — |
+| `APPLE_STAND_HOUR` | No | Yes | `HOUR` | — |
+| `APPLE_STAND_TIME` | No | Yes | `SECOND` | — |
+| `ATRIAL_FIBRILLATION_BURDEN` | No | 16.0 or later | `PERCENT` | — |
+| `AUDIOGRAM` | No | Yes | `DECIBEL_HEARING_LEVEL` | — |
+| `BASAL_ENERGY_BURNED` | Yes | Yes | `KILOCALORIE` | `READ_BASAL_METABOLIC_RATE` |
+| `BIRTH_DATE` | No | Yes | `NO_UNIT` | — |
+| `BLOOD_GLUCOSE` | Yes | Yes | `MILLIGRAM_PER_DECILITER` | `READ_BLOOD_GLUCOSE` |
+| `BLOOD_OXYGEN` | Yes | Yes | `PERCENT` | `READ_OXYGEN_SATURATION` |
+| `BLOOD_PRESSURE_DIASTOLIC` | Yes | Yes | `MILLIMETER_OF_MERCURY` | `READ_BLOOD_PRESSURE` |
+| `BLOOD_PRESSURE_SYSTOLIC` | Yes | Yes | `MILLIMETER_OF_MERCURY` | `READ_BLOOD_PRESSURE` |
+| `BLOOD_TYPE` | No | Yes | `NO_UNIT` | — |
+| `BODY_FAT_PERCENTAGE` | Yes | Yes | `PERCENT` | `READ_BODY_FAT` |
+| `BODY_MASS_INDEX` | Yes | Yes | `NO_UNIT` | `READ_WEIGHT` and `READ_HEIGHT` |
+| `BODY_TEMPERATURE` | Yes | Yes | `DEGREE_CELSIUS` | `READ_BODY_TEMPERATURE` |
+| `BODY_WATER_MASS` | Yes | No | `KILOGRAM` | `READ_BODY_WATER_MASS` |
+| `DIETARY_BIOTIN` | No | Yes | `GRAM` | — |
+| `DIETARY_CAFFEINE` | No | Yes | `GRAM` | — |
+| `DIETARY_CALCIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_CARBS_CONSUMED` | No | Yes | `GRAM` | — |
+| `DIETARY_CHLORIDE` | No | Yes | `GRAM` | — |
+| `DIETARY_CHOLESTEROL` | No | Yes | `GRAM` | — |
+| `DIETARY_CHROMIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_COPPER` | No | Yes | `GRAM` | — |
+| `DIETARY_ENERGY_CONSUMED` | No | Yes | `KILOCALORIE` | — |
+| `DIETARY_FATS_CONSUMED` | No | Yes | `GRAM` | — |
+| `DIETARY_FAT_MONOUNSATURATED` | No | Yes | `GRAM` | — |
+| `DIETARY_FAT_POLYUNSATURATED` | No | Yes | `GRAM` | — |
+| `DIETARY_FAT_SATURATED` | No | Yes | `GRAM` | — |
+| `DIETARY_FIBER` | No | Yes | `GRAM` | — |
+| `DIETARY_FOLATE` | No | Yes | `GRAM` | — |
+| `DIETARY_IODINE` | No | Yes | `GRAM` | — |
+| `DIETARY_IRON` | No | Yes | `GRAM` | — |
+| `DIETARY_MAGNESIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_MANGANESE` | No | Yes | `GRAM` | — |
+| `DIETARY_MOLYBDENUM` | No | Yes | `GRAM` | — |
+| `DIETARY_NIACIN` | No | Yes | `GRAM` | — |
+| `DIETARY_PANTOTHENIC_ACID` | No | Yes | `GRAM` | — |
+| `DIETARY_PHOSPHORUS` | No | Yes | `GRAM` | — |
+| `DIETARY_POTASSIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_PROTEIN_CONSUMED` | No | Yes | `GRAM` | — |
+| `DIETARY_RIBOFLAVIN` | No | Yes | `GRAM` | — |
+| `DIETARY_SELENIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_SODIUM` | No | Yes | `GRAM` | — |
+| `DIETARY_SUGAR` | No | Yes | `GRAM` | — |
+| `DIETARY_THIAMIN` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_A` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_B12` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_B6` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_C` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_D` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_E` | No | Yes | `GRAM` | — |
+| `DIETARY_VITAMIN_K` | No | Yes | `GRAM` | — |
+| `DIETARY_ZINC` | No | Yes | `GRAM` | — |
+| `DISTANCE_CYCLING` | No | Yes | `METER` | — |
+| `DISTANCE_DELTA` | Yes | No | `METER` | `READ_DISTANCE` |
+| `DISTANCE_SWIMMING` | No | Yes | `METER` | — |
+| `DISTANCE_WALKING_RUNNING` | No | Yes | `METER` | — |
+| `ELECTROCARDIOGRAM` | No | Yes | `VOLT` | — |
+| `ELECTRODERMAL_ACTIVITY` | No | Yes | `SIEMEN` | — |
+| `EXERCISE_TIME` | No | Yes | `MINUTE` | — |
+| `FLIGHTS_CLIMBED` | Yes | Yes | `COUNT` | `READ_FLOORS_CLIMBED` |
+| `FORCED_EXPIRATORY_VOLUME` | No | Yes | `LITER` | — |
+| `GENDER` | No | Yes | `NO_UNIT` | — |
+| `HEADACHE_MILD` | No | Yes | `MINUTE` | — |
+| `HEADACHE_MODERATE` | No | Yes | `MINUTE` | — |
+| `HEADACHE_NOT_PRESENT` | No | Yes | `MINUTE` | — |
+| `HEADACHE_SEVERE` | No | Yes | `MINUTE` | — |
+| `HEADACHE_UNSPECIFIED` | No | Yes | `MINUTE` | — |
+| `HEART_RATE` | Yes | Yes | `BEATS_PER_MINUTE` | `READ_HEART_RATE` |
+| `HEART_RATE_VARIABILITY_RMSSD` | Yes | No | `MILLISECOND` | `READ_HEART_RATE_VARIABILITY` |
+| `HEART_RATE_VARIABILITY_SDNN` | No | Yes | `MILLISECOND` | — |
+| `HEIGHT` | Yes | Yes | `METER` | `READ_HEIGHT` |
+| `HIGH_HEART_RATE_EVENT` | No | Yes | `NO_UNIT` | — |
+| `INSULIN_DELIVERY` | No | Yes | `INTERNATIONAL_UNIT` | — |
+| `IRREGULAR_HEART_RATE_EVENT` | No | Yes | `NO_UNIT` | — |
+| `LEAN_BODY_MASS` | Yes | Yes | `KILOGRAM` | `READ_LEAN_BODY_MASS` |
+| `LOW_HEART_RATE_EVENT` | No | Yes | `NO_UNIT` | — |
+| `MENSTRUATION_FLOW` | Yes | Yes | `NO_UNIT` | `READ_MENSTRUATION` |
+| `MINDFULNESS` | No | Yes | `MINUTE` | — |
+| `NUTRITION` | Yes | Yes | `NO_UNIT` | `READ_NUTRITION` |
+| `PERIPHERAL_PERFUSION_INDEX` | No | Yes | `PERCENT` | — |
+| `RESPIRATORY_RATE` | Yes | Yes | `RESPIRATIONS_PER_MINUTE` | `READ_RESPIRATORY_RATE` |
+| `RESTING_HEART_RATE` | Yes | Yes | `BEATS_PER_MINUTE` | `READ_RESTING_HEART_RATE` |
+| `SKIN_TEMPERATURE` | Yes | No | `DEGREE_CELSIUS` | `READ_SKIN_TEMPERATURE` |
+| `SLEEP_ASLEEP` | Yes | Yes | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_AWAKE` | Yes | Yes | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_AWAKE_IN_BED` | Yes | No | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_DEEP` | Yes | Yes | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_IN_BED` | No | Yes | `MINUTE` | — |
+| `SLEEP_LIGHT` | Yes | Yes | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_OUT_OF_BED` | Yes | No | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_REM` | Yes | Yes | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_SESSION` | Yes | No | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_UNKNOWN` | Yes | No | `MINUTE` | `READ_SLEEP` |
+| `SLEEP_WRIST_TEMPERATURE` | No | 16.0 or later | `DEGREE_CELSIUS` | — |
+| `SPEED` | Yes | No | `METER_PER_SECOND` | `READ_SPEED` |
+| `STEPS` | Yes | Yes | `COUNT` | `READ_STEPS` |
+| `TOTAL_CALORIES_BURNED` | Yes | Listed, but fails | `KILOCALORIE` | `READ_TOTAL_CALORIES_BURNED` |
+| `UNDERWATER_DEPTH` | No | 16.0 or later | `METER` | — |
+| `UV_INDEX` | No | 16.0 or later | `COUNT` | — |
+| `WAIST_CIRCUMFERENCE` | No | Yes | `METER` | — |
+| `WALKING_HEART_RATE` | No | Yes | `BEATS_PER_MINUTE` | — |
+| `WALKING_SPEED` | No | Yes | `METER_PER_SECOND` | — |
+| `WATER` | Yes | Yes | `LITER` | `READ_HYDRATION` |
+| `WATER_TEMPERATURE` | No | 16.0 or later | `DEGREE_CELSIUS` | — |
+| `WEIGHT` | Yes | Yes | `KILOGRAM` | `READ_WEIGHT` |
+| `WORKOUT` | Yes | Yes | `NO_UNIT` | `READ_EXERCISE` |
+| `WORKOUT_ROUTE` | Yes | Yes | `NO_UNIT` | `READ_EXERCISE` |

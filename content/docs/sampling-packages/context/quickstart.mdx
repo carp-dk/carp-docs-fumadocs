@@ -1,0 +1,200 @@
+---
+title: Quickstart
+description: Build a Flutter app that collects activity, location and mobility features in a CAMS study.
+icon: Bolt
+---
+
+Build an app that records activity events on the phone, collects locations and mobility features through a `LocationService`, and prints each measurement as JSON.
+
+## Prerequisites
+
+- The package added and the platforms configured, as described in [Installation](/docs/sampling-packages/context/installation).
+- A physical phone that you can carry around. Activity and mobility data need real movement, and the iOS Simulator has no activity recognition.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_context_package/carp_context_package.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(ContextSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone as the primary device
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Daily activity and mobility',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Add a location service as a connected device
+  final locationService = LocationService(distance: 0); // [!code highlight]
+  protocol.addConnectedDevice(locationService, phone); // [!code highlight]
+
+  // 4. Collect activity events on the phone
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(measures: [Measure(type: ContextSamplingPackage.ACTIVITY)]), // [!code highlight]
+    phone,
+  );
+
+  // 5. Collect location and mobility features through the location service
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: ContextSamplingPackage.LOCATION), // [!code highlight]
+        Measure(type: ContextSamplingPackage.MOBILITY), // [!code highlight]
+      ],
+    ),
+    locationService,
+  );
+
+  // 6. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 7. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the six context measure types and the three services known to CARP Mobile Sensing (CAMS). Register the package before `configure()`. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Creates a protocol with the phone as the primary device. `SQLiteDataEndPoint()` keeps the measurements in a SQLite database on the phone. |
+| **3. Location service** | Adds the `LocationService` that gives the phone's location to `LOCATION` and `MOBILITY`. `distance: 0` turns off the distance filter, so a location arrives about once a minute even when the phone lies still. `MOBILITY` needs these locations to detect stops; the default of 10 meters saves battery but may miss some. |
+| **4. Activity** | Runs `ACTIVITY` on the phone itself. |
+| **5. Location and mobility** | Targets the task at `locationService`, so it starts when the service connects, after the participant grants location access. |
+| **6. Deploy** | Configures the client, deploys the protocol on the phone and starts sampling. CAMS asks for the permissions that the measures need. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **7. Print** | Prints every measurement as JSON, including the `dk.cachet.carp.triggeredtask` measurements that CAMS adds when a trigger fires. |
+
+All three measures are event-based: an `ImmediateTrigger` starts each of them once, and they keep reporting until the study stops.
+
+## Run the app
+
+Connect the phone and run:
+
+```bash
+flutter run
+```
+
+CAMS asks for the permissions one at a time:
+
+1. The permissions from the CAMS setup, such as notifications.
+2. **Physical activity** on Android, or **Motion & Fitness** on iOS, for `ACTIVITY`.
+3. Location while the app is in use. The participant must keep precise location on.
+4. Location all the time. On Android 11 and later, the participant selects **Allow all the time** on the app's location settings page. On iOS, the participant taps **Change to Always Allow**.
+
+On Android, the app then shows ongoing notifications for the CAMS background service and for activity recognition. A third notification, for the location service, shows once the participant allows location all the time.
+
+## Check the data
+
+Each measurement prints as one line of JSON. Formatted, a location measurement from an Android phone looks like this:
+
+```json
+{
+  "sensorStartTime": 1793006130412518,
+  "data": {
+    "__type": "dk.cachet.carp.location",
+    "latitude": 55.786025,
+    "longitude": 12.524159,
+    "altitude": 43.2,
+    "accuracy": 12.0,
+    "verticalAccuracy": 4.0,
+    "speed": 0.0,
+    "speedAccuracy": 0.5,
+    "heading": 0.0,
+    "headingAccuracy": 0.0,
+    "time": "2026-10-26T10:15:29.000",
+    "isMock": false,
+    "elapsedRealtimeNanos": 734512345000000.0,
+    "elapsedRealtimeUncertaintyNanos": 1000000.0,
+    "satellites": 11
+  }
+}
+```
+
+`sensorStartTime` is the time the phone created the measurement, in microseconds since the epoch. `time` is the time of the location fix in the phone's local time, without a UTC offset.
+
+An activity measurement holds the activity type and its confidence in percent:
+
+```json
+{
+  "sensorStartTime": 1793006132017245,
+  "data": {
+    "__type": "dk.cachet.carp.activity",
+    "confidence": 100,
+    "type": "STILL"
+  }
+}
+```
+
+A mobility measurement appears only when the phone leaves a place where it stayed for more than 30 seconds. See [Mobility features](/docs/sampling-packages/context/mobility).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No location or mobility data">
+
+Check that the participant allowed location all the time and kept precise location on, then restart the app.
+
+With approximate location, the location service stays disconnected; without access all the time, `LOCATION` collects nothing. See [Permissions and background](/docs/sampling-packages/context/permissions).
+
+</Accordion>
+<Accordion title="No activity data">
+
+Check that the participant granted **Physical activity** on Android or **Motion & Fitness** on iOS. On Android, activity recognition also needs Google Play services. The package drops events with a confidence below 50%, and on iOS it reports a new event only when the activity changes.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Permissions and background" href="/docs/sampling-packages/context/permissions" icon="Lock">
+
+The permissions each measure needs and how collection continues in the background.
+
+</Card>
+<Card title="Location" href="/docs/sampling-packages/context/location" icon="MyLocation">
+
+How location is collected, continuously or once per trigger, and its data.
+
+</Card>
+<Card title="Mobility features" href="/docs/sampling-packages/context/mobility" icon="Route">
+
+How daily stops, moves, places, home stay and entropy are computed.
+
+</Card>
+<Card title="Weather and air quality" href="/docs/sampling-packages/context/weather-and-air-quality" icon="PartlyCloudyDay">
+
+Current weather and air quality for the phone's position.
+
+</Card>
+</Cards>

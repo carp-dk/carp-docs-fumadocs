@@ -1,0 +1,200 @@
+---
+title: Health data
+description: The fields, value classes and units of HealthData, and how health data differs between Android and iOS.
+icon: Dataset
+---
+
+Each data point that a health measure reads from Google Health Connect or Apple Health becomes one measurement whose data is a [`HealthData`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthData-class.html) object. All health data has the data type `dk.cachet.carp.health`, which is also its `__type` in JSON. The `healthDataType` field says what kind of data a point holds.
+
+The measurement's `sensorStartTime` and `sensorEndTime` are the sample's `dateFrom` and `dateTo` in microseconds since 1970, not the time of the read. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Fields
+
+`HealthData` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `uuid` | `String` | The ID of the sample or record in the health store. Empty for `BODY_MASS_INDEX` on Android and for `GENDER`, `BIRTH_DATE` and `BLOOD_TYPE` on iOS. See [Platform differences](#platform-differences). |
+| `value` | `HealthValue` | The value, as one of the [value classes](#value-classes). |
+| `unit` | `String` | The `HealthDataUnit` name of the value, such as `COUNT` or `KILOCALORIE`. |
+| `healthDataType` | `String` | The `HealthDataType` name, such as `STEPS`. |
+| `dateFrom` | `DateTime` | Start of the sample, in UTC. |
+| `dateTo` | `DateTime` | End of the sample, in UTC. Equal to `dateFrom` for a sample at one instant, such as a weight. |
+| `platform` | `HealthPlatform` | `GOOGLE_HEALTH_CONNECT` or `APPLE_HEALTH`. |
+| `deviceId` | `String?` | `unknown` with the `health` plugin 13.3.2, except for `BODY_MASS_INDEX` on Android, which holds the phone's Android build ID. |
+| `sourceId` | `String?` | Android: empty. iOS: the bundle identifier of the source. |
+| `sourceName` | `String?` | Android: the package name of the app that wrote the record. iOS: the name of the source, such as a watch. |
+
+`HealthData` does not keep the recording method, metadata or device model of the plugin's data point. The data therefore cannot tell manual entries from measured ones.
+
+To use the values in the app, filter the measurement stream on the data class:
+
+```dart
+client.measurements
+    .where((measurement) => measurement.data is HealthData)
+    .listen((measurement) {
+      final data = measurement.data as HealthData;
+      final value = data.value;
+      if (value is NumericHealthValue) {
+        print('${data.healthDataType}: ${value.numericValue} ${data.unit}');
+      } else if (value is WorkoutHealthValue) {
+        print('Workout: ${value.workoutActivityType.name}');
+      }
+    });
+```
+
+## Value classes
+
+The class of `value` depends on the data type, and its `__type` in JSON is the class name. Most data types use `NumericHealthValue`:
+
+| Value class | Data types | JSON fields |
+| --- | --- | --- |
+| [`NumericHealthValue`](https://pub.dev/documentation/health/latest/health/NumericHealthValue-class.html) | All data types not listed below | `numericValue` |
+| `WorkoutHealthValue` | `WORKOUT` | `workoutActivityType`, and the optional `totalEnergyBurned`, `totalDistance` and `totalSteps`, each with a unit field such as `totalDistanceUnit` |
+| `WorkoutRouteHealthValue` | `WORKOUT_ROUTE` | `locations`, each with `latitude`, `longitude`, `timestamp` and optional altitude, accuracy, speed and course fields, and `workoutUuid` |
+| `NutritionHealthValue` | `NUTRITION` | `name`, `meal_type`, `calories`, `protein`, `fat`, `carbs`, `caffeine`, and 37 more nutrient fields in snake case, such as `vitamin_c` and `fat_saturated` |
+| `MenstruationFlowHealthValue` | `MENSTRUATION_FLOW` | `flow`, which is `unspecified`, `none`, `light`, `medium`, `heavy` or `spotting`, and `isStartOfCycle`, `wasUserEntered` and `dateTime` |
+| `AudiogramHealthValue` | `AUDIOGRAM` (iOS only) | `frequencies`, `leftEarSensitivities` and `rightEarSensitivities` |
+| `ElectrocardiogramHealthValue` | `ELECTROCARDIOGRAM` (iOS only) | `voltageValues`, each with `voltage` and `timeSinceSampleStart`, and `averageHeartRate`, `samplingFrequency` and `classification` |
+| `InsulinDeliveryHealthValue` | `INSULIN_DELIVERY` (iOS only) | `units`, and `reason`, which is `NOT_SET`, `BASAL` or `BOLUS` |
+| `ActivityIntensityHealthValue` | `ACTIVITY_INTENSITY` (Android only) | `intensityLevel`, which is `moderate`, `vigorous` or `unknown`, and `minutes` |
+| `SkinTemperatureHealthValue` | `SKIN_TEMPERATURE` (Android only) | `temperature_delta`, `baseline` and `measurement_location` |
+
+Optional fields are left out of the JSON when they have no value. For the workout activity types, see [Workout types](/docs/flutter-plugins/health/data-types#workout-types).
+
+## Units
+
+Each data type arrives in the default unit that the `health` plugin defines for it, and `unit` names that unit. Sleep, mindfulness and headache types hold the duration of the sample in minutes. For the unit of every type, see [All data types](/docs/sampling-packages/health/data-types#all-data-types).
+
+## Platform differences
+
+The same data type can carry different details on the two platforms:
+
+| | Android | iOS |
+| --- | --- | --- |
+| **`uuid`** | The Health Connect record ID. All samples of one heart rate or speed record, and all stages of one sleep session, share it. | The HealthKit sample UUID, one for each sample |
+| **`sourceId`** | Empty | The bundle identifier of the app or device that wrote the sample |
+| **`sourceName`** | The package name of the app that wrote the record, such as `com.sec.android.app.shealth` | The name of the source, such as an Apple Watch |
+| **`HEART_RATE`** | One data point for each sample in a heart rate record | One data point for each sample |
+| **Sleep** | `SLEEP_SESSION` gives one data point for each session, in whole minutes. Each stage type gives one data point for each stage of that type. | One data point for each sleep sample of the stage type |
+| **`BASAL_ENERGY_BURNED`** | The basal metabolic rate in kilocalories per day, at one instant | The energy in kilocalories over the sample's time span |
+| **`BLOOD_OXYGEN`, `BODY_FAT_PERCENTAGE`** | A percentage from 0 to 100 | HealthKit's percent unit, a fraction from 0 to 1 |
+| **`BODY_MASS_INDEX`** | Computed from each weight and the last height in the run's time span, with no `uuid` or source. A time span without a height gives no data point. | The BMI samples in Apple Health |
+| **`GENDER`, `BIRTH_DATE`, `BLOOD_TYPE`** | Not available | One data point on every run, with the run's time span as its dates and no `uuid` |
+
+On iOS, `GENDER` and `BLOOD_TYPE` hold the raw value of HealthKit's biological sex and blood type. `BIRTH_DATE` holds the birth date in seconds since 1970.
+
+## Record IDs and duplicates
+
+`HealthData` has a record ID that is not part of the JSON: `uuid`, `healthDataType`, `dateFrom` and `dateTo`, joined by `|`, for example `85328732-41d3-53b2-a81e-007f33bee353|STEPS|2026-01-26T07:00:00.000Z|2026-01-26T08:00:00.000Z`. Health Connect gives all samples of one record the same `uuid`, so the record ID adds the data type and the time span.
+
+The SQLite data manager stores each record ID once for each deployment and device role. It drops a data point that it has already stored, with some limits:
+
+- Data points without a `uuid` have no record ID, so the SQLite data manager stores `GENDER`, `BIRTH_DATE` and `BLOOD_TYPE` again on every run.
+- A background measure stores its data under the role name of the health service, by default `Health Service`. A health app task uses the role name of the phone, by default `Smartphone`. The same data point read by both is stored twice.
+- The CARP Web Services (CAWS) data manager buffers data with the SQLite data manager and by default deletes it after upload. It therefore drops a copy only while the earlier copy waits for upload. The file and console data managers keep every copy.
+
+For the data managers, see [Data managers](/docs/mobile-sensing/data-managers).
+
+## Example data
+
+Each example shows the `data` object of one measurement:
+
+<Accordions>
+<Accordion title="Steps from Health Connect">
+
+```json
+{
+  "__type": "dk.cachet.carp.health",
+  "uuid": "85328732-41d3-53b2-a81e-007f33bee353",
+  "value": {
+    "__type": "NumericHealthValue",
+    "numericValue": 1982
+  },
+  "unit": "COUNT",
+  "healthDataType": "STEPS",
+  "dateFrom": "2026-01-26T07:00:00.000Z",
+  "dateTo": "2026-01-26T08:00:00.000Z",
+  "platform": "GOOGLE_HEALTH_CONNECT",
+  "deviceId": "unknown",
+  "sourceId": "",
+  "sourceName": "com.sec.android.app.shealth"
+}
+```
+
+</Accordion>
+<Accordion title="Basal energy from Apple Health">
+
+```json
+{
+  "__type": "dk.cachet.carp.health",
+  "uuid": "236C6441-BE81-4231-8CB2-25F9483B4967",
+  "value": {
+    "__type": "NumericHealthValue",
+    "numericValue": 17.770999999999997
+  },
+  "unit": "KILOCALORIE",
+  "healthDataType": "BASAL_ENERGY_BURNED",
+  "dateFrom": "2026-01-26T12:39:46.373Z",
+  "dateTo": "2026-01-26T12:54:23.152Z",
+  "platform": "APPLE_HEALTH",
+  "deviceId": "unknown",
+  "sourceId": "com.apple.health.4B76DB4C-F19C-4D05-8766-FC7EC4DEF393",
+  "sourceName": "Apple Watch"
+}
+```
+
+</Accordion>
+<Accordion title="Sleep session from Health Connect">
+
+```json
+{
+  "__type": "dk.cachet.carp.health",
+  "uuid": "5f0c2a9e-7d41-4b8e-9a26-3c1e8b7d4f60",
+  "value": {
+    "__type": "NumericHealthValue",
+    "numericValue": 452
+  },
+  "unit": "MINUTE",
+  "healthDataType": "SLEEP_SESSION",
+  "dateFrom": "2026-01-25T22:41:00.000Z",
+  "dateTo": "2026-01-26T06:13:00.000Z",
+  "platform": "GOOGLE_HEALTH_CONNECT",
+  "deviceId": "unknown",
+  "sourceId": "",
+  "sourceName": "com.google.android.apps.fitness"
+}
+```
+
+</Accordion>
+<Accordion title="Workout from Health Connect">
+
+```json
+{
+  "__type": "dk.cachet.carp.health",
+  "uuid": "c3a8e1d2-4f6b-4a9c-8e7d-1b2f3a4c5d6e",
+  "value": {
+    "__type": "WorkoutHealthValue",
+    "workoutActivityType": "RUNNING",
+    "totalEnergyBurned": 312,
+    "totalEnergyBurnedUnit": "KILOCALORIE",
+    "totalDistance": 5012,
+    "totalDistanceUnit": "METER",
+    "totalSteps": 5640,
+    "totalStepsUnit": "COUNT"
+  },
+  "unit": "NO_UNIT",
+  "healthDataType": "WORKOUT",
+  "dateFrom": "2026-01-26T06:30:00.000Z",
+  "dateTo": "2026-01-26T07:02:00.000Z",
+  "platform": "GOOGLE_HEALTH_CONNECT",
+  "deviceId": "unknown",
+  "sourceId": "",
+  "sourceName": "com.google.android.apps.fitness"
+}
+```
+
+</Accordion>
+</Accordions>
+
+For the data types and their platforms, see [Data types](/docs/sampling-packages/health/data-types).

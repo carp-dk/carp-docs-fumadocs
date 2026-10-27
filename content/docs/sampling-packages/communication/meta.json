@@ -1,0 +1,7 @@
+{
+  "title": "Communication Sampling",
+  "description": "carp_communication_package",
+  "icon": "Call",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Measures---", "calls-and-messages", "calendar", "---Guides---", "privacy", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_communication_package)", "[API reference](https://pub.dev/documentation/carp_communication_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_communication_package)"]
+}

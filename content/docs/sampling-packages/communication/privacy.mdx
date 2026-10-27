@@ -1,0 +1,71 @@
+---
+title: Privacy
+description: Hash phone numbers, message texts and calendar titles with the default privacy schema, and change what it protects.
+icon: Shield
+---
+
+Registering the package adds one privacy transformer per measure type to the default privacy schema. When a protocol turns the schema on, the transformers hash phone numbers, names, message texts and calendar titles.
+
+## Enable the privacy schema
+
+Set `privacySchemaName` to `PrivacySchema.DEFAULT` on the [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html):
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Calls, messages and calendar',
+  dataEndPoint: SQLiteDataEndPoint(),
+  privacySchemaName: PrivacySchema.DEFAULT, // [!code highlight]
+);
+```
+
+The schema is off by default: without `privacySchemaName`, CARP Mobile Sensing (CAMS) stores numbers, names, texts and titles in clear text. With the schema on, CAMS transforms each measurement on the phone, so the data manager and the `measurements` stream get only transformed data. The schema covers the measurements of every package in the study.
+
+The transformers change these fields:
+
+| Measure | Hashed | Unchanged |
+| --- | --- | --- |
+| `PHONE_LOG` | Each call's `number`, `formattedNumber` and `name` | `timestamp`, `callType`, `duration`, and the window's `start` and `end` |
+| `TEXT_MESSAGE_LOG`, `TEXT_MESSAGE` | Each message's `address` and `body` | `id`, `size`, `read`, `date`, `dateSent`, `type` and `status` |
+| `CALENDAR` | Each event's `title` and `description` | `eventId`, `calendarId`, `start`, `end`, `allDay`, `location`, `status`, `timeZone`, `isRecurring`, and the window's `start` and `end` |
+
+## Check the limits of hashing
+
+Each transformer replaces a value with the SHA-1 hash of its UTF-8 text, written as 40 lowercase hexadecimal characters: `+4525550446` becomes `3cc207b140bccded5cdd7d35a0f0f06ae08ca646`. The hash uses no salt or key, which has these consequences:
+
+- **Same value, same hash:** you can still count how often a number or a text occurs without reading it.
+- **Not anonymous:** phone numbers come from a limited set of possible values, so anyone with the data can recover a number by hashing candidate numbers. Treat hashed data as pseudonymized personal data.
+- **Formats differ:** the same contact can appear as `+45 25 55 04 46` in `formattedNumber` and as `+4525550446` in `number`, and the two give different hashes. An SMS `address` can differ from both.
+- **Metadata stays readable:** call times and durations, message lengths, and event times and locations are not hashed.
+
+## Replace a transformer
+
+To protect other fields, or to protect them differently, replace a transformer in the default schema after you register the package. This transformer keeps the default hashing of calendar events and also removes their locations:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_communication_package/communication.dart';
+
+// Hash titles and descriptions, and remove locations
+Data calendarWithoutLocations(Data data) {
+  final calendar = calendarAnonymizer(data) as Calendar;
+  for (final event in calendar.calendarEvents) {
+    event.location = null;
+  }
+  return calendar;
+}
+
+void main() {
+  CarpMobileSensing.ensureInitialized();
+  SamplingPackageRegistry().register(CommunicationSamplingPackage());
+  DataTransformerSchemaRegistry() // [!code highlight]
+      .lookup(PrivacySchema.DEFAULT)! // [!code highlight]
+      .add(CommunicationSamplingPackage.CALENDAR, calendarWithoutLocations); // [!code highlight]
+  // ... the rest of your app
+}
+```
+
+A transformer receives the data of one measurement and returns the transformed data. `add()` replaces the transformer of that measure type, so call it after `register()`, which adds the package's own transformers. The package's functions, such as [`calendarAnonymizer`](https://pub.dev/documentation/carp_communication_package/latest/communication/calendarAnonymizer.html), [`phoneLogAnonymizer`](https://pub.dev/documentation/carp_communication_package/latest/communication/phoneLogAnonymizer.html) and [`textMessageLogAnonymizer`](https://pub.dev/documentation/carp_communication_package/latest/communication/textMessageLogAnonymizer.html), are public, so a replacement can build on them.
+
+For privacy schemas in general, see [Data transformation and privacy](/docs/mobile-sensing/privacy). To write transformers for other data types, see [Adding privacy transformers](/docs/mobile-sensing/extending#adding-privacy-transformers).

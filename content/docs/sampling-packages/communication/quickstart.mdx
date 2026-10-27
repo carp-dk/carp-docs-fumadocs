@@ -1,0 +1,183 @@
+---
+title: Quickstart
+description: Build a Flutter app that collects the call log, text messages and calendar events with hashed identifiers.
+icon: Bolt
+---
+
+The finished app reads calls, text messages and calendar events on a schedule and prints them with phone numbers and texts hashed.
+
+## Prerequisites
+
+- The setup in [Installation](/docs/sampling-packages/communication/installation), including the CARP Mobile Sensing (CAMS) setup it builds on.
+- A physical phone with some calls, text messages and calendar events. On iOS, only the calendar is collected.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_communication_package/communication.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(CommunicationSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol that hashes numbers, names and texts
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Calls, messages and calendar',
+    dataEndPoint: SQLiteDataEndPoint(),
+    privacySchemaName: PrivacySchema.DEFAULT, // [!code highlight]
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Collect the call log and the calendar every 3 hours
+  protocol.addTaskControl(
+    PeriodicTrigger(period: const Duration(hours: 3)),
+    BackgroundTask(
+      measures: [
+        Measure(type: CommunicationSamplingPackage.PHONE_LOG), // [!code highlight]
+        Measure(type: CommunicationSamplingPackage.CALENDAR), // [!code highlight]
+      ],
+    ),
+    phone,
+  );
+
+  // 4. Collect the text message log once a day
+  protocol.addTaskControl(
+    PeriodicTrigger(period: const Duration(days: 1)),
+    BackgroundTask(
+      measures: [Measure(type: CommunicationSamplingPackage.TEXT_MESSAGE_LOG)], // [!code highlight]
+    ),
+    phone,
+  );
+
+  // 5. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 6. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the four measure types, the JSON types of their data and their privacy transformers known to CAMS. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | `privacySchemaName: PrivacySchema.DEFAULT` turns on the privacy transformers, which hash phone numbers, contact names, message texts and event titles. Without it, CAMS stores them in clear text. |
+| **3. Calls and calendar** | `PeriodicTrigger` fires when sampling starts and then every 3 hours. Each run collects from the end of the previous run, and the first run goes back 1 day. |
+| **4. Text messages** | The text message log returns every message in the inbox and the sent folder on each run, so a daily trigger keeps the duplicates down. |
+| **5. Deploy** | CAMS asks for the permissions of all measures and then starts the triggers. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **6. Print** | `client.measurements` delivers each measurement after the privacy transformers have run. |
+
+The phone log and the calendar keep their last collection time in memory. After an app restart, their first run goes back 1 day again. To keep the time across restarts, see [Calls and text messages](/docs/sampling-packages/communication/calls-and-messages#configuration).
+
+## Run the app
+
+Connect the phone and run:
+
+```bash
+flutter run
+```
+
+On Android, CAMS asks for access to phone calls, call logs, the calendar and SMS; on iOS, it asks for calendar access only. Allow them.
+
+The first run starts right away, and the console prints a measurement for each measure that runs on the phone. CAMS also adds a `dk.cachet.carp.triggeredtask` measurement each time a trigger fires.
+
+A calendar measurement looks like this, with the event titles and descriptions hashed and the JSON formatted for readability:
+
+```json
+{
+  "sensorStartTime": 1793019600512345,
+  "sensorEndTime": 1793106000512345,
+  "data": {
+    "__type": "dk.cachet.carp.calendar",
+    "calendarEvents": [
+      {
+        "eventId": "1187",
+        "calendarId": "5",
+        "title": "8a1e29b3dd009e1104338701230be5d7a38b1fed",
+        "start": "2026-10-25T23:00:00.000Z",
+        "end": "2026-10-26T23:00:00.000Z",
+        "allDay": true,
+        "status": "confirmed",
+        "isRecurring": false
+      },
+      {
+        "eventId": "1042",
+        "calendarId": "3",
+        "title": "9de5cdd1cef9a6467ce3e02cc92e0daeb6096368",
+        "description": "938980c5b8c9f71c1637aa265cc3191ed40d4314",
+        "start": "2026-10-27T08:00:00.000Z",
+        "end": "2026-10-27T09:00:00.000Z",
+        "allDay": false,
+        "location": "Room 101",
+        "status": "confirmed",
+        "timeZone": "Europe/Copenhagen",
+        "isRecurring": true
+      }
+    ],
+    "start": "2026-10-26T14:00:00.512345",
+    "end": "2026-10-27T14:00:00.512345"
+  }
+}
+```
+
+For the fields of each measure, see [Calls and text messages](/docs/sampling-packages/communication/calls-and-messages) and [Calendar](/docs/sampling-packages/communication/calendar).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No call log or text messages on Android">
+
+Check that the participant allowed every dialog, and that the permissions are in the merged manifest. An app that removes the restricted permissions for Google Play collects the calendar only. See [Installation](/docs/sampling-packages/communication/installation) for the entries each measure needs.
+
+</Accordion>
+<Accordion title="Only calendar data on iOS">
+
+Use an Android phone to collect calls and text messages: iOS gives apps no access to them, so CAMS skips those measures on iOS.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Calls and text messages" href="/docs/sampling-packages/communication/calls-and-messages" icon="Sms">
+
+What the call and message measures collect, and their data.
+
+</Card>
+<Card title="Calendar" href="/docs/sampling-packages/communication/calendar" icon="CalendarMonth">
+
+Which events the calendar measure collects, and their fields.
+
+</Card>
+<Card title="Privacy" href="/docs/sampling-packages/communication/privacy" icon="Shield">
+
+Hash phone numbers, message texts and event titles before storage.
+
+</Card>
+</Cards>

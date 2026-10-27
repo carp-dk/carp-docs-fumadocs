@@ -1,0 +1,7 @@
+{
+  "title": "Survey Sampling",
+  "description": "carp_survey_package",
+  "icon": "Quiz",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "surveys", "cognitive-tests", "scheduling", "---Reference---", "survey-data", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_survey_package)", "[API reference](https://pub.dev/documentation/carp_survey_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_survey_package)"]
+}

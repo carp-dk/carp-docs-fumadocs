@@ -1,0 +1,196 @@
+---
+title: Collecting data
+description: Collect health data with background measures or health app tasks, choose triggers and set how far back to read.
+icon: Download
+---
+
+Add health data to a CARP Mobile Sensing (CAMS) study protocol as a background measure or as a health app task. A trigger runs a background measure, while the participant starts a health app task from the task list:
+
+| | Background measure | Health app task |
+| --- | --- | --- |
+| **Task** | [`BackgroundTask`](https://pub.dev/documentation/carp_core/latest/common/BackgroundTask-class.html) with a health measure | [`HealthAppTask`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthAppTask-class.html) |
+| **Target device** | The [`HealthService`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthService-class.html) | The phone |
+| **Started by** | A trigger | The participant, from the task list |
+| **Asks for access** | Your app, through the health service manager | The task, when it starts |
+| **Reads** | Each time the trigger fires | Once each time the participant starts it |
+
+Both need a `HealthService` in the protocol.
+
+## Add a background measure
+
+Add a `HealthService` to the protocol as a connected device of the phone. Then add a background task with a health measure, and target the task at the service:
+
+```dart
+final healthService = HealthService();
+protocol.addConnectedDevice(healthService, phone);
+
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 1)),
+  BackgroundTask(
+    measures: [
+      HealthSamplingPackage.getHealthMeasure([
+        HealthDataType.STEPS,
+        HealthDataType.ACTIVE_ENERGY_BURNED,
+        HealthDataType.SLEEP_ASLEEP,
+      ]),
+    ],
+  ),
+  healthService,
+);
+```
+
+[`getHealthMeasure`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthSamplingPackage/getHealthMeasure.html) creates a `dk.cachet.carp.health` measure for the listed data types, and its first run reads 30 days back. To read another number of days on the first run, pass it as the second argument: `HealthSamplingPackage.getHealthMeasure([HealthDataType.WEIGHT], 7)`.
+
+Because the task targets the health service, CAMS runs it only while the service is connected. On Android, the service connects only once the participant has allowed every health data type in the protocol. See [Permissions](/docs/sampling-packages/health/permissions).
+
+## Configure the measure
+
+`getHealthMeasure()` sets a [`HealthSamplingConfiguration`](https://pub.dev/documentation/carp_health_package/latest/health_package/HealthSamplingConfiguration-class.html) as the measure's `overrideSamplingConfiguration`. To set the values yourself, create the configuration. For example, to read only the last 12 hours of heart rate on the first run:
+
+```dart
+final heartRateMeasure = Measure(type: HealthSamplingPackage.HEALTH)
+  ..overrideSamplingConfiguration = HealthSamplingConfiguration(
+    past: const Duration(hours: 12),
+    healthDataTypes: [HealthDataType.HEART_RATE],
+  );
+```
+
+`HealthSamplingConfiguration` is a [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html) with these properties:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `healthDataTypes` | `List<HealthDataType>` | — | The data types to read. Required. When the measure starts, CAMS removes the types that the platform does not offer and logs a warning. |
+| `past` | `Duration` | 1 day | How far back the first run reads. `getHealthMeasure()` sets 30 days. |
+| `future` | `Duration` | 1 day | Not used: each run reads up to the current time. |
+| `lastTime` | `DateTime?` | `null` | When the measure last produced data. CAMS sets it and saves it with the deployment. |
+
+<Callout type="warning" title="Do not use a const list">
+
+CAMS removes unsupported types from the `healthDataTypes` list when the measure starts. On a `const` list this fails, and the measure collects nothing until the app restarts. Pass the data types in a list literal without `const`.
+
+</Callout>
+
+A health measure without its own configuration uses the package default, which reads `STEPS` from 30 days back. That default lives only in memory, so its read position starts over when the app restarts. Set the configuration on the measure, as `getHealthMeasure()` does.
+
+<Accordions>
+<Accordion title="Configuration as JSON">
+
+In a protocol's JSON, for example in a protocol from CARP Web Services (CAWS), the configuration is the `overrideSamplingConfiguration` of the measure. Durations are in microseconds, and `lastTime` appears only after the first data:
+
+```json
+{
+  "__type": "dk.cachet.carp.common.application.sampling.HealthSamplingConfiguration",
+  "lastTime": "2026-01-26T13:00:05.123456Z",
+  "past": 2592000000000,
+  "future": 86400000000,
+  "healthDataTypes": ["STEPS", "HEART_RATE"]
+}
+```
+
+</Accordion>
+</Accordions>
+
+## How incremental reads work
+
+Each health measure keeps a read position in `lastTime`. Its runs read the store like this:
+
+1. The first run reads from `past` before the current time up to the current time.
+2. Each measurement that a run produces sets `lastTime` to the time of collection. CAMS saves it with the deployment, so it survives app restarts.
+3. The next run reads from `lastTime` up to the current time.
+4. A run that produces nothing, for example on a locked iPhone or without access, leaves `lastTime` as it was. The next run then reads the same time again.
+
+This has some consequences for the data:
+
+- The position belongs to the measure, not to each data type. When one type returns data and another returns nothing, the position moves on for both. On iOS, where a denied type returns nothing, a type that the participant allows later is read only from the measure's current position on.
+- Google Health Connect and Apple Health select data by the time of the sample. Data that reaches the store after a run has covered its time, for example from a watch that syncs hours later, may be missed.
+- Frequent runs do not read the same data again, because each run starts at the position.
+- On Android, Health Connect returns data only from up to 30 days before the participant granted access. A `past` longer than 30 days needs history access. See [Request history access (Android)](/docs/sampling-packages/health/permissions#request-history-access-android).
+
+## Choose a trigger
+
+The health measure is a [one-time measure](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures): each time its trigger fires, it reads once and then stops. Use a trigger that repeats it. Because the package reads only while the app is in the foreground, prefer one that fires while the participant uses the app:
+
+| Trigger | When it reads | Use it for |
+| --- | --- | --- |
+| [`AppLifecycleTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppLifecycleTrigger-class.html) with `AppLifecycleState.resumed` | Each time the app comes to the foreground | Studies in which the participant opens the app regularly |
+| [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html) | When the health service connects, then once per period while the app runs | Regular reads while the app runs. A run while the app is in the background may read nothing; the next run then reads that time again. |
+| `PeriodicTrigger` with a `HealthAppTask` | When the participant starts the task | A task that the participant completes in the app. See [Let the participant start a collection](#let-the-participant-start-a-collection). |
+
+For example, to read steps and heart rate each time the app comes to the foreground:
+
+```dart
+protocol.addTaskControl(
+  AppLifecycleTrigger({AppLifecycleState.resumed}),
+  BackgroundTask(
+    measures: [
+      HealthSamplingPackage.getHealthMeasure([
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+      ]),
+    ],
+  ),
+  healthService,
+);
+```
+
+`AppLifecycleState` comes from `package:flutter/widgets.dart`, which `package:flutter/material.dart` exports. CAMS triggers run on timers and events in the app, so they fire only while the app runs. For the other triggers, see [Triggers](/docs/mobile-sensing/domain-model#triggers).
+
+## Let the participant start a collection
+
+A `HealthAppTask` puts a task on the participant's task list, and the participant starts it in the app. Add it with a trigger, and target it at the phone:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 1)),
+  HealthAppTask(
+    title: 'Share your health data',
+    description: 'Shares your steps and weight with the study.',
+    types: [HealthDataType.STEPS, HealthDataType.WEIGHT],
+    notification: true,
+  ),
+  phone,
+);
+```
+
+<Callout type="warning" title="Health service required">
+
+Without a `HealthService` in the protocol, the task cannot ask for access and reads nothing. Add one even when the protocol has only health app tasks.
+
+</Callout>
+
+CAMS puts scheduled tasks on the task list only when the study resumes after it has connected the phone, so start sampling as the Survey Sampling [quickstart](/docs/sampling-packages/survey/quickstart) does.
+
+Your app shows the task list and calls `onStart()` when the participant starts a task, as in the [app task model](/docs/mobile-sensing/app-task-model). When the task starts, it:
+
+1. asks for access to its data types, which on iOS shows the HealthKit sheet only for types that it has not asked about before;
+2. reads its data types once, from where its previous run ended, or 30 days back on its first run;
+3. marks itself done 30 seconds after it starts reading, and CAMS adds a `dk.cachet.carp.completedapptask.health` measurement.
+
+On Android, the task reads only when the participant has allowed every health data type of the protocol. When the permission request fails, or on Android when the participant allows none of the types, the task reads nothing and stays started.
+
+`HealthAppTask` takes these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `title` | `String` | No | `''` | Title in the task list and the notification. |
+| `description` | `String` | No | `''` | One line of text in the task list and the notification. |
+| `instructions` | `String` | No | `''` | Longer instructions for the participant. |
+| `types` | `List<HealthDataType>` | No | `const []` | The data types to read. Used only when `measures` holds no health measure. |
+| `measures` | `List<Measure>?` | No | — | Measures to collect. Without a health measure, the task adds one for `types` that reads 30 days back. |
+| `notification` | `bool` | No | `false` | Whether to show a notification when the task is triggered. |
+| `expire` | `Duration?` | No | — | How long the task stays on the task list. |
+| `minutesToComplete` | `int?` | No | — | Estimated time to complete, for display. |
+| `name` | `String?` | No | — | Task name. CAMS generates one if it is not set. |
+| `type` | `String` | No | `AppTask.HEALTH_ASSESSMENT_TYPE` | The app task type, `health`. Keep the default, which turns the task into a health user task. |
+
+A health measure can also be one of the measures of another app task, such as a [survey task](/docs/sampling-packages/survey/surveys). Only a `HealthAppTask` asks for access, so ask for the data types before such a task runs.
+
+The health service manager learns the data types of an app task only when the task starts, so `requestPermissions()` misses them before that. Ask for them with `requestHealthPermissions()` instead. See [`HealthServiceManager` reference](/docs/sampling-packages/health/permissions#healthservicemanager-reference).
+
+## Limitations
+
+- The package reads health data only while the app is in the foreground, and on iOS only while the phone is unlocked.
+- When one data type fails, the `health` plugin discards the data of all types in the measure. Put a type that may fail in a measure of its own, in a separate task. See [Data types](/docs/sampling-packages/health/data-types#limitations).
+- The read position is per measure. Data that two measures read, for example a background measure and a health app task, arrives twice, once from each.
+
+For the data that each run produces, see [Health data](/docs/sampling-packages/health/health-data).

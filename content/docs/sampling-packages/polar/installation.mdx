@@ -1,0 +1,142 @@
+---
+title: Installation
+description: Add carp_polar_package to a CAMS app and configure Bluetooth on Android and iOS.
+icon: Download
+---
+
+Setting up the Polar package takes four steps on top of the CARP Mobile Sensing (CAMS) setup:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_polar_package
+```
+
+The package needs CAMS, so complete [Installation](/docs/mobile-sensing/installation) for CAMS first.
+
+The package brings in the [`polar`](https://pub.dev/packages/polar) plugin, which adds the Polar BLE SDK to the Android and iOS builds. With CAMS 2.5.1, `flutter pub add` resolves `polar` 7.11.0 on Flutter 3.44 or later and 7.10.1 on earlier versions. Both include Polar BLE SDK 6.14.0.
+
+If your code imports `package:polar/polar.dart`, for example to use `PolarDataType`, also add the plugin as a direct dependency:
+
+```bash
+flutter pub add polar
+```
+
+</Step>
+<Step title="Configure Android">
+
+Add the Bluetooth and location permissions to `android/app/src/main/AndroidManifest.xml`, directly above the `<application>` element:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+    android:usesPermissionFlags="neverForLocation" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
+
+The permissions serve these purposes:
+
+| Permission | Purpose |
+| --- | --- |
+| `BLUETOOTH_SCAN` | Lets the Polar BLE SDK find the sensor on Android 12 or later. `neverForLocation` declares that the app does not derive location from the scan. |
+| `BLUETOOTH_CONNECT` | Lets the Polar BLE SDK connect to the sensor on Android 12 or later. |
+| `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | CAMS checks the location permission on every Android version before it connects to a Bluetooth device. |
+
+<Callout type="warning">
+
+Do not limit the location permissions with `android:maxSdkVersion`. CAMS needs the location permission on every Android version.
+
+</Callout>
+
+The `polar` plugin adds the legacy `BLUETOOTH` and `BLUETOOTH_ADMIN` permissions for Android 11 and earlier to the merged manifest. The Polar BLE SDK needs `minSdk` 24 or later, the default for new Flutter projects. The plugin downloads the SDK from the JitPack Maven repository.
+
+</Step>
+<Step title="Configure iOS">
+
+Add a Bluetooth usage description and the `bluetooth-central` background mode to `ios/Runner/Info.plist`, inside the `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>This app connects to your Polar sensor to record your heart rate for a research study.</string>
+<key>UIBackgroundModes</key>
+<array>
+  <string>bluetooth-central</string>
+</array>
+```
+
+If `UIBackgroundModes` already exists, add the `bluetooth-central` string to it. The background mode keeps the connection to the sensor, and the data, flowing while the app is in the background. In Xcode, it is **Uses Bluetooth LE accessories** under **Signing & Capabilities → Background Modes**.
+
+CAMS requests the Bluetooth permission through the `permission_handler` plugin. If your iOS project uses CocoaPods, enable that permission in the `post_install` block of `ios/Podfile`:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_BLUETOOTH=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+If the list already exists, add only the `PERMISSION_BLUETOOTH=1` line. With Swift Package Manager, `permission_handler` enables the permission by itself when `Info.plist` contains `NSBluetoothAlwaysUsageDescription`.
+
+The `polar` plugin supports both CocoaPods and Swift Package Manager, and it pulls in the Polar BLE SDK either way. Do not add `PolarBleSdk` to the project yourself. The SDK needs iOS 14.0 or later, which the CAMS minimum of 15.0 covers.
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure `SmartPhoneClientManager`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_polar_package/carp_polar_package.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(PolarSamplingPackage()); // [!code ++]
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering makes the seven Polar measure types and the `PolarDevice` configuration known to CAMS, and adds the `PolarDeviceManager` that connects to the sensor. It also registers the Polar classes for JSON, so that CAMS can read protocols and data that contain them.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The analyzer reports that Smartphone is ambiguous">
+
+Hide `Smartphone` when you import `carp_core`. Both `carp_core` and `carp_mobile_sensing` define the class, and CAMS apps use the one in `carp_mobile_sensing`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+```
+
+</Accordion>
+<Accordion title="The log says the permissions required to connect are missing">
+
+Call `requestPermissions()` on the Polar device manager before it connects, because CAMS does not ask for Bluetooth permissions by itself. On Android, also check that the manifest declares both location permissions without `android:maxSdkVersion`. See [Request Bluetooth permissions](/docs/sampling-packages/polar/connecting#request-bluetooth-permissions).
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/polar/quickstart" icon="Bolt">
+
+Connect to a Polar sensor and print its heart rate and ECG.
+
+</Card>
+</Cards>

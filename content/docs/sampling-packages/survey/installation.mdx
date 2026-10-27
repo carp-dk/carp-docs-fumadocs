@@ -1,0 +1,181 @@
+---
+title: Installation
+description: Add carp_survey_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+The package runs on CARP Mobile Sensing (CAMS), so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first. Adding surveys on top of it takes four steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_survey_package research_package
+flutter pub add cognition_package
+```
+
+`carp_survey_package` does not re-export the packages it builds on. Add `research_package` to build your own surveys, and `cognition_package` only if you add cognitive tests. `flutter pub add` picks `research_package` 3.2.0, the newest version that `carp_survey_package` supports.
+
+</Step>
+<Step title="Configure Android">
+
+`research_package` 3.x depends on the [`health`](/docs/flutter-plugins/health) plugin, which requires API level 26 or later. Raise `minSdk` in `android/app/build.gradle.kts`:
+
+```kotlin title="android/app/build.gradle.kts"
+android {
+    defaultConfig {
+        minSdk = flutter.minSdkVersion // [!code --]
+        minSdk = 26 // [!code ++]
+    }
+}
+```
+
+Surveys and cognitive tests need no Android permissions. To ask for health data, for example in an informed consent flow, also set up Google Health Connect. See [Android](/docs/flutter-plugins/health/platform-setup/android) in the Health section.
+
+</Step>
+<Step title="Configure iOS">
+
+The `health` plugin also links HealthKit into the iOS app. Add the two HealthKit usage descriptions to `ios/Runner/Info.plist`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSHealthShareUsageDescription</key>
+<string>Your health data is read only if the study asks for it.</string>
+<key>NSHealthUpdateUsageDescription</key>
+<string>The study does not write to Apple Health, but HealthKit requires this description.</string>
+```
+
+To ask for health data, also add the **HealthKit** capability: without it, the authorization sheet does not appear. The minimum iOS version stays at 15.0, as for CAMS.
+
+<Callout type="warning">
+
+The `research_package` 4.0.0 release notes report that App Store review rejects apps that link HealthKit without using it. Version 4.0.0 drops the `health` dependency for this reason, but `carp_survey_package` 2.1.1 requires 3.x.
+
+</Callout>
+
+`cognition_package` plays its sounds with [`just_audio`](https://pub.dev/packages/just_audio). Its documentation says that App Store review then asks for a microphone usage description, because the audio session code includes a microphone API. Add `NSMicrophoneUsageDescription` to `Info.plist`, or, if the app does not record audio, compile the microphone code out:
+
+<Tabs items={['Swift Package Manager', 'CocoaPods']}>
+<Tab value="Swift Package Manager">
+
+Clean the build, then set the environment variable for every build, including `flutter build ios`:
+
+```bash
+flutter clean
+AUDIO_SESSION_MICROPHONE=0 flutter run
+```
+
+</Tab>
+<Tab value="CocoaPods">
+
+Add the macro to the `post_install` block of the Podfile. If the block already sets `GCC_PREPROCESSOR_DEFINITIONS`, for example for `permission_handler`, add the macro to that list instead.
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'AUDIO_SESSION_MICROPHONE=0' # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Register the sampling package">
+
+Register `SurveySamplingPackage` in `main()`, before `configure()`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_survey_package/survey.dart'; // [!code ++]
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(SurveySamplingPackage()); // [!code ++]
+  await SmartPhoneClientManager().configure();
+
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering the package:
+
+- adds the `dk.cachet.carp.survey` measure type;
+- registers `RPAppTask`, `RPTaskResultData` and all Research Package and Cognition Package classes for JSON deserialization;
+- registers the user task factory that turns a triggered `survey`, `cognition` or `informed_consent` app task into a `SurveyUserTask`.
+
+`configure()` restores the saved studies and survey tasks from JSON, which only works for registered types.
+
+</Step>
+</Steps>
+
+## Add optional assets
+
+Two Research Package features read files from fixed paths in your app's assets:
+
+| Feature | Asset | Without the asset |
+| --- | --- | --- |
+| `RPTimerStep(playSound: true)` | `assets/audio/RPTimerStepSound.mp3` | No sound plays. The package does not bundle the sound, and it only prints the error. |
+| `RPLocalizations.delegate` | `assets/lang/<language_code>.json` for every supported language | The delegate fails to load, because it does not catch a missing file. |
+
+Declare the folders in `pubspec.yaml`:
+
+```yaml title="pubspec.yaml"
+flutter:
+  assets:
+    - assets/audio/ # [!code ++]
+    - assets/lang/ # [!code ++]
+```
+
+The Research Package example app ships a timer sound, [`RPTimerStepSound.mp3`](https://github.com/carp-dk/research.package/blob/master/example/assets/audio/RPTimerStepSound.mp3). `CPLocalizations.delegate` needs no files in your app. For the translation files, see [Translate the survey](/docs/sampling-packages/survey/surveys#translate-the-survey).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Version solving fails on research_package">
+
+Change the `research_package` constraint in `pubspec.yaml` to `^3.2.0`. `carp_survey_package` 2.1.1 and `cognition_package` 1.9.1 require `^3.0.0`, so a constraint on 4.0.0 cannot resolve.
+
+</Accordion>
+<Accordion title="TimeOfDay is defined in two libraries">
+
+Hide Flutter's class in files that use the CARP `TimeOfDay` for a trigger:
+
+```dart
+import 'package:flutter/material.dart' hide TimeOfDay;
+```
+
+Flutter's `material.dart` and `carp_core` both define a `TimeOfDay` class.
+
+</Accordion>
+<Accordion title="The Android build fails on minSdkVersion">
+
+Set `minSdk = 26` in `android/app/build.gradle.kts`. The `health` plugin requires API level 26, so the manifest merger rejects a lower value.
+
+</Accordion>
+<Accordion title="Survey tasks are gone after a restart">
+
+Register `SurveySamplingPackage` before you call `SmartPhoneClientManager().configure()`. Otherwise CAMS cannot read the `RPAppTask` JSON in the saved study and task queue, and the log shows `Failed to load studies` and `Failed to load task queue`, each with a `SerializationException`.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/survey/quickstart" icon="Bolt">
+
+Build an app that schedules a daily WHO-5 survey.
+
+</Card>
+</Cards>

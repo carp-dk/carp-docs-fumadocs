@@ -1,0 +1,186 @@
+---
+title: Weather and air quality
+description: How the weather and air quality measures fetch current conditions from OpenWeather and WAQI for the phone's position.
+icon: PartlyCloudyDay
+---
+
+Two [one-time](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measures describe the participant's environment. `dk.cachet.carp.weather` (`ContextSamplingPackage.WEATHER`) gets the current weather from [OpenWeather](https://openweathermap.org/). `dk.cachet.carp.airquality` (`ContextSamplingPackage.AIR_QUALITY`) gets the air quality index of the nearest station from the [World Air Quality Index](https://waqi.info/) (WAQI) project.
+
+They run on the [`WeatherService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/WeatherService-class.html) and [`AirQualityService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/AirQualityService-class.html) connected devices, on Android and iOS.
+
+## Get the API keys
+
+Each service needs a key from its provider:
+
+| Service | Measure | Key |
+| --- | --- | --- |
+| OpenWeather | `WEATHER` | An API key from your [OpenWeather](https://openweathermap.org/api) account. The measure calls the [Current weather data](https://openweathermap.org/current) API. |
+| WAQI | `AIR_QUALITY` | A token from the [WAQI data platform](https://aqicn.org/data-platform/token/). |
+
+The protocol stores the keys in plain text. Keep them out of source control, for example in a configuration file that Git ignores, and protect stored protocols that contain them.
+
+## Add the measures to a protocol
+
+Add the services as connected devices of the phone, and target each task at its service:
+
+```dart
+final weatherService = WeatherService(apiKey: 'your-openweather-api-key');
+final airQualityService = AirQualityService(apiKey: 'your-waqi-token');
+protocol
+  ..addConnectedDevice(weatherService, phone)
+  ..addConnectedDevice(airQualityService, phone);
+
+// Collect weather and air quality every 30 minutes
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(minutes: 30)),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.WEATHER)]),
+  weatherService,
+);
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(minutes: 30)),
+  BackgroundTask(
+    measures: [Measure(type: ContextSamplingPackage.AIR_QUALITY)],
+  ),
+  airQualityService,
+);
+```
+
+Both measures are one-time: each trigger collects one measurement, so use a trigger that repeats. A `PeriodicTrigger` fires only while the app runs.
+
+You can also let the participant start the collection with an [app task](/docs/mobile-sensing/app-task-model). To start it on a geofence event, see [Trigger tasks on geofence events](/docs/sampling-packages/context/geofences#trigger-tasks-on-geofence-events).
+
+Like the location measures, the services connect only when the participant has granted location access with precise location. See [Connection rules](/docs/sampling-packages/context/services#connection-rules).
+
+## How collection works
+
+Each time the trigger fires, the probe collects one measurement:
+
+1. The probe gets the phone's position from the shared location manager. It waits up to 6 seconds for a new location and otherwise uses the last location that the app received.
+2. The probe sends the position to the web service. OpenWeather returns the current weather at the position, and WAQI returns the data of the station nearest to it.
+3. The probe turns the response into one measurement and pauses itself 5 seconds later. The next trigger repeats the cycle.
+
+## Errors
+
+When a run fails, the measurement holds an error with the type `dk.cachet.carp.error` instead of weather or air quality data. A run fails when:
+
+- the protocol has no `WeatherService` or `AirQualityService`;
+- no location arrives within 6 seconds and the app has received none before, for example right after it starts;
+- the request fails, for example because of a wrong API key, no network or a missing `INTERNET` permission in an Android release build.
+
+The message names the probe and the cause:
+
+```json
+{
+  "__type": "dk.cachet.carp.error",
+  "message": "WeatherProbe Exception: Bad state: Could not get location."
+}
+```
+
+The services do not check the API keys when they connect, so a wrong key shows up only as error measurements. Filter on the data type when you analyze the data.
+
+## Privacy
+
+Each run sends the phone's exact position and the API key to the provider, in the URL of an HTTPS request:
+
+```text
+https://api.openweathermap.org/data/2.5/weather?lat=<latitude>&lon=<longitude>&appid=<api_key>&lang=en
+https://api.waqi.info/feed//geo:<latitude>;<longitude>/?token=<api_key>
+```
+
+OpenWeather and WAQI therefore receive the participant's position every time a measure runs. Include them in your data protection plan.
+
+## Weather data
+
+Each `WEATHER` measurement holds a [`Weather`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/Weather-class.html) with the type `dk.cachet.carp.weather`. All fields are nullable, and fields that OpenWeather does not report, such as rain on a dry day, are left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `country` | `String?` | Country code, such as `DK`. |
+| `areaName` | `String?` | Name of the area, such as a city. |
+| `weatherMain` | `String?` | Group of weather conditions in English, such as `Clouds`. |
+| `weatherDescription` | `String?` | Weather condition in English, such as `broken clouds`. |
+| `date` | `DateTime?` | Time that OpenWeather calculated the data, in local time. |
+| `sunrise` | `DateTime?` | Sunrise, in local time. |
+| `sunset` | `DateTime?` | Sunset, in local time. |
+| `latitude` | `double?` | Latitude of the position in degrees. |
+| `longitude` | `double?` | Longitude of the position in degrees. |
+| `pressure` | `double?` | Atmospheric pressure at sea level in hPa. |
+| `windSpeed` | `double?` | Wind speed in m/s. |
+| `windDegree` | `double?` | Wind direction in degrees. |
+| `humidity` | `double?` | Relative humidity in percent. |
+| `cloudiness` | `double?` | Cloud cover in percent. |
+| `rainLastHour` | `double?` | Rain in the last hour, in mm. |
+| `rainLast3Hours` | `double?` | Rain in the last 3 hours, in mm. |
+| `snowLastHour` | `double?` | Snow in the last hour, in mm. |
+| `snowLast3Hours` | `double?` | Snow in the last 3 hours, in mm. |
+| `temperature` | `double?` | Temperature in °C. |
+| `tempMin` | `double?` | Lowest temperature currently observed in the area, in °C. |
+| `tempMax` | `double?` | Highest temperature currently observed in the area, in °C. |
+
+The times have no UTC offset. A weather measurement looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.weather",
+  "country": "DK",
+  "areaName": "Kongens Lyngby",
+  "weatherMain": "Clouds",
+  "weatherDescription": "broken clouds",
+  "date": "2026-10-26T10:12:00.000",
+  "sunrise": "2026-10-26T07:05:12.000",
+  "sunset": "2026-10-26T16:41:40.000",
+  "latitude": 55.79,
+  "longitude": 12.52,
+  "pressure": 1012.0,
+  "windSpeed": 5.1,
+  "windDegree": 240.0,
+  "humidity": 81.0,
+  "cloudiness": 75.0,
+  "temperature": 9.4,
+  "tempMin": 8.3,
+  "tempMax": 10.6
+}
+```
+
+## Air quality data
+
+Each `AIR_QUALITY` measurement holds an [`AirQuality`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/AirQuality-class.html) with the type `dk.cachet.carp.airquality`. The position is that of the station, not of the phone:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `airQualityIndex` | `int` | The air quality index (AQI) reported by WAQI. Higher is worse. `-1` when WAQI reports no number. |
+| `source` | `String?` | The first data source that WAQI credits for the station. |
+| `place` | `String?` | The name of the station. |
+| `latitude` | `double` | The latitude of the station in degrees. `-1` when unknown. |
+| `longitude` | `double` | The longitude of the station in degrees. `-1` when unknown. |
+| `airQualityLevel` | `AirQualityLevel?` | The health category of the index. See [Air quality levels](#air-quality-levels). |
+
+An air quality measurement looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.airquality",
+  "airQualityIndex": 42,
+  "source": "Danish Centre for Environment and Energy",
+  "place": "H.C. Andersens Boulevard, Copenhagen, Denmark",
+  "latitude": 55.6748,
+  "longitude": 12.5698,
+  "airQualityLevel": "GOOD"
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Air quality levels
+
+`airQualityLevel` is an [`AirQualityLevel`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/AirQualityLevel.html) that the package derives from the index:
+
+| Level | Index |
+| --- | --- |
+| `GOOD` | 0–50 |
+| `MODERATE` | 51–100 |
+| `UNHEALTHY_FOR_SENSITIVE_GROUPS` | 101–150 |
+| `UNHEALTHY` | 151–200 |
+| `VERY_UNHEALTHY` | 201–300 |
+| `HAZARDOUS` | Above 300 |
+| `UNKNOWN` | Below 0 |

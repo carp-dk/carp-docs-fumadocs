@@ -1,0 +1,112 @@
+---
+title: Installed apps
+description: The APPS measure, which lists the apps installed on an Android phone with their package name, version and update time.
+icon: Apps
+---
+
+`dk.cachet.carp.apps` is a [one-time](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone, on Android only, through the [`installed_apps`](https://pub.dev/packages/installed_apps) plugin. Add it as `Measure(type: AppsSamplingPackage.APPS)`. It collects the full app list each time its trigger fires.
+
+## Add the measure to a protocol
+
+A one-time measure collects only when its trigger fires, so choose a trigger that matches how often the app list matters to the study:
+
+<Tabs items={['PeriodicTrigger', 'OneTimeTrigger']}>
+<Tab value="PeriodicTrigger">
+
+A [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html) collects the list when sampling starts, typically at every app start, and then once per period:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 7)),
+  BackgroundTask(measures: [Measure(type: AppsSamplingPackage.APPS)]),
+  phone,
+);
+```
+
+</Tab>
+<Tab value="OneTimeTrigger">
+
+A [`OneTimeTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/OneTimeTrigger-class.html) collects the list once per deployment, also across app restarts:
+
+```dart
+protocol.addTaskControl(
+  OneTimeTrigger(),
+  BackgroundTask(measures: [Measure(type: AppsSamplingPackage.APPS)]),
+  phone,
+);
+```
+
+</Tab>
+</Tabs>
+
+An `ImmediateTrigger` collects the list only when sampling starts, typically at every app start.
+
+The measure has no sampling configuration.
+
+## Included apps
+
+The measure lists the apps that `installed_apps` returns with its default filters:
+
+- System apps are left out, also when the participant can open them.
+- Apps without a launcher entry are left out.
+- The list is sorted by app name.
+
+The package has no option to change these filters.
+
+On Android 11 or later, the app sees all other apps only with the `QUERY_ALL_PACKAGES` permission, which `installed_apps` adds to the manifest. Without it, the list holds only the apps that Android makes visible by default.
+
+For the Google Play restrictions on this permission, see [Google Play policy](/docs/sampling-packages/apps/installation#google-play-policy).
+
+## Limitations
+
+- If reading the list fails, `installed_apps` returns an empty list instead of an error, so the measurement has an empty `installedApps`.
+- `framework` comes from a heuristic in `installed_apps`, which can misclassify apps.
+- The package has no privacy transformer, so app names and package names are stored as collected, also with the default privacy schema. The list of apps can reveal sensitive information about a participant, so cover it in the study's consent.
+- The measure does not run on iOS.
+
+## Data
+
+Each measurement holds an [`Apps`](https://pub.dev/documentation/carp_apps_package/latest/apps/Apps-class.html) object with the `__type` `dk.cachet.carp.apps`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `installedApps` | `List<App>` | The installed apps, sorted by name. |
+
+Each entry is an [`App`](https://pub.dev/documentation/carp_apps_package/latest/apps/App-class.html). Fields that are `null` are left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `String?` | App name as shown to the participant. |
+| `packageName` | `String?` | The application ID, such as `com.spotify.music`. |
+| `versionName` | `String?` | Version string, such as `9.0.88`. |
+| `versionCode` | `int?` | Internal version number. |
+| `installTimeMillis` | `int?` | Despite its name, the time the app was last installed or updated, in milliseconds since the epoch, not the time of the first install. |
+| `framework` | `String?` | The framework the app is built with: `Flutter`, `React Native`, `Xamarin`, `Ionic` or `Native or Others`. |
+
+The measurement's `sensorStartTime` is the time of collection. The data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.apps",
+  "installedApps": [
+    {
+      "name": "My Study",
+      "packageName": "dk.carp.myapp",
+      "versionName": "1.4.0",
+      "versionCode": 42,
+      "installTimeMillis": 1792489267000,
+      "framework": "Flutter"
+    },
+    {
+      "name": "Spotify",
+      "packageName": "com.spotify.music",
+      "versionName": "9.0.88",
+      "versionCode": 129088,
+      "installTimeMillis": 1788372235000,
+      "framework": "Native or Others"
+    }
+  ]
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

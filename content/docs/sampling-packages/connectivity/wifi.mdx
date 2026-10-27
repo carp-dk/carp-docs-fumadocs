@@ -1,0 +1,124 @@
+---
+title: Wi-Fi
+description: The WIFI measure, which reads the name, access point and IP address of the Wi-Fi network that the phone uses.
+icon: Wifi
+---
+
+`dk.cachet.carp.wifi` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone on Android and iOS. Add it as `Measure(type: ConnectivitySamplingPackage.WIFI)`. Every 10 minutes by default, it reads the network name (SSID), the MAC address of the access point (BSSID) and the phone's IP address.
+
+## Add the measure to a protocol
+
+Start the measure with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html). To read the network every 5 minutes, set an [`IntervalSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/IntervalSamplingConfiguration-class.html) on the measure:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: ConnectivitySamplingPackage.WIFI,
+        samplingConfiguration: IntervalSamplingConfiguration( // [!code highlight]
+          interval: const Duration(minutes: 5), // [!code highlight]
+        ), // [!code highlight]
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+The measure also needs location access. See [Location permission](#location-permission).
+
+## Configuration
+
+The measure uses an `IntervalSamplingConfiguration`:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `interval` | `Duration` | 10 minutes | Time between two readings. The first reading comes one interval after the measure starts. |
+
+A shorter interval catches network changes sooner and produces more measurements.
+
+## Location permission
+
+Android and iOS return the SSID and BSSID only to apps with location access. On Android, the participant must allow precise location, and Location Services must be on.
+
+<Callout type="warning" title="Known issue">
+
+CARP Mobile Sensing (CAMS) does not ask for location for `WIFI`, because the measure declares no permissions. Unless the app or another measure asks for it, the measurements lack the real SSID and BSSID. Ask for location in the app, as shown below.
+
+</Callout>
+
+Add location to the permissions that CAMS asks for, with a `permissionRequester` in `configure()`. `Permission` comes from [`permission_handler`](https://pub.dev/packages/permission_handler), which you add with `flutter pub add permission_handler`:
+
+```dart
+await SmartPhoneClientManager().configure(
+  permissionRequester: (permissions) => requestPermissionsInOrder([
+    ...permissions,
+    Permission.locationWhenInUse, // [!code highlight]
+  ]),
+);
+```
+
+CAMS calls the requester only when a measure in the deployment declares a permission. Measures that declare location, such as `BEACON` and the location measures of `carp_context_package`, make CAMS ask for location by themselves. If no measure in the protocol declares a permission, ask for location in the app before you configure the client:
+
+```dart
+await Permission.locationWhenInUse.request();
+await SmartPhoneClientManager().configure();
+```
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- The SSID comes in double quotes, for example `"MyLab"`, as Android returns it.
+- The SSID and BSSID need precise location (`ACCESS_FINE_LOCATION`) and Location Services. The IP address needs neither.
+- On Android 12 or later, `ip` is the IPv4 address on the phone's active network. That network can also be the mobile network or a VPN.
+- The plugin adds `ACCESS_WIFI_STATE` and `ACCESS_NETWORK_STATE` to the merged manifest.
+
+</Tab>
+<Tab value="iOS">
+
+- The SSID and BSSID need the **Access Wi-Fi Information** capability and precise location access. Instead of location access, a network that the app configured with `NEHotspotConfiguration`, or an active VPN or `NEDNSSettingsManager` configuration of the app, also works.
+- Without these, `ssid` and `bssid` are missing. The IP address needs no permission.
+- The simulator returns no Wi-Fi information.
+
+</Tab>
+</Tabs>
+
+## Name hashing
+
+The default privacy schema replaces `ssid` with its SHA-1 hash, a string of 40 hexadecimal characters. `bssid` and `ip` are stored as collected. Turn the schema on with `privacySchemaName: PrivacySchema.DEFAULT` on the [`SmartphoneStudyProtocol`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SmartphoneStudyProtocol-class.html).
+
+Android includes the quotes in the SSID, so the same network hashes differently on the two platforms:
+
+| Platform | `ssid` as collected | SHA-1 hash of `ssid` |
+| --- | --- | --- |
+| Android | `"MyLab"` | `25dbe51dca333497aadaceb6203d1c59569e86b9` |
+| iOS | `MyLab` | `3593174e7d8fb794f1feef02985266f85596924b` |
+
+For privacy schemas in general, see [Data transformation and privacy](/docs/mobile-sensing/privacy).
+
+## Data
+
+Each measurement holds a [`Wifi`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/Wifi-class.html) object with the `__type` `dk.cachet.carp.wifi`. Fields that are `null` are left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ssid` | `String?` | Network name, in double quotes on Android. With the default privacy schema, its SHA-1 hash. |
+| `bssid` | `String?` | MAC address of the access point. |
+| `ip` | `String?` | IPv4 address of the phone. |
+
+The measurement's `sensorStartTime` is the time of the reading. On Android, without the privacy schema, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.wifi",
+  "ssid": "\"MyLab\"",
+  "bssid": "a4:2b:b0:12:34:56",
+  "ip": "192.168.1.43"
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

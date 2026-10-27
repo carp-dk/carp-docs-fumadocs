@@ -1,0 +1,202 @@
+---
+title: Quickstart
+description: Build an app that connects to a Polar sensor and prints its heart rate and ECG measurements.
+icon: Bolt
+---
+
+The finished app connects to a Polar H10 by its Polar ID and prints each heart rate and ECG measurement as JSON.
+
+## Prerequisites
+
+- The setup in [Installation](/docs/sampling-packages/polar/installation), including the CARP Mobile Sensing (CAMS) setup it builds on.
+- A Polar H10 sensor and its Polar ID: the eight characters printed on the sensor, for example `B5FC172F`. With an H9 or a Verity Sense, the example collects heart rate only.
+- A physical Android or iOS phone. Emulators and simulators cannot connect to a Bluetooth sensor.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with this program, and set `polarIdentifier` to the Polar ID of your sensor:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_polar_package/carp_polar_package.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(PolarSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone and a Polar sensor connected to it
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Resting heart rate and ECG',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  final polar = PolarDevice(roleName: 'Polar H10'); // [!code highlight]
+  protocol
+    ..addPrimaryDevice(phone)
+    ..addConnectedDevice(polar, phone);
+
+  // 3. Collect heart rate and ECG from the sensor while it is connected
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: PolarSamplingPackage.HR), // [!code highlight]
+        Measure(type: PolarSamplingPackage.ECG), // [!code highlight]
+      ],
+    ),
+    polar,
+  );
+
+  // 4. Configure the client, ask for Bluetooth permissions and bind the sensor
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  final polarManager = client.deviceController.getDeviceManager(
+    PolarDevice.DEVICE_TYPE,
+  ) as PolarDeviceManager;
+  await polarManager.requestPermissions(); // [!code highlight]
+  polarManager.polarIdentifier = 'B5FC172F'; // [!code highlight]
+
+  // 5. Deploy the protocol on the first run; CAMS connects to the sensor and starts sampling
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 6. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | `PolarSamplingPackage` makes the Polar measure types, the `PolarDevice` configuration and its device manager known to CAMS. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | The phone is the primary device, and a `PolarDevice` with the role `Polar H10` is connected to it. The protocol does not identify the physical sensor. |
+| **3. Task** | A `BackgroundTask` on the Polar device collects `HR` and `ECG`. Both measures are event-based, so an `ImmediateTrigger` starts them once, and they stream while the sensor is connected. |
+| **4. Bind** | `requestPermissions()` asks for Bluetooth and, on Android, location. Setting `polarIdentifier` binds the `Polar H10` role to your physical sensor. |
+| **5. Deploy** | During the deployment, CAMS configures the Polar device manager and connects to the sensor, because the manager has a Polar ID. The Polar measures start when the sensor has reported the data types it offers. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **6. Print** | `client.measurements` streams every measurement, and the example prints each one as JSON. |
+
+The example binds the sensor before it deploys the study, so CAMS connects to it as part of the deployment. To bind a sensor later, for example from a settings screen, see [Connecting a device](/docs/sampling-packages/polar/connecting).
+
+## Run the app
+
+<Steps>
+<Step title="Put on the sensor">
+
+Wear the H10 on its chest strap, against the skin.
+
+</Step>
+<Step title="Start the app on your phone">
+
+```bash
+flutter run
+```
+
+Allow the Bluetooth permission. On Android, also allow access to the location: CAMS needs it to connect to Bluetooth devices.
+
+</Step>
+<Step title="Check the console">
+
+Once the phone is connected to the sensor, the console prints one JSON object per measurement. ECG measurements hold batches of voltage samples, and heart rate measurements look like this:
+
+```json
+{
+  "sensorStartTime": 1793023392104000,
+  "data": {
+    "__type": "dk.cachet.carp.polar.hr",
+    "samples": [
+      {
+        "hr": 64,
+        "rrsMs": [938],
+        "contactStatus": true,
+        "contactStatusSupported": true
+      }
+    ]
+  }
+}
+```
+
+The console also shows the task measurements of CAMS itself, such as `dk.cachet.carp.triggeredtask`.
+
+</Step>
+</Steps>
+
+To work with the values in code, check the type of the data:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is PolarHR) {
+    for (final sample in data.samples) {
+      print('${sample.hr} bpm, RR intervals ${sample.rrsMs} ms');
+    }
+  }
+});
+```
+
+For all the fields, see [Measure types](/docs/sampling-packages/polar/measure-types).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No Polar measurements appear">
+
+Print the status of the Polar device manager and act on it:
+
+- `configured`: the device manager has no Polar ID. Set `polarIdentifier` before the study is deployed.
+- `disconnected` right after the start: the Bluetooth permissions are missing. Allow them, and on Android, check the manifest entries in [Installation](/docs/sampling-packages/polar/installation).
+- `connecting` for a long time: the phone has not found the sensor. Check that the Polar ID matches the ID printed on the sensor, and that the sensor is worn, charged and near the phone.
+
+For the code that prints the status, see [Monitor the connection](/docs/sampling-packages/polar/connecting#monitor-the-connection).
+
+</Accordion>
+<Accordion title="Heart rate arrives but ECG does not">
+
+Use a Polar H10: it is the only supported sensor with ECG. With an H10, CAMS may have started the tasks before the sensor reported the ECG data type. Once the sensor is connected, pause and resume sampling with `client.pause()` and `client.resume()`.
+
+In both cases, the log says that the Polar device does not support the data type `PolarDataType.ecg`. See [Connect to the sensor](/docs/sampling-packages/polar/connecting#connect-to-the-sensor).
+
+</Accordion>
+<Accordion title="The log shows Failed to load studies after a restart">
+
+The example keeps working, because it creates a new study at every start. The message comes from a known issue in version 2.1.0: CAMS cannot read back the stored registration of a Polar sensor. See [Restore the binding after a restart](/docs/sampling-packages/polar/connecting#restore-the-binding-after-a-restart).
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Connecting a device" href="/docs/sampling-packages/polar/connecting" icon="Bluetooth">
+
+Bind a Polar sensor, connect to it and follow its status.
+
+</Card>
+<Card title="Measure types" href="/docs/sampling-packages/polar/measure-types" icon="Dataset">
+
+The seven Polar measure types, their sample rates and data fields.
+
+</Card>
+<Card title="Data managers" href="/docs/mobile-sensing/data-managers" icon="Storage">
+
+Store the measurements on the phone or upload them to a server.
+
+</Card>
+</Cards>

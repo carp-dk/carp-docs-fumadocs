@@ -1,0 +1,191 @@
+---
+title: Quickstart
+description: Build an app that connects a Movisens sensor by its name and prints tap markers and skin temperature.
+icon: Bolt
+---
+
+The finished app connects to a Movisens sensor by its Bluetooth name and prints each tap marker and skin temperature measurement as JSON.
+
+## Prerequisites
+
+- The setup in [Installation](/docs/sampling-packages/movisens/installation), including the CARP Mobile Sensing (CAMS) setup it builds on.
+- A Movisens Move4, EcgMove4 or EdaMove4 sensor, and its Bluetooth name: `MOVISENS Sensor` followed by the five-digit serial number on the back of the sensor.
+- An Android phone with Bluetooth turned on, and the sensor paired with the phone in the Android Bluetooth settings. On iOS, and for a sensor that is not paired, the status never becomes `connected`; see the known issue in [Connect to the sensor](/docs/sampling-packages/movisens/connecting#connect-to-the-sensor).
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with this program, and set `deviceName` to the Bluetooth name of your sensor:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_movisens_package/carp_movisens_package.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(MovisensSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone and a Movisens sensor
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Tap markers and skin temperature from a Movisens sensor',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  final movisens = MovisensDevice( // [!code highlight]
+    sensorLocation: SensorLocation.Chest,
+    sex: Sex.Female,
+    height: 168, // cm
+    weight: 62, // kg
+    age: 34,
+  );
+  protocol
+    ..addPrimaryDevice(phone)
+    ..addConnectedDevice(movisens, phone);
+
+  // 3. Collect tap markers and skin temperature while the sensor is connected
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: MovisensSamplingPackage.TAP_MARKER), // [!code highlight]
+        Measure(type: MovisensSamplingPackage.SKIN_TEMPERATURE), // [!code highlight]
+      ],
+    ),
+    movisens,
+  );
+
+  // 4. Deploy the protocol on the first run and start sampling
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 5. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  // 6. Bind the sensor by its name, ask for permissions and connect to it
+  final manager = client.deviceController.getDeviceManager(
+    MovisensDevice.DEVICE_TYPE,
+  ) as MovisensDeviceManager;
+  manager.statusEvents.listen((status) => print('Movisens: ${status.name}'));
+  manager.deviceName = 'MOVISENS Sensor 03348'; // [!code highlight]
+  await manager.requestPermissions();
+  await manager.connect(); // [!code highlight]
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the Movisens measure types and the sensor known to CAMS. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Adds a [`MovisensDevice`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensDevice-class.html) with the wearer's sensor location, sex, height, weight and age. The sensor uses these values for its activity algorithms, such as the metabolic equivalent of task (MET) and body position. |
+| **3. Task** | Runs `TAP_MARKER` and `SKIN_TEMPERATURE` on the sensor. Both are event-based measures, so an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html) starts them and they stream while the sensor is connected. |
+| **4. Deploy** | Configures CAMS, deploys the protocol on the phone and resumes sampling. The sensor's task waits until the sensor connects. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **5. Print** | Prints every measurement as JSON. |
+| **6. Connect** | Prints each new status of the sensor, binds the sensor by its Bluetooth name, asks for the Bluetooth permissions and connects to it. |
+
+Tap markers arrive as soon as you tap the sensor, so they show quickly whether the connection works.
+
+## Run the app
+
+<Steps>
+<Step title="Start the app on your phone">
+
+```bash
+flutter run
+```
+
+Allow the nearby devices and location permissions. The console shows `Movisens: connected` and then `Movisens: connecting` again, as the known issue in [Connect to the sensor](/docs/sampling-packages/movisens/connecting#connect-to-the-sensor) describes.
+
+</Step>
+<Step title="Tap the sensor">
+
+A tap marker measurement appears at once:
+
+```json
+{
+  "sensorStartTime": 1793006600123456,
+  "data": {
+    "__type": "dk.cachet.carp.movisens.tap_marker",
+    "timestamp": "2026-10-26T10:23:20.123456",
+    "deviceId": "88:6B:0F:3A:52:C1",
+    "type": "tapMarker",
+    "tapMarker": 1203
+  }
+}
+```
+
+</Step>
+</Steps>
+
+Skin temperature arrives about once per minute, up to 84 seconds after the sensor measured it. Both timestamps are the phone's time when the value arrived: `timestamp` in local time and `sensorStartTime` in microseconds since the epoch.
+
+To work with the values in code, check the type of the data:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is MovisensSkinTemperature) {
+    print('Skin temperature: ${data.skinTemperature} °C');
+  }
+});
+```
+
+For all the fields, see [Measure types](/docs/sampling-packages/movisens/measure-types).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The console never shows connected">
+
+Run the app on an Android phone, and pair the sensor with the phone in the Android Bluetooth settings first. When `movisens_flutter` has to scan for the sensor, the status does not become `connected`, and no data arrives. See the known issue in [Connect to the sensor](/docs/sampling-packages/movisens/connecting#connect-to-the-sensor).
+
+</Accordion>
+<Accordion title="The status changes to disconnected right after connect()">
+
+On Android, check that the manifest declares `ACCESS_COARSE_LOCATION` and that the nearby devices and location permissions are allowed. See [Installation](/docs/sampling-packages/movisens/installation#troubleshooting).
+
+</Accordion>
+<Accordion title="No skin temperature arrives">
+
+Wait 2 minutes: values other than tap markers arrive up to 84 seconds after the sensor measured them. If none arrive, check that your sensor sends skin temperature; see [Supported models](/docs/sampling-packages/movisens#supported-models).
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Connecting a device" href="/docs/sampling-packages/movisens/connecting" icon="Bluetooth">
+
+Bind a sensor by its name, connect it and follow its status.
+
+</Card>
+<Card title="Measure types" href="/docs/sampling-packages/movisens/measure-types" icon="Dataset">
+
+The six measure types, their data types, fields and timing.
+
+</Card>
+<Card title="Triggers" href="/docs/mobile-sensing/domain-model#triggers" icon="Schedule">
+
+Start tasks on a schedule or when an event occurs.
+
+</Card>
+</Cards>

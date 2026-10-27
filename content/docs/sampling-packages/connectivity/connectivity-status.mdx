@@ -1,0 +1,86 @@
+---
+title: Connectivity status
+description: The CONNECTIVITY measure, which records the network types the phone uses each time they change.
+icon: CellTower
+---
+
+`dk.cachet.carp.connectivity` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone on Android and iOS and needs no permissions. Add it as `Measure(type: ConnectivitySamplingPackage.CONNECTIVITY)`.
+
+## Add the measure to a protocol
+
+Start the measure with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html), so that it runs until the study pauses:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [Measure(type: ConnectivitySamplingPackage.CONNECTIVITY)],
+  ),
+  phone,
+);
+```
+
+The measure has no sampling configuration.
+
+## Status values
+
+Each measurement holds a list of [`ConnectivityStatus`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/ConnectivityStatus.html) values, because the phone can use several networks at once, for example Wi-Fi and a VPN:
+
+| Value | Meaning | Android | iOS |
+| --- | --- | --- | --- |
+| `wifi` | Wi-Fi | Yes | Yes |
+| `mobile` | Cellular data | Yes | Yes |
+| `ethernet` | Wired network | Yes | Yes |
+| `bluetooth` | Network over Bluetooth | Yes | No |
+| `vpn` | Virtual private network | Yes | No |
+| `none` | No network | Yes | Yes |
+| `unknown` | A network type that the package does not map, such as a satellite link, or a VPN on iOS | Yes | Yes |
+
+`none` is always the only value in its list. For the values that each platform reports, see [Platform differences](#platform-differences).
+
+## Event timing
+
+The measure records a status at these moments:
+
+1. When the measure starts, it records the current status.
+2. After that, it records a new status every time the set of networks changes.
+
+At the start, the first status may be recorded twice: once by the measure's own check and once as the first event from the plugin. Remove consecutive duplicates in your analysis.
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- The plugin adds `ACCESS_NETWORK_STATE` to the merged manifest, so the app declares nothing.
+- With Wi-Fi and mobile data both on, Android reports only `wifi`.
+- Android 15 or later can report satellite links, which the measure records as `unknown`.
+
+</Tab>
+<Tab value="iOS">
+
+- Changes that happen while the app is in the background are not recorded, because `connectivity_plus` drops events in the background.
+- `connectivity_plus` reports a VPN and a satellite link as other network types, so the measure records `unknown`. A satellite link appears together with `mobile`.
+- The `connectivity_plus` documentation warns that iOS can report changes several times or unreliably, for example `none` followed by `wifi` right after reconnecting.
+
+</Tab>
+</Tabs>
+
+## Data
+
+Each measurement holds a [`Connectivity`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/Connectivity-class.html) object with the `__type` `dk.cachet.carp.connectivity`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `connectivityStatus` | `List<ConnectivityStatus>` | The network types in use, as listed in [Status values](#status-values). Never empty. |
+
+The measurement's `sensorStartTime` is the time the status was recorded. For a phone on Wi-Fi with a VPN, on Android, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.connectivity",
+  "connectivityStatus": ["wifi", "vpn"]
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

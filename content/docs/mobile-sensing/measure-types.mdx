@@ -102,35 +102,35 @@ Types marked with \* are one-time measures.
 
 | Type | Android | iOS | Package | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `location` | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Listens to the stream of location changes from the phone's OS |
-| `activity` | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Activity as events from the OS's built-in activity recognition API |
-| `weather`\* | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Detailed weather information for the current location of the phone |
-| `airquality`\* | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Air quality of the current location of the phone (from land-based stations) |
-| `geofence` | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Tracks entry, dwell and exit events in circular geofences |
-| `mobility` | Yes | Yes | [`context`](https://pub.dev/packages/carp_context_package) | Tracks location and calculates mobility features based on the [`mobility_features`](https://pub.dev/packages/mobility_features) plugin |
-| `bluetooth` | Yes | Yes | [`connectivity`](https://pub.dev/packages/carp_connectivity_package) | Scans nearby BLE devices |
-| `wifi` | Yes | No | [`connectivity`](https://pub.dev/packages/carp_connectivity_package) | Collects SSID and BSSID from connected Wi-Fi networks |
-| `connectivity` | Yes | Yes | [`connectivity`](https://pub.dev/packages/carp_connectivity_package) | Connectivity status events |
-| `beacon` | Yes | Yes | [`connectivity`](https://pub.dev/packages/carp_connectivity_package) | Scans for nearby [iBeacons](https://en.wikipedia.org/wiki/IBeacon) |
-| `audio`\* | Yes | Yes | [`audio`](https://pub.dev/packages/carp_audio_package) | Records audio from the device microphone |
-| `noise` | Yes | Yes | [`audio`](https://pub.dev/packages/carp_audio_package) | Detects ambient noise from the device microphone |
-| `apps`\* | Yes | No | [`apps`](https://pub.dev/packages/carp_apps_package) | List of installed apps |
-| `appusage`\* | Yes | No | [`apps`](https://pub.dev/packages/carp_apps_package) | List of app usage |
-| `phonelog`\* | Yes | No | [`communication`](https://pub.dev/packages/carp_communication_package) | Log of incoming and outgoing phone calls |
-| `textmessagelog`\* | Yes | No | [`communication`](https://pub.dev/packages/carp_communication_package) | Log of incoming and outgoing text messages (SMS) |
-| `textmessage` | Yes | No | [`communication`](https://pub.dev/packages/carp_communication_package) | Text message (SMS) events when received |
-| `calendar`\* | Yes | Yes | [`communication`](https://pub.dev/packages/carp_communication_package) | Calendar events from the calendars on the phone |
-| `survey`\* | Yes | Yes | [`survey`](https://pub.dev/packages/carp_survey_package) | Data from surveys (questionnaires) through the [Research Package](https://pub.dev/packages/research_package), and cognitive assessments from the [Cognition Package](https://pub.dev/packages/cognition_package) |
+| `location` | Yes | Yes | [`context`](/docs/sampling-packages/context) | Listens to the stream of location changes from the phone's OS |
+| `activity` | Yes | Yes | [`context`](/docs/sampling-packages/context) | Activity as events from the OS's built-in activity recognition API |
+| `weather`\* | Yes | Yes | [`context`](/docs/sampling-packages/context) | Detailed weather information for the current location of the phone |
+| `airquality`\* | Yes | Yes | [`context`](/docs/sampling-packages/context) | Air quality of the current location of the phone (from land-based stations) |
+| `geofence` | Yes | Yes | [`context`](/docs/sampling-packages/context) | Tracks entry, dwell and exit events in circular geofences |
+| `mobility` | Yes | Yes | [`context`](/docs/sampling-packages/context) | Tracks location and calculates mobility features based on the [`mobility_features`](https://pub.dev/packages/mobility_features) plugin |
+| `bluetooth` | Yes | Foreground only | [`connectivity`](/docs/sampling-packages/connectivity) | Scans nearby BLE devices |
+| `wifi` | Yes | Yes | [`connectivity`](/docs/sampling-packages/connectivity) | Collects SSID and BSSID from connected Wi-Fi networks |
+| `connectivity` | Yes | Yes | [`connectivity`](/docs/sampling-packages/connectivity) | Connectivity status events |
+| `beacon` | Yes | Yes | [`connectivity`](/docs/sampling-packages/connectivity) | Scans for nearby [iBeacons](https://en.wikipedia.org/wiki/IBeacon) |
+| `audio`\* | Yes | Yes | [`audio`](/docs/sampling-packages/audio) | Records audio from the device microphone |
+| `noise` | Yes | Yes | [`audio`](/docs/sampling-packages/audio) | Detects ambient noise from the device microphone |
+| `apps`\* | Yes | No | [`apps`](/docs/sampling-packages/apps) | List of installed apps |
+| `appusage`\* | Yes | No | [`apps`](/docs/sampling-packages/apps) | List of app usage |
+| `phonelog`\* | Yes | No | [`communication`](/docs/sampling-packages/communication) | Log of incoming and outgoing phone calls |
+| `textmessagelog`\* | Yes | No | [`communication`](/docs/sampling-packages/communication) | Log of incoming and outgoing text messages (SMS) |
+| `textmessage` | Yes | No | [`communication`](/docs/sampling-packages/communication) | Text message (SMS) events when received |
+| `calendar`\* | Yes | Yes | [`communication`](/docs/sampling-packages/communication) | Calendar events from the calendars on the phone |
+| `survey`\* | Yes | Yes | [`survey`](/docs/sampling-packages/survey) | Data from surveys (questionnaires) through the [Research Package](/docs/flutter-plugins/research-package), and cognitive assessments from the [Cognition Package](https://pub.dev/packages/cognition_package) |
 
 ### Wearable device sampling packages
 
 | Type | Android | iOS | Package | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `health` | Yes | Yes | [`health`](https://pub.dev/packages/carp_health_package) | Different types of health data from [Apple Health](https://www.apple.com/health/) and [Google Health Connect](https://health.google/products/), which may come from connected wearable devices |
-| `movisens` | Yes | No | [`movisens`](https://pub.dev/packages/carp_movisens_package) | Activity and heart rate monitoring using the [Movisens](https://www.movisens.com/en/) [Move4](https://www.movisens.com/en/products/activity-sensor/) and [EcgMove4](https://www.movisens.com/en/products/ecg-sensor/) devices |
-| `esense` | Yes | Yes | [`esense`](https://pub.dev/packages/carp_esense_package) | Inertial measurement unit (IMU) sensor events and button press/release events from the [eSense](https://www.esense.io/) device |
-| `polar` | Yes | Yes | [`polar`](https://pub.dev/packages/carp_polar_package) | Inertial measurement (accelerometer, gyroscope, magnetometer) and heart rate (ECG, PPI, PPG, HR) data from [Polar](https://www.polar.com/en) devices |
-| `movesense` | Yes | Yes | [`movesense`](https://pub.dev/packages/carp_movesense_package) | State (tap), heart rate (HR), ECG and inertial measurement unit (IMU: accelerometer, gyroscope, magnetometer) data from [Movesense](https://www.movesense.com/) devices |
-| `watch.aware` | No | Yes | [`aware`](https://pub.dev/packages/carp_aware_package) | Motion, heart rate, battery, location, heading, Bluetooth, ambient noise and sound classification collected on an [Apple Watch](https://www.apple.com/watch/) using the [AWARE](https://github.com/awareframework/com.awareframework.ios.sensor.applewatch) watchOS framework. These measures use the `dk.carp.watch.aware` namespace; see [Apple Watch Sensing](/docs/sampling-packages/apple-watch). |
+| `health` | Yes | Yes | [`health`](/docs/sampling-packages/health) | Different types of health data from [Apple Health](https://www.apple.com/health/) and [Google Health Connect](https://health.google/products/), which may come from connected wearable devices |
+| `movisens` | Yes | Yes | [`movisens`](/docs/sampling-packages/movisens) | Activity and heart rate monitoring using the [Movisens](https://www.movisens.com/en/) [Move4](https://www.movisens.com/en/products/activity-sensor/) and [EcgMove4](https://www.movisens.com/en/products/ecg-sensor/) devices |
+| `esense` | Yes | Yes | [`esense`](/docs/sampling-packages/esense) | Inertial measurement unit (IMU) sensor events and button press/release events from the [eSense](https://www.esense.io/) device |
+| `polar` | Yes | Yes | [`polar`](/docs/sampling-packages/polar) | Inertial measurement (accelerometer, gyroscope, magnetometer) and heart rate (ECG, PPI, PPG, HR) data from [Polar](https://www.polar.com/en) devices |
+| `movesense` | Yes | Yes | [`movesense`](/docs/sampling-packages/movesense) | State (tap), heart rate (HR), ECG and inertial measurement unit (IMU: accelerometer, gyroscope, magnetometer) data from [Movesense](https://www.movesense.com/) devices |
+| `watch.aware` | No | Yes | [`aware`](/docs/sampling-packages/apple-watch) | Motion, heart rate, battery, location, heading, Bluetooth, ambient noise and sound classification collected on an [Apple Watch](https://www.apple.com/watch/) using the [AWARE](https://github.com/awareframework/com.awareframework.ios.sensor.applewatch) watchOS framework. These measures use the `dk.carp.watch.aware` namespace; see [Apple Watch Sensing](/docs/sampling-packages/apple-watch). |
 
 Each of these device measures has sub-types, such as `dk.cachet.carp.movisens.hr` for heart rate (HR) measures from the Movisens device.

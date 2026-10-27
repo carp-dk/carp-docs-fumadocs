@@ -1,0 +1,384 @@
+---
+title: Informed consent
+description: Build an informed consent flow that explains the study section by section and collects the participant's signature.
+icon: HowToReg
+---
+
+An informed consent flow is a task built around one [`RPConsentDocument`](https://pub.dev/documentation/research_package/latest/model/RPConsentDocument-class.html). The document holds the sections that explain the study and the signature that the participant gives. Two steps show it: [`RPVisualConsentStep`](https://pub.dev/documentation/research_package/latest/model/RPVisualConsentStep-class.html) presents one section per page, and [`RPConsentReviewStep`](https://pub.dev/documentation/research_package/latest/model/RPConsentReviewStep-class.html) shows the whole text and collects the agreement and the signature.
+
+The participant goes through the flow in this order:
+
+1. The visual consent step shows the sections one page at a time. Most pages have a summary and a **Learn more** link to the full text.
+2. **SEE SUMMARY** on the last section opens the review step, which shows the full text of every section.
+3. **AGREE** opens a confirmation dialog. When the participant confirms, the signature page asks for a name and a drawn signature.
+4. A completion step confirms that the consent is saved, and `onSubmit` receives the result.
+
+The participant leaves the flow with **DISAGREE** on the review step. See [Leave a consent task](#leave-a-consent-task).
+
+## Build a consent task
+
+This function builds a consent task for a four-week sleep study:
+
+```dart
+RPOrderedTask buildConsentTask() {
+  final document = RPConsentDocument(
+    title: 'Sleep and activity study',
+    sections: [
+      RPConsentSection(
+        type: RPConsentSectionType.Overview,
+        summary: 'The study looks at how your sleep relates to your activity.',
+        content:
+            'For four weeks, the app counts your steps and asks one '
+            'question about your sleep every morning.',
+      ),
+      RPConsentSection(
+        type: RPConsentSectionType.TimeCommitment,
+        summary: 'The study takes about two minutes a day.',
+        content: 'Answering the morning question takes about two minutes.',
+      ),
+      RPConsentSection(
+        type: RPConsentSectionType.PassiveDataCollection,
+        summary: 'The app collects these data in the background:',
+        dataTypes: [
+          RPDataTypeSection(
+            dataName: 'Steps',
+            dataInformation: 'Your daily step count, counted by the phone.',
+          ),
+          RPDataTypeSection(
+            dataName: 'Physical activity',
+            dataInformation: 'Whether you are still, walking or running.',
+          ),
+        ],
+      ),
+      RPConsentSection(
+        type: RPConsentSectionType.Withdrawing,
+        summary: 'You can leave the study at any time.',
+        content:
+            'To leave the study, write to the study team. The data collected '
+            'until then is deleted at your request.',
+      ),
+    ],
+  )..addSignature(RPConsentSignature(identifier: 'participantSignature'));
+
+  return RPOrderedTask(
+    identifier: 'consentTask',
+    steps: [
+      RPVisualConsentStep(
+        identifier: 'consentSections',
+        consentDocument: document,
+      ),
+      RPConsentReviewStep(
+        identifier: 'consentReview',
+        title: 'Review',
+        consentDocument: document,
+        text: 'Do you agree to take part?',
+        reasonForConsent:
+            'By tapping AGREE, you confirm that you have read the information '
+            'and agree to take part in the study.',
+      ),
+      RPCompletionStep(
+        identifier: 'consentDone',
+        title: 'Thank you',
+        text: 'Your consent is saved.',
+      ),
+    ],
+  );
+}
+```
+
+Both consent steps show the same document, and the signature belongs to the document. The `title` of the document does not appear on screen, but the consent result keeps it. A completion step ends the task.
+
+<Callout type="warning" title="Known issue">
+
+In a task that ends with the review step, the consent result arrives too late when the signature includes a drawing. `onSubmit` then receives the result without it. Put a completion step after the review step, as in the example.
+
+</Callout>
+
+Show the task with `RPUITask` on a route of its own, like any other task. See [Running tasks](/docs/flutter-plugins/research-package/running-tasks). To show it in a CARP Mobile Sensing (CAMS) study, see [Add informed consent](/docs/sampling-packages/survey/surveys#add-informed-consent).
+
+## Write the sections
+
+Each [`RPConsentSection`](https://pub.dev/documentation/research_package/latest/model/RPConsentSection-class.html) explains one topic of the study and takes these parameters:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `RPConsentSectionType` | Yes | The kind of section, which sets the default title, the illustration and the layout. See [Section types](#section-types). |
+| `title` | `String?` | No | The heading of the section. Without it, the section shows the default title of its type. A `Custom` section requires it. |
+| `summary` | `String` | Yes | A short text under the title. |
+| `content` | `String?` | No | The full text, shown on the **Learn more** page and in the review step. Set it on every section that has **Learn more**: the link fails without it. |
+| `dataTypes` | `List<RPDataTypeSection>?` | No | The data that a data collection section lists. The three data collection types require it. |
+| `permissions` | `List<RPPermissionType>?` | No | The permissions to ask for when the participant taps **NEXT** on the section. See [Permissions](/docs/flutter-plugins/research-package/permissions). |
+| `healthDataTypes` | `List<String>?` | No | The names of the health data types to ask access to with the `health` permission, such as `STEPS`. In version 3.2.0, a list of `HealthDataType` values. |
+| `customIllustration` | `Widget?` | No | An image or icon for a `Custom` section. It is not saved in JSON. |
+
+Each [`RPDataTypeSection`](https://pub.dev/documentation/research_package/latest/model/RPDataTypeSection-class.html) in `dataTypes` has a `dataName`, which the list shows, and a `dataInformation`, which appears when the participant taps the name. Both are required.
+
+Every text of a section can be a translation key. The default titles are keys too, such as `title.overview`, so a section without `title` shows the key unless the app registers an `RPLocalizations` delegate. See [Localization](/docs/flutter-plugins/research-package/localization).
+
+## Section types
+
+[`RPConsentSectionType`](https://pub.dev/documentation/research_package/latest/model/RPConsentSectionType.html) has 27 values. The 15 types that describe the study show an illustration, the title, the summary and **Learn more**:
+
+| Type | Default title |
+| --- | --- |
+| `Overview` | Overview |
+| `Welcome` | Welcome |
+| `AboutUs` | About us |
+| `Goals` | Our goal |
+| `Benefits` | Benefits for you |
+| `StudyTasks` | Study Tasks |
+| `StudySurvey` | Study Survey |
+| `TimeCommitment` | Time Commitment |
+| `Duration` | Study duration |
+| `DataGathering` | Data Gathering |
+| `DataUse` | Data Use |
+| `DataHandling` | Data handling |
+| `Privacy` | Privacy |
+| `YourRights` | Your rights |
+| `Withdrawing` | Withdrawing |
+
+Eight types explain a permission and have the same layout, with an illustration of the permission:
+
+| Type | Default title | Explains |
+| --- | --- | --- |
+| `Location` | Location | `location` and `locationAlways` |
+| `ActivityRecognition` | Physical activity | `activityRecognition` |
+| `Bluetooth` | Nearby devices | `bluetooth` |
+| `Notification` | Reminders | `notification` |
+| `Microphone` | Microphone | `microphone` |
+| `Camera` | Camera | `camera` |
+| `BackgroundSensing` | Background sensing | `ignoreBatteryOptimizations` |
+| `Health` | Health | `health` |
+
+A type does not ask for its permission by itself: list the permission in the section's `permissions`. See [Declare the permissions](/docs/flutter-plugins/research-package/permissions#declare-the-permissions).
+
+Three types list data instead. They show the title, the summary and the `dataTypes`, without an illustration and without **Learn more**:
+
+| Type | Default title |
+| --- | --- |
+| `UserDataCollection` | Data Collection from You |
+| `PassiveDataCollection` | Passive Data Collection |
+| `HealthDataCollection` | Health Data Collection |
+
+`Custom` has no default title and no illustration. Set `title`, and optionally `customIllustration`.
+
+## Show the sections
+
+`RPVisualConsentStep` shows the sections of its document one page at a time, in list order. It takes these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step and its permission result. |
+| `consentDocument` | `RPConsentDocument` | Yes | — | The document to show. |
+| `askPermission` | `bool` | No | `false` | Whether the step asks for the permissions of its sections. See [Permissions](/docs/flutter-plugins/research-package/permissions). |
+
+A progress bar at the top shows how far the participant is, unless the document has a single section. **Learn more** opens the `content` of the section on a page of its own. In a data collection section, a tap on a data type shows its `dataInformation`.
+
+**NEXT** moves to the next section, and **SEE SUMMARY** on the last section ends the step. **BACK** returns to the previous section from the second section on. The pages do not respond to swipes.
+
+Give the document at least two sections. With a single section, the step shows **NEXT** instead of **SEE SUMMARY**, and **NEXT** does nothing, so the participant cannot leave the step.
+
+The step records no result, unless it asks for permissions.
+
+## Ask for agreement
+
+`RPConsentReviewStep` shows the whole document on one scrolling page. A header asks the participant to review the form, and the title, summary and `content` of each section follow.
+
+Data collection sections show the name and the information of each data type instead. **DISAGREE** and **AGREE** stay at the bottom of the screen.
+
+The step takes these parameters:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `identifier` | `String` | Yes | Identifies the step and its consent result. |
+| `title` | `String` | Yes | Not shown on screen. |
+| `consentDocument` | `RPConsentDocument` | Yes | The document to review, the same as in the visual consent step. |
+| `text` | `String?` | No | The title of the confirmation dialog. Always set it: **AGREE** fails when it is `null`. |
+| `reasonForConsent` | `String?` | No | The text of the confirmation dialog. Always set it: **AGREE** fails when it is `null`. |
+
+**AGREE** opens a dialog with `text` as its title, `reasonForConsent` as its text, and the buttons **CANCEL** and **AGREE**. When the participant confirms with **AGREE**, the step shows the signature page. A document without a signature ends the step right away.
+
+## Collect a signature
+
+Add an [`RPConsentSignature`](https://pub.dev/documentation/research_package/latest/model/RPConsentSignature-class.html) to the document with `addSignature()`, as in the example. The review step collects only the first signature of the document.
+
+`RPConsentSignature` takes these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the signature in the document. The result uses the identifier of the review step instead. |
+| `requiresName` | `bool` | No | `true` | Asks for a first and a last name. |
+| `requiresSignatureImage` | `bool` | No | `true` | Asks for a signature drawn with a finger. |
+| `title` | `String?` | No | — | Not shown on screen. |
+
+When `requiresName` is `true`, the signature page shows the **First Name** and **Last Name** fields. When `requiresSignatureImage` is `true`, it shows a box to sign in, with **Clear** to start over. **NEXT** becomes enabled when every required part is filled in, and it ends the step.
+
+A signature records only what the participant entered. It is not a cryptographic signature, and it does not verify who the participant is.
+
+## Read the consent result
+
+The review step records an [`RPConsentSignatureResult`](https://pub.dev/documentation/research_package/latest/model/RPConsentSignatureResult-class.html) under its own identifier, `consentReview` in the example. It has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The identifier of the review step. |
+| `endDate` | `DateTime?` | When the participant agreed or signed, also available as `signingDate`. The result has no `startDate`. |
+| `consentDocument` | `RPConsentDocument` | A copy of the document with the titles, summaries, contents and data types in the language the participant saw. It leaves out `permissions`, `healthDataTypes` and `customIllustration`. |
+| `signature` | `RPSignatureResult?` | The name and the drawing, or `null` when the document has no signature. |
+| `userId` | `String?` | Not set by Research Package. |
+
+The [`RPSignatureResult`](https://pub.dev/documentation/research_package/latest/model/RPSignatureResult-class.html) in `signature` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `firstName` | `String?` | The first name, or an empty string when `requiresName` is `false`. |
+| `lastName` | `String?` | The last name, or an empty string when `requiresName` is `false`. |
+| `signatureImage` | `String?` | The drawing as a PNG image, written as a list of byte values in a string, such as `[137, 80, 78, 71, ...]`. It is `null` when `requiresSignatureImage` is `false`. |
+
+The getter `fullName` joins the first and the last name with a space.
+
+To use the drawing, decode the string into PNG bytes:
+
+```dart
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:research_package/research_package.dart';
+
+/// The signature drawing as PNG bytes, or null when there is none
+Uint8List? signaturePng(RPTaskResult result) {
+  final consent = result.getStepResultForIdentifier('consentReview');
+  if (consent is! RPConsentSignatureResult) return null;
+
+  final image = consent.signature?.signatureImage;
+  if (image == null) return null;
+  final bytes = (jsonDecode(image) as List<dynamic>).cast<int>();
+  return Uint8List.fromList(bytes);
+}
+```
+
+Show the bytes with `Image.memory()`, or save them as a PNG file. As text, the drawing takes more than four times the space of the PNG file.
+
+<Accordions>
+<Accordion title="Example consent result">
+
+The consent result of the example task, as JSON, with the drawing shortened:
+
+```json
+{
+  "__type": "RPConsentSignatureResult",
+  "identifier": "consentReview",
+  "endDate": "2026-10-27T10:04:51.682310",
+  "consentDocument": {
+    "__type": "RPConsentDocument",
+    "signatures": [
+      {
+        "__type": "RPConsentSignature",
+        "identifier": "participantSignature",
+        "requiresName": true,
+        "requiresSignatureImage": true
+      }
+    ],
+    "title": "Sleep and activity study",
+    "sections": [
+      {
+        "__type": "RPConsentSection",
+        "type": "Overview",
+        "title": "Overview",
+        "summary": "The study looks at how your sleep relates to your activity.",
+        "content": "For four weeks, the app counts your steps and asks one question about your sleep every morning."
+      },
+      {
+        "__type": "RPConsentSection",
+        "type": "TimeCommitment",
+        "title": "Time Commitment",
+        "summary": "The study takes about two minutes a day.",
+        "content": "Answering the morning question takes about two minutes."
+      },
+      {
+        "__type": "RPConsentSection",
+        "type": "PassiveDataCollection",
+        "title": "Passive Data Collection",
+        "summary": "The app collects these data in the background:",
+        "dataTypes": [
+          {
+            "__type": "RPDataTypeSection",
+            "dataName": "Steps",
+            "dataInformation": "Your daily step count, counted by the phone."
+          },
+          {
+            "__type": "RPDataTypeSection",
+            "dataName": "Physical activity",
+            "dataInformation": "Whether you are still, walking or running."
+          }
+        ]
+      },
+      {
+        "__type": "RPConsentSection",
+        "type": "Withdrawing",
+        "title": "Withdrawing",
+        "summary": "You can leave the study at any time.",
+        "content": "To leave the study, write to the study team. The data collected until then is deleted at your request."
+      }
+    ]
+  },
+  "signature": {
+    "__type": "RPSignatureResult",
+    "firstName": "Anna",
+    "lastName": "Jensen",
+    "signatureImage": "[137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, ...]"
+  }
+}
+```
+
+The section titles are the English default titles, because the app registers `RPLocalizations.delegate`.
+
+</Accordion>
+</Accordions>
+
+## Leave a consent task
+
+A task that contains an `RPConsentReviewStep` is a consent task. Apple's guidelines for [pre-alert screens](https://developer.apple.com/design/human-interface-guidelines/privacy#Pre-alert-screens-windows-or-views) require that a screen explaining a permission request offer no way to leave it without seeing the system alert. A consent task follows them:
+
+- The top bar has no close button.
+- The visual consent step has no cancel button. As in every task, the system back button and back gesture do nothing.
+- **BACK** is hidden on a section whose permissions have not been asked for yet.
+
+The participant leaves a consent task with **DISAGREE** on the review step. The leave dialog asks "Leave consent form?" and says "You have not given your consent yet." **LEAVE** calls `onCancel` with the result so far and closes the task.
+
+That result holds no consent result, but it holds the permission result when the visual consent step asked for permissions.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Learn more does nothing">
+
+Set `content` on the section. Without it, the tap fails and the page does not open.
+
+</Accordion>
+<Accordion title="NEXT does nothing on the only section">
+
+Add a second section to the document. With one section, the visual consent step never shows **SEE SUMMARY** and cannot end.
+
+</Accordion>
+<Accordion title="AGREE shows an error instead of the dialog">
+
+Set both `text` and `reasonForConsent` on the review step. The confirmation dialog needs both.
+
+</Accordion>
+<Accordion title="A data collection section shows an error">
+
+Set `dataTypes` on every `UserDataCollection`, `PassiveDataCollection` and `HealthDataCollection` section.
+
+</Accordion>
+<Accordion title="Section titles show keys such as title.overview">
+
+Register an `RPLocalizations` delegate, or set `title` on each section. See [Localization](/docs/flutter-plugins/research-package/localization).
+
+</Accordion>
+<Accordion title="The result in onSubmit has no consent result">
+
+Put a completion step after the review step, as the [example task](#build-a-consent-task) does.
+
+</Accordion>
+</Accordions>

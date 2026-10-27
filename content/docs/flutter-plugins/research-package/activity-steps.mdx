@@ -1,0 +1,212 @@
+---
+title: Activity steps
+description: Build interactive test steps on RPActivityStep, log their timings and gestures, and read the activity result.
+icon: Psychology
+---
+
+An **activity step** runs an interactive test, such as a reaction time or tapping test, instead of asking a question. Activity steps are subclasses of [`RPActivityStep`](https://pub.dev/documentation/research_package/latest/model/RPActivityStep-class.html) that draw the test and report its outcome in an [`RPActivityResult`](https://pub.dev/documentation/research_package/latest/model/RPActivityResult-class.html).
+
+## How activity steps work
+
+When an activity step appears, these things happen:
+
+1. The step creates an `RPActivityResult` with its identifier, and an [`RPActivityEventLogger`](https://pub.dev/documentation/research_package/latest/ui/RPActivityEventLogger-class.html) that writes into that result.
+2. It calls its `stepBody()` with an `onResultChange` callback and the logger, and shows the returned widget above the bottom bar.
+3. The test records its stages and the gestures of the participant through the logger.
+4. The test reports its outcome by calling `onResultChange`. Each call stores the value under the key `result`, sets `endDate` and records the activity result in the task result.
+5. A value that is not `null` enables **NEXT**, and the participant moves on.
+
+`RPActivityStep` takes these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `identifier` | `String` | Yes | — | Identifies the step and its result. |
+| `includeInstructions` | `bool` | No | `true` | Whether the test shows its own instructions before it starts. |
+| `includeResults` | `bool` | No | `true` | Whether the test shows its outcome after it ends. |
+
+Research Package does not read `includeInstructions` and `includeResults` itself: the subclass decides what they change. The `title` of an activity step is always `RPActivityStep` and is not shown. `calculateScore()` returns `0` unless a subclass overrides it, and Research Package never calls it.
+
+## Write an activity step
+
+Extend `RPActivityStep` and override `stepBody()` to return the widget of the test. This test counts taps on a button for 10 seconds, logs each tap and reports the count:
+
+```dart title="lib/tap_count_activity.dart"
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:research_package/research_package.dart';
+
+/// A test that counts taps on a button for 10 seconds
+class TapCountActivity extends RPActivityStep { // [!code highlight]
+  TapCountActivity({required super.identifier, super.includeInstructions});
+
+  @override
+  Widget stepBody( // [!code highlight]
+    dynamic Function(dynamic) onResultChange,
+    RPActivityEventLogger eventLogger,
+  ) => TapCountTest(this, onResultChange, eventLogger);
+}
+
+class TapCountTest extends StatefulWidget {
+  const TapCountTest(
+    this.activity,
+    this.onResultChange,
+    this.eventLogger, {
+    super.key,
+  });
+
+  final TapCountActivity activity;
+  final dynamic Function(dynamic) onResultChange;
+  final RPActivityEventLogger eventLogger;
+
+  @override
+  State<TapCountTest> createState() => _TapCountTestState();
+}
+
+class _TapCountTestState extends State<TapCountTest> {
+  int _taps = 0;
+  bool _running = false;
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.eventLogger.instructionStarted();
+  }
+
+  void _start() {
+    widget.eventLogger.instructionEnded();
+    widget.eventLogger.testStarted();
+    setState(() => _running = true);
+    Timer(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      widget.eventLogger.testEnded();
+      setState(() {
+        _running = false;
+        _done = true;
+      });
+      widget.onResultChange({'taps': _taps}); // [!code highlight]
+    });
+  }
+
+  void _tap() {
+    widget.eventLogger.addCorrectGesture('Button tap', 'Tap ${_taps + 1}'); // [!code highlight]
+    setState(() => _taps++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_done) return Center(child: Text('$_taps taps'));
+    if (_running) {
+      return Center(
+        child: FilledButton(onPressed: _tap, child: const Text('Tap')),
+      );
+    }
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.activity.includeInstructions)
+            const Text('Tap the button as often as you can for 10 seconds.'),
+          FilledButton(onPressed: _start, child: const Text('Start')),
+        ],
+      ),
+    );
+  }
+}
+```
+
+The test calls `onResultChange` once, after the timer. Until then, **NEXT** stays disabled, so the participant cannot skip the test. Pass a value that JSON can encode, such as a map of numbers and strings: the result stores it as it is.
+
+Use the step in a task like any other step:
+
+```dart
+final tapTest = RPOrderedTask(
+  identifier: 'tapTest',
+  steps: [
+    TapCountActivity(identifier: 'tapCount'),
+    RPCompletionStep(
+      identifier: 'done',
+      title: 'Well done',
+      text: 'Your taps are counted.',
+    ),
+  ],
+);
+```
+
+To load a task with your own activity step from JSON, add JSON support to the subclass. It needs its own `fromJsonFunction` getter, a `fromJson()` factory and a registration in [`FromJsonFactory`](https://pub.dev/documentation/carp_serializable/latest/carp_serializable/FromJsonFactory-class.html) from the `carp_serializable` package.
+
+Without its own `fromJsonFunction`, the subclass inherits the one of `RPActivityStep`, and the task loads a plain `RPActivityStep` that shows an empty screen. For the code, see [Add your own step classes](/docs/flutter-plugins/research-package/json#add-your-own-step-classes).
+
+## Event logger
+
+`RPActivityEventLogger` stamps the current time with each call:
+
+| Method | Records |
+| --- | --- |
+| `instructionStarted()`, `instructionEnded()` | `instructionStarted` and `instructionEnded` in `stepTimes` |
+| `testShown()` | `testShown`: the test is on screen, which may be before it starts |
+| `testStarted()`, `testEnded()` | `testStarted` and `testEnded` |
+| `resultsShown()`, `resultsClosed()` | `resultsShown` and `resultsClosed` |
+| `addCorrectGesture(type, description)` | An `Interaction` with the correctness `Correct gesture` |
+| `addWrongGesture(type, description)` | An `Interaction` with the correctness `Wrong gesture` |
+
+`type` and `description` are free text, such as `Button tap` and the number of the tap.
+
+## Read the activity result
+
+The step records an `RPActivityResult` under its own identifier, `tapCount` in the example. It has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `identifier` | `String` | The identifier of the step. |
+| `results` | `Map<String, dynamic>` | The value of the last `onResultChange` call, under the key `result`. |
+| `stepTimes` | [`StepTimes`](https://pub.dev/documentation/research_package/latest/model/StepTimes-class.html) | The times the logger recorded. Times that the test never logged stay `null`. |
+| `interactions` | `List<Interaction>` | The gestures the logger recorded, as [`Interaction`](https://pub.dev/documentation/research_package/latest/model/Interaction-class.html) objects with `time`, `correctness`, `type` and `description`. |
+| `endDate` | `DateTime?` | When the test last reported a result. |
+| `startDate` | `DateTime?` | Not set by activity steps. |
+
+Look up the result by the step identifier, then read the outcome that the test reported:
+
+```dart
+void printTapCount(RPTaskResult result) {
+  final tapResult = result.getStepResultForIdentifier('tapCount');
+  if (tapResult is RPActivityResult) {
+    final outcome = tapResult.results['result'];
+    if (outcome is Map) {
+      print('Taps: ${outcome['taps']}');
+    }
+    print('Gestures logged: ${tapResult.interactions.length}');
+  }
+}
+```
+
+After three taps, the result of the tapping test is:
+
+```json
+{
+  "__type": "RPActivityResult",
+  "identifier": "tapCount",
+  "endDate": "2026-10-27T10:12:31.904211",
+  "results": { "result": { "taps": 3 } },
+  "stepTimes": {
+    "instruction_started": "2026-10-27T10:12:15.112054",
+    "instruction_ended": "2026-10-27T10:12:21.871530",
+    "test_started": "2026-10-27T10:12:21.871662",
+    "test_ended": "2026-10-27T10:12:31.903987"
+  },
+  "interactions": [
+    { "time": "2026-10-27T10:12:22.240117", "correctness": "Correct gesture", "type": "Button tap", "description": "Tap 1" },
+    { "time": "2026-10-27T10:12:22.701846", "correctness": "Correct gesture", "type": "Button tap", "description": "Tap 2" },
+    { "time": "2026-10-27T10:12:23.355201", "correctness": "Correct gesture", "type": "Button tap", "description": "Tap 3" }
+  ]
+}
+```
+
+In JSON, the keys of `stepTimes` are in snake case, unset times are left out, and the interactions have no `__type`. For the dates and for results in general, see [Results](/docs/flutter-plugins/research-package/results).
+
+## Cognitive tests
+
+[`cognition_package`](https://pub.dev/packages/cognition_package) has 14 cognitive tests built on `RPActivityStep`, such as the flanker, Stroop and trail making tests. Its version 1.9.1 requires `research_package` 3.x, so an app that uses it gets `research_package` 3.2.0. Activity steps and activity results work the same in that version.
+
+For the tests, their parameters and their results, see [Cognitive tests](/docs/sampling-packages/survey/cognitive-tests).

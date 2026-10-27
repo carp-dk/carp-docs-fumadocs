@@ -1,0 +1,159 @@
+---
+title: App usage
+description: The APP_USAGE measure, which records the foreground time of each app over a time window from Android usage statistics.
+icon: Timer
+---
+
+`dk.cachet.carp.appusage` is a [one-time](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone, on Android only, through the [`app_usage`](https://pub.dev/packages/app_usage) plugin. Add it as `Measure(type: AppsSamplingPackage.APP_USAGE)`. Each time its trigger fires, it collects the usage of a time window that ends at that moment.
+
+## Add the measure to a protocol
+
+Give the measure its own [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html), so that each window starts where the previous one ended, also after an app restart. Add it with a trigger that repeats:
+
+<Tabs items={['PeriodicTrigger', 'AppLifecycleTrigger']}>
+<Tab value="PeriodicTrigger">
+
+A [`PeriodicTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicTrigger-class.html) collects when sampling starts and then once per period:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 1)),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: AppsSamplingPackage.APP_USAGE,
+        samplingConfiguration: HistoricSamplingConfiguration( // [!code highlight]
+          past: const Duration(days: 1), // [!code highlight]
+        ), // [!code highlight]
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+</Tab>
+<Tab value="AppLifecycleTrigger">
+
+An [`AppLifecycleTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/AppLifecycleTrigger-class.html) collects each time the app returns to the foreground. `AppLifecycleState` comes from `package:flutter/widgets.dart`:
+
+```dart
+protocol.addTaskControl(
+  AppLifecycleTrigger({AppLifecycleState.resumed}),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: AppsSamplingPackage.APP_USAGE,
+        samplingConfiguration: HistoricSamplingConfiguration( // [!code highlight]
+          past: const Duration(days: 1), // [!code highlight]
+        ), // [!code highlight]
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+</Tab>
+</Tabs>
+
+Collect app usage with one measure and one trigger. Two app usage measures keep separate windows, which overlap.
+
+## Configuration
+
+`HistoricSamplingConfiguration` has these properties:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `past` | `Duration` | 1 day | How far back the window reaches when the measure has not collected before. |
+| `future` | `Duration` | 1 day | Not used by this measure. |
+| `lastTime` | `DateTime?` | `null` | When the measure last collected. CARP Mobile Sensing (CAMS) sets it after each collection. |
+
+Without a configuration on the measure, the package default applies, with a `past` of 1 day.
+
+## Time window
+
+Each collection covers a window from `start` to `end`:
+
+1. `start` is `lastTime` if the measure collected before, otherwise the current time minus `past`.
+2. `end` is the current time.
+3. After the collection, CAMS sets `lastTime` to the current time, so the next window starts where this one ended.
+
+<Callout type="warning" title="Known issue">
+
+Without its own configuration, the measure keeps `lastTime` in memory only. After an app restart, the first window therefore starts `past` before the current time again and overlaps data that was already collected. Give the measure its own `HistoricSamplingConfiguration`, as in the examples above, so that CAMS saves `lastTime` with the deployment.
+
+</Callout>
+
+## Precision
+
+The `app_usage` plugin states that Android's usage statistics are precise to a day only. The usage of a window therefore comes from Android's statistics for the periods that overlap the window, which can be longer than the window. Each app's `startDate` and `endDate` show the period that its statistics cover.
+
+Use windows of a day or longer. Do not add up the usage of consecutive windows: a period that overlaps two windows counts in both.
+
+## Usage access
+
+The measure needs the participant to turn on **Usage access** for the app, which CAMS does not ask for. When access is missing, the `app_usage` plugin opens the **Usage access** settings screen each time the measure collects. The measurement then has an empty `usage` map.
+
+For how to prepare participants for this setting, see [Installation](/docs/sampling-packages/apps/installation#usage-access).
+
+## Limitations
+
+- In `usage`, `name` is the last part of the package name, not the app name. To get app names, join with the [installed apps](/docs/sampling-packages/apps/installed-apps) on `packageName`.
+- `lastForeground` is not the last time the app was in the foreground. See [Data](#data).
+- `start` and `end` are in UTC, while the dates in `usage` are in local time without an offset.
+- Usage is counted in whole seconds, and apps without foreground time are left out.
+- If the phone's clock is set back to before `lastTime`, each collection fails until the clock passes `lastTime` again. The data manager then stores an error measurement instead of usage data.
+- The package has no privacy transformer, so package names and usage times are stored as collected.
+- The measure does not run on iOS.
+
+## Data
+
+Each measurement holds an [`AppUsage`](https://pub.dev/documentation/carp_apps_package/latest/apps/AppUsage-class.html) object with the `__type` `dk.cachet.carp.appusage`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `start` | `DateTime` | Start of the window, in UTC. |
+| `end` | `DateTime` | End of the window, in UTC. |
+| `usage` | `Map<String, AppUsageInfo>` | The usage of each app with foreground time, keyed by package name. Empty when usage access is missing. |
+
+Each value in `usage` is an [`AppUsageInfo`](https://pub.dev/documentation/carp_apps_package/latest/apps/AppUsageInfo-class.html):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `String` | The last part of the package name, such as `music` for `com.spotify.music`. Not the app name. |
+| `packageName` | `String` | The full package name. |
+| `usage` | `Duration` | Total time in the foreground, in whole seconds. In JSON, an integer number of microseconds. |
+| `startDate` | `DateTime` | Start of the period that Android's statistics for the app cover, in local time without an offset. |
+| `endDate` | `DateTime` | End of that period, in local time without an offset. |
+| `lastForeground` | `DateTime` | On Android 10 or later, the last time that one of the app's foreground services was used. On Android 9 and lower, the epoch (`1970-01-01`) in local time, which may also appear for apps without foreground services. |
+
+The measurement's `sensorStartTime` and `sensorEndTime` hold the window in microseconds since the epoch. The data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.appusage",
+  "start": "2026-10-25T09:00:04.700012Z",
+  "end": "2026-10-26T09:00:04.812345Z",
+  "usage": {
+    "com.spotify.music": {
+      "name": "music",
+      "packageName": "com.spotify.music",
+      "usage": 2712000000,
+      "startDate": "2026-10-25T00:00:00.000",
+      "endDate": "2026-10-26T09:58:12.000",
+      "lastForeground": "2026-10-26T08:41:27.000"
+    },
+    "com.instagram.android": {
+      "name": "android",
+      "packageName": "com.instagram.android",
+      "usage": 1440000000,
+      "startDate": "2026-10-25T00:00:00.000",
+      "endDate": "2026-10-26T09:31:40.000",
+      "lastForeground": "1970-01-01T01:00:00.000"
+    }
+  }
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

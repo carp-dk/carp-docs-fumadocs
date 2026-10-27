@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { BaseLayoutProps } from '@/components/m3e/layout';
 import { appName } from './shared';
-import { AccountTreeIcon, BoltIcon, BookIcon, BugIcon, CodeIcon, DatabaseIcon, DatasetIcon, DownloadIcon, ExtensionIcon, HeartIcon, HubIcon, MailIcon, SchoolIcon, SensorsIcon, StarIcon, StorageIcon, WatchIcon } from '@/components/ui/icons';
+import { AccountTreeIcon, AppsIcon, AssignmentIcon, BoltIcon, BookIcon, BugIcon, BuildIcon, CallIcon, CodeIcon, DatabaseIcon, DatasetIcon, DownloadIcon, EcgHeartIcon, ExtensionIcon, FitnessTrackerIcon, HeadphonesIcon, HeartIcon, HubIcon, LocationIcon, MailIcon, MicIcon, MonitorHeartIcon, QuizIcon, SchoolIcon, SensorsIcon, StarIcon, StorageIcon, VitalSignsIcon, WatchIcon, WifiIcon } from '@/components/ui/icons';
 import { BrandMark, DiscordIcon, GitHubIcon } from '@/components/ui/brand-icons';
 
 // Each Flutter package: docs section, pub.dev name and API reference. The category picks its
@@ -10,8 +10,20 @@ type Category = 'framework' | 'plugin' | 'sampling';
 const packages: { text: string; name: string; summary: string; url: string; icon: ReactNode; category: Category }[] = [
   { text: 'Mobile Sensing', name: 'carp_mobile_sensing', summary: 'Collect data from phone sensors, wearables and users', url: '/docs/mobile-sensing', icon: <SensorsIcon />, category: 'framework' },
   { text: 'Health', name: 'health', summary: 'Read and write health data from Android & iOS', url: '/docs/flutter-plugins/health', icon: <HeartIcon />, category: 'plugin' },
+  { text: 'Research Package', name: 'research_package', summary: 'Surveys, informed consent and results in Flutter apps', url: '/docs/flutter-plugins/research-package', icon: <AssignmentIcon />, category: 'plugin' },
   { text: 'Debug Toolkit', name: 'carp_debug_flutter', summary: 'In-app debugging tools for Flutter apps', url: '/docs/flutter-plugins/debug-toolkit', icon: <BugIcon />, category: 'plugin' },
+  { text: 'Context Sampling', name: 'carp_context_package', summary: 'Location, activity, mobility, weather and air quality', url: '/docs/sampling-packages/context', icon: <LocationIcon />, category: 'sampling' },
+  { text: 'Survey Sampling', name: 'carp_survey_package', summary: 'Surveys and cognitive tests as app tasks', url: '/docs/sampling-packages/survey', icon: <QuizIcon />, category: 'sampling' },
+  { text: 'Health Sampling', name: 'carp_health_package', summary: 'Health Connect and Apple Health data in a study', url: '/docs/sampling-packages/health', icon: <MonitorHeartIcon />, category: 'sampling' },
+  { text: 'Audio Sampling', name: 'carp_audio_package', summary: 'Ambient noise and audio recordings', url: '/docs/sampling-packages/audio', icon: <MicIcon />, category: 'sampling' },
+  { text: 'Connectivity Sampling', name: 'carp_connectivity_package', summary: 'Network status, Wi-Fi, Bluetooth and beacons', url: '/docs/sampling-packages/connectivity', icon: <WifiIcon />, category: 'sampling' },
+  { text: 'Communication Sampling', name: 'carp_communication_package', summary: 'Phone calls, text messages and calendar events', url: '/docs/sampling-packages/communication', icon: <CallIcon />, category: 'sampling' },
+  { text: 'Apps Sampling', name: 'carp_apps_package', summary: 'Installed apps and app usage on Android', url: '/docs/sampling-packages/apps', icon: <AppsIcon />, category: 'sampling' },
   { text: 'Apple Watch Sensing', name: 'carp_aware_package', summary: 'Passive sensor data from an Apple Watch', url: '/docs/sampling-packages/apple-watch', icon: <WatchIcon />, category: 'sampling' },
+  { text: 'Polar Sampling', name: 'carp_polar_package', summary: 'Heart rate, ECG and motion from Polar sensors', url: '/docs/sampling-packages/polar', icon: <EcgHeartIcon />, category: 'sampling' },
+  { text: 'Movesense Sampling', name: 'carp_movesense_package', summary: 'Heart rate, ECG and motion from Movesense sensors', url: '/docs/sampling-packages/movesense', icon: <VitalSignsIcon />, category: 'sampling' },
+  { text: 'Movisens Sampling', name: 'carp_movisens_package', summary: 'Activity, heart rate and EDA from Movisens sensors', url: '/docs/sampling-packages/movisens', icon: <FitnessTrackerIcon />, category: 'sampling' },
+  { text: 'eSense Sampling', name: 'carp_esense_package', summary: 'Button and motion events from eSense earables', url: '/docs/sampling-packages/esense', icon: <HeadphonesIcon />, category: 'sampling' },
 ];
 const packageLinks = (category: Category) => packages.filter(item => item.category === category).map(({ text, name, summary, url, icon }) => ({ text, badge: name, description: summary, url, icon }));
 
@@ -39,10 +51,12 @@ export function baseOptions(): BaseLayoutProps {
         { text: 'Measure types', description: 'Every measure, by sampling package and platform', url: '/docs/mobile-sensing/measure-types', icon: <DatasetIcon /> },
         { text: 'Data managers', description: 'Store or upload collected measurements', url: '/docs/mobile-sensing/data-managers', icon: <StorageIcon /> },
         { text: 'Extending CAMS', description: 'Custom triggers, sampling packages and data managers', url: '/docs/mobile-sensing/extending', icon: <ExtensionIcon /> },
+        { text: 'Building sampling packages', description: 'Create, test and publish your own sampling package', url: '/docs/mobile-sensing/building-sampling-packages', icon: <BuildIcon /> },
         { text: 'Best practices', description: 'Background sensing, iOS setup and build issues', url: '/docs/mobile-sensing/best-practices', icon: <StarIcon /> },
       ] },
       { type: 'menu', text: 'Flutter Plugins', items: packageLinks('plugin') },
-      { type: 'menu', text: 'Sampling Packages', items: packageLinks('sampling') },
+      // Twelve sampling packages: two columns keep the menu within the viewport.
+      { type: 'menu', variant: 'navigation', text: 'Sampling Packages', items: packageLinks('sampling') },
       // { type: 'menu', text: 'API Reference', items: [
       //   { text: 'All CARP packages', description: 'API documentation on pub.dev', url: '/docs/api-reference', icon: <PackageIcon /> },
       //   ...packages.map(({ name, icon }) => ({ text: name, description: 'pub.dev API reference', url: `https://pub.dev/documentation/${name}/latest/`, external: true, icon })),

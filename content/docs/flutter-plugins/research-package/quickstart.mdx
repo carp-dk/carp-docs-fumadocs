@@ -1,0 +1,233 @@
+---
+title: Quickstart
+description: Build a short survey, show it with RPUITask and print the participant's answers as JSON.
+icon: Bolt
+---
+
+Build a Flutter app that shows a two-question daily survey and prints the answers as JSON when the participant finishes it.
+
+## Prerequisites
+
+- A Flutter app set up as described in [Installation](/docs/flutter-plugins/research-package/installation), including the translation file `assets/lang/en.json`.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:research_package/research_package.dart';
+
+void main() {
+  // 1. Initialize Research Package
+  ResearchPackage.ensureInitialized(); // [!code highlight]
+
+  runApp(const SurveyApp());
+}
+
+class SurveyApp extends StatelessWidget {
+  const SurveyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    // 2. Load the texts of Research Package and of the app
+    localizationsDelegates: [
+      RPLocalizations.delegate, // [!code highlight]
+      GlobalMaterialLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    supportedLocales: const [Locale('en')],
+    home: const HomePage(),
+  );
+}
+
+// 3. Define the survey
+RPOrderedTask buildSurvey() => RPOrderedTask( // [!code highlight]
+  identifier: 'dailyCheckIn',
+  steps: [
+    RPInstructionStep(
+      identifier: 'intro',
+      title: 'Daily check-in',
+      text: 'Two short questions about the last day.',
+    ),
+    RPQuestionStep(
+      identifier: 'sleepQuality',
+      title: 'How well did you sleep last night?',
+      answerFormat: RPChoiceAnswerFormat(
+        answerStyle: RPChoiceAnswerStyle.SingleChoice,
+        choices: [
+          RPChoice(text: 'Very well', value: 3),
+          RPChoice(text: 'Fairly well', value: 2),
+          RPChoice(text: 'Poorly', value: 1),
+          RPChoice(text: 'Very poorly', value: 0),
+        ],
+      ),
+    ),
+    RPQuestionStep(
+      identifier: 'coffeeCups',
+      title: 'How many cups of coffee did you drink yesterday?',
+      answerFormat: RPIntegerAnswerFormat(
+        minValue: 0,
+        maxValue: 20,
+        suffix: 'cups',
+      ),
+    ),
+    RPCompletionStep(
+      identifier: 'done',
+      title: 'Thank you',
+      text: 'Your answers are saved.',
+    ),
+  ],
+);
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: FilledButton(
+        // 4. Show a new survey on a new route
+        onPressed: () {
+          final task = buildSurvey();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => SurveyPage(task: task)),
+          );
+        },
+        child: const Text('Start survey'),
+      ),
+    ),
+  );
+}
+
+class SurveyPage extends StatelessWidget {
+  const SurveyPage({super.key, required this.task});
+
+  final RPOrderedTask task;
+
+  @override
+  Widget build(BuildContext context) => RPUITask( // [!code highlight]
+    task: task,
+    // 5. Print the result as JSON
+    onSubmit: (RPTaskResult result) => print(jsonEncode(result)), // [!code highlight]
+    onCancel: (RPTaskResult? result) => print('Survey left before the end'),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Initialize** | `ResearchPackage.ensureInitialized()` registers the model classes, which `fromJson()` needs to load tasks and results from JSON. This app builds its survey in Dart, so the call only prepares for later JSON use. |
+| **2. Texts** | `RPLocalizations.delegate` loads the package's own texts, such as **NEXT** and **DONE**, and your translations from `assets/lang/en.json`. The `GlobalMaterialLocalizations`, `GlobalCupertinoLocalizations` and `GlobalWidgetsLocalizations` delegates add Flutter's own texts for each language you add to `supportedLocales`. |
+| **3. Survey** | An [`RPOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPOrderedTask-class.html) shows its steps in order: an instruction, two questions and a completion screen. Each question has an answer format that decides how the participant answers. |
+| **4. Route** | Each tap builds a new task and shows it on a route of its own. A new task per run matters, because some objects in a task change while it runs. [`RPUITask`](https://pub.dev/documentation/research_package/latest/ui/RPUITask-class.html) closes the route by itself after the last step and when the participant leaves the survey. |
+| **5. Result** | `onSubmit` receives one [`RPTaskResult`](https://pub.dev/documentation/research_package/latest/model/RPTaskResult-class.html) with a result per question, keyed by the step identifier. `onCancel` runs instead when the participant leaves the survey early. |
+
+## Run the app
+
+Run the app with `flutter run` and tap **Start survey**. The top bar shows the position, such as "1 of 4" on the first screen. **NEXT** is enabled once the question on screen has an answer.
+
+After **DONE** on the last screen, the survey closes and the console shows the result, formatted here for reading:
+
+```json
+{
+  "__type": "RPTaskResult",
+  "identifier": "dailyCheckIn",
+  "startDate": "2026-10-27T08:14:41.207415",
+  "endDate": "2026-10-27T08:15:02.118346",
+  "results": {
+    "sleepQuality": {
+      "__type": "RPStepResult",
+      "identifier": "sleepQuality",
+      "startDate": "2026-10-27T08:15:02.119352",
+      "endDate": "2026-10-27T08:15:02.119571",
+      "questionTitle": "How well did you sleep last night?",
+      "results": {
+        "answer": [
+          { "__type": "RPChoice", "text": "Fairly well", "value": 2, "isFreeText": false }
+        ]
+      },
+      "answerFormat": {
+        "__type": "RPChoiceAnswerFormat",
+        "questionType": "SingleChoice",
+        "choices": [
+          { "__type": "RPChoice", "text": "Very well", "value": 3, "isFreeText": false },
+          { "__type": "RPChoice", "text": "Fairly well", "value": 2, "isFreeText": false },
+          { "__type": "RPChoice", "text": "Poorly", "value": 1, "isFreeText": false },
+          { "__type": "RPChoice", "text": "Very poorly", "value": 0, "isFreeText": false }
+        ],
+        "answerStyle": "SingleChoice"
+      }
+    },
+    "coffeeCups": {
+      "__type": "RPStepResult",
+      "identifier": "coffeeCups",
+      "startDate": "2026-10-27T08:15:02.119587",
+      "endDate": "2026-10-27T08:15:02.119591",
+      "questionTitle": "How many cups of coffee did you drink yesterday?",
+      "results": { "answer": "2" },
+      "answerFormat": {
+        "__type": "RPIntegerAnswerFormat",
+        "minValue": 0,
+        "maxValue": 20,
+        "suffix": "cups",
+        "questionType": "Integer"
+      }
+    }
+  }
+}
+```
+
+The instruction and completion steps record nothing. The choice question stores a list of the selected choices, and the integer question stores the typed text as a string.
+
+Because the app registers `RPLocalizations`, both step results carry the time of submission as their dates, not the time of the answer. See [Timestamps](/docs/flutter-plugins/research-package/results#timestamps).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The app shows a blank screen at startup">
+
+Add the file `assets/lang/en.json`, declare `assets/lang/` under `flutter: assets` in `pubspec.yaml`, and restart the app. `RPLocalizations.delegate` fails to load without the file, and Flutter does not show the first screen until every delegate has loaded.
+
+</Accordion>
+<Accordion title="NEXT stays disabled">
+
+Give the question on screen a valid answer. An answer is missing or invalid when:
+
+- the integer field holds anything other than a whole number from `minValue` to `maxValue`;
+- in a single choice, the participant taps the selected option again, which clears the selection;
+- the participant has not moved a slider or turned a date picker yet.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Tasks and steps" href="/docs/flutter-plugins/research-package/tasks-and-steps" icon="AccountTree">
+
+Task classes and every step type, with their parameters.
+
+</Card>
+<Card title="Answer formats" href="/docs/flutter-plugins/research-package/answer-formats" icon="EditNote">
+
+The seven answer formats and the value each one stores.
+
+</Card>
+<Card title="Results" href="/docs/flutter-plugins/research-package/results" icon="Dataset">
+
+Result classes, answer values, timestamps and the JSON format.
+
+</Card>
+<Card title="Running tasks" href="/docs/flutter-plugins/research-package/running-tasks" icon="Play">
+
+Show a task, handle its callbacks and customize its bars.
+
+</Card>
+</Cards>

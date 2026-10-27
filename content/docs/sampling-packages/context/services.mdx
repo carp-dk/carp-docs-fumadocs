@@ -1,0 +1,186 @@
+---
+title: Services
+description: The LocationService, WeatherService and AirQualityService devices, their settings and how they connect.
+icon: Tune
+---
+
+Five of the six measures run on **services**: connected devices that stand for a data source, not a physical sensor. [`LocationService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationService-class.html) stands for the phone's location service, and [`WeatherService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/WeatherService-class.html) and [`AirQualityService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/AirQualityService-class.html) stand for two web services. `ACTIVITY` runs on the phone itself.
+
+| Device | Device type | Measures |
+| --- | --- | --- |
+| `Smartphone` | `dk.carp.cams.devices.Smartphone` | `ACTIVITY` |
+| `LocationService` | `dk.carp.cams.devices.LocationService` | `LOCATION`, `GEOFENCE`, `MOBILITY` |
+| `WeatherService` | `dk.carp.cams.devices.WeatherService` | `WEATHER` |
+| `AirQualityService` | `dk.carp.cams.devices.AirQualityService` | `AIR_QUALITY` |
+
+## Services in a protocol
+
+Add each service as a connected device of the phone, and target each task at the device that its measures run on:
+
+```dart
+final locationService = LocationService();
+final weatherService = WeatherService(apiKey: 'your-openweather-api-key');
+final airQualityService = AirQualityService(apiKey: 'your-waqi-token');
+protocol
+  ..addConnectedDevice(locationService, phone)
+  ..addConnectedDevice(weatherService, phone)
+  ..addConnectedDevice(airQualityService, phone);
+
+// Location measures run on the location service
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.LOCATION)]),
+  locationService,
+);
+
+// Weather and air quality run on their own services
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(minutes: 30)),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.WEATHER)]),
+  weatherService,
+);
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(minutes: 30)),
+  BackgroundTask(
+    measures: [Measure(type: ContextSamplingPackage.AIR_QUALITY)],
+  ),
+  airQualityService,
+);
+```
+
+Each probe reads from the service of its measure, whatever device its task targets. The target decides when the task starts: CARP Mobile Sensing (CAMS) resumes a task only while its target device is connected. A task targeted at `locationService` therefore waits until the location service connects, after the participant grants location access.
+
+Add a `LocationService` to every protocol that uses `LOCATION`, `GEOFENCE` or `MOBILITY`. Without one, the location manager gets no settings, and the measures use the defaults of the `location` plugin. These are high accuracy and a location every 5 seconds on Android, and up to one location per second on iOS.
+
+<Accordions>
+<Accordion title="Services in protocol JSON">
+
+In the JSON of a protocol, the services are entries in `connectedDevices`. With the settings above:
+
+```json
+[
+  {
+    "__type": "dk.carp.cams.devices.LocationService",
+    "roleName": "Location Service",
+    "isOptional": true,
+    "defaultSamplingConfiguration": {},
+    "accuracy": "balanced",
+    "distance": 10.0,
+    "interval": 60000000,
+    "notificationOnTapBringToFront": false
+  },
+  {
+    "__type": "dk.carp.cams.devices.WeatherService",
+    "roleName": "Weather Service",
+    "isOptional": true,
+    "defaultSamplingConfiguration": {},
+    "apiKey": "your-openweather-api-key"
+  },
+  {
+    "__type": "dk.carp.cams.devices.AirQualityService",
+    "roleName": "Air Quality Service",
+    "isOptional": true,
+    "defaultSamplingConfiguration": {},
+    "apiKey": "your-waqi-token"
+  }
+]
+```
+
+`interval` is in microseconds. Protocols from CAMS 1.x, which name the services in the `dk.cachet.carp.common.application.devices` namespace, still load.
+
+</Accordion>
+</Accordions>
+
+## Connection rules
+
+CAMS connects the services when it deploys the study, after it has asked for permissions, and again each time the app starts. A service connects when:
+
+| Service | Condition |
+| --- | --- |
+| `LocationService` | The participant has granted location access with precise location, and the phone's location service is on. Connecting applies the service's settings to the shared location manager. |
+| `WeatherService`, `AirQualityService` | The participant has granted location access with precise location, and the service has an API key. |
+
+The weather and air quality services need location access because they send the phone's position to the web service. The API key is not checked when a service connects: a wrong key shows up later as error measurements.
+
+The status of a service is a [`DeviceStatus`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/DeviceStatus.html). After deployment it is `configured`, and while CAMS connects it, `connecting`. It then becomes `connected`, or `disconnected` when a condition is not met.
+
+Services have no battery or heartbeat measures and do not reconnect by themselves. To connect a service after the participant grants location access, restart the app or call `connect()` on its device manager.
+
+To follow the status of the location service, listen to its [`LocationServiceManager`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationServiceManager-class.html):
+
+```dart
+final manager = SmartPhoneClientManager().deviceController.getDeviceManager(
+  LocationService.DEVICE_TYPE,
+);
+if (manager is LocationServiceManager) {
+  manager.statusEvents.listen(
+    (status) => print('Location service: ${status.name}'),
+  );
+}
+```
+
+## `LocationService`
+
+`LocationService` sets how the phone delivers locations to `LOCATION`, `GEOFENCE` and `MOBILITY`, and the Android notification that shows while location runs in the background:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `roleName` | `String?` | No | `'Location Service'` | The device role name in the protocol. |
+| `accuracy` | `GeolocationAccuracy` | No | `GeolocationAccuracy.balanced` | The accuracy to ask the platform for. See [Accuracy levels](/docs/sampling-packages/context/location#accuracy-levels). |
+| `distance` | `double` | No | `10` | The distance in meters the phone must move before the next location. `0` turns the distance filter off. |
+| `interval` | `Duration` | No | `Duration(minutes: 1)` | The time between locations. |
+| `notificationTitle` | `String?` | No | `null` | The title of the Android notification. When `null`, the title is "CARP Location Service". |
+| `notificationMessage` | `String?` | No | `null` | The text of the Android notification. When `null`, the text is "The location service is running in the background". |
+| `notificationDescription` | `String?` | No | `null` | The subtext of the Android notification. When `null`, the subtext is "Background location is on to keep the CARP Mobile Sensing app up-to-date with your location. This is required for main features to work properly when the app is not in use." |
+| `notificationIconName` | `String?` | No | `null` | The name of a drawable in `android/app/src/main/res/drawable/` for the notification icon. When `null`, the `location` plugin uses its own icon. |
+| `notificationOnTapBringToFront` | `bool` | No | `false` | Whether tapping the Android notification brings the app to the front. |
+
+A lower `interval` or `distance` and a higher `accuracy` give more detailed data but drain the battery faster. For example, this service asks for high accuracy and a location about every 5 minutes, but only after the phone has moved 25 meters. It also sets its own notification texts:
+
+```dart
+final locationService = LocationService(
+  accuracy: GeolocationAccuracy.high,
+  distance: 25,
+  interval: const Duration(minutes: 5),
+  notificationTitle: 'Mobility study',
+  notificationMessage: 'Collecting your location in the background',
+  notificationIconName: 'ic_notification',
+  notificationOnTapBringToFront: true,
+);
+```
+
+The notification settings apply only on Android, where background location runs as a foreground service with an ongoing notification. On iOS, the status bar shows the location indicator instead.
+
+Use one `LocationService` per protocol. All location measures share one location manager, which applies the settings of the first `LocationService` that connects and keeps them until the app restarts.
+
+## `WeatherService` and `AirQualityService`
+
+The two web services take the same parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `apiKey` | `String` | Yes | — | The OpenWeather API key for `WeatherService`, or the World Air Quality Index (WAQI) token for `AirQualityService`. |
+| `roleName` | `String?` | No | `'Weather Service'` or `'Air Quality Service'` | The device role name in the protocol. |
+
+The protocol stores the API keys in plain text. Anyone who can read the protocol, for example in CARP Web Services (CAWS), can read the keys. To get the keys, see [Get the API keys](/docs/sampling-packages/context/weather-and-air-quality#get-the-api-keys).
+
+## `LocationManager`
+
+[`LocationManager`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationManager-class.html) is the singleton that every location-based probe uses, including the weather and air quality probes. The `LocationService` configures it when it connects. In app code, use it to read the location state:
+
+| Member | Description |
+| --- | --- |
+| `hasPermission()` | Whether the app has location access with precise location. Approximate location counts as no access. |
+| `requestPermission()` | Asks for location while in use and then all the time, through the CAMS permission queue. It never opens the app settings. |
+| `getLocation()` | Waits up to 6 seconds for a new location, then falls back to `lastKnownLocation`. Throws a `StateError` when there is neither. |
+| `onLocationChanged` | A stream of `Location` objects from the `location` plugin. |
+| `lastKnownLocation` | The last location that the app received, or `null`. |
+| `isBackgroundModeEnabled()` | Whether background location is on. |
+| `configuration` | The `LocationService` whose settings apply, or `null` before a location service connects. |
+
+For example, to get the phone's position once:
+
+```dart
+final location = await LocationManager().getLocation();
+print('${location.latitude}, ${location.longitude}');
+```

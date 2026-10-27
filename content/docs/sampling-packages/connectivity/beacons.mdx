@@ -1,0 +1,159 @@
+---
+title: Beacons
+description: The BEACON measure, which detects iBeacons in configured regions and records their identifiers and estimated distance.
+icon: Radar
+---
+
+`dk.cachet.carp.beacon` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the phone on Android and iOS, through the [`dchs_flutter_beacon`](https://pub.dev/packages/dchs_flutter_beacon) plugin. Add it as `Measure(type: ConnectivitySamplingPackage.BEACON)`. Each measurement covers one region and lists the beacons in it, with their signal strength and estimated distance.
+
+The measure detects iBeacon frames and, on Android, also AltBeacon frames. It does not detect Eddystone frames.
+
+## Add the measure to a protocol
+
+The measure needs at least one region; without regions, it does not start. Set the regions in a [`BeaconRangingPeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BeaconRangingPeriodicSamplingConfiguration-class.html) on the measure, and start it with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html). This example gives each of two beacons its own region and records beacons up to 5 meters away:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: ConnectivitySamplingPackage.BEACON,
+        samplingConfiguration: BeaconRangingPeriodicSamplingConfiguration(
+          beaconDistance: 5,
+          beaconRegions: [
+            BeaconRegion(
+              identifier: 'lab-entrance',
+              uuid: 'fda50693-a4e2-4fb1-afcf-c6eb07647825',
+              major: 1,
+              minor: 1,
+            ),
+            BeaconRegion(
+              identifier: 'lab-desk',
+              uuid: 'fda50693-a4e2-4fb1-afcf-c6eb07647825',
+              major: 1,
+              minor: 2,
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+One region per beacon keeps beacons that share a UUID apart in the data. See [Data](#data).
+
+## Configuration
+
+`BeaconRangingPeriodicSamplingConfiguration` has these properties:
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `beaconRegions` | `List<BeaconRegion>` | `[]` | Regions to monitor and range. With no regions, the measure does not start. |
+| `beaconDistance` | `int` | `2` | Maximum estimated distance, in meters, of the beacons to record. |
+
+Despite its name, the configuration has no interval or duration: ranging runs without pauses while the measure runs.
+
+Each region is a [`BeaconRegion`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BeaconRegion-class.html):
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `identifier` | `String` | — | Required. A unique name for the region, which measurements report in `region`. |
+| `uuid` | `String` | — | Required. Proximity UUID of the beacons. On iOS, it must be a valid UUID string. |
+| `major` | `int?` | `null` | Narrows the region to beacons with this major value. |
+| `minor` | `int?` | `null` | Narrows the region to beacons with this minor value. |
+
+Set `minor` only together with `major`. iOS ignores a `minor` without a `major`, and Android then uses the `minor` value as the major value.
+
+## How beacon detection works
+
+The measure combines region monitoring and ranging:
+
+1. When the measure starts, it monitors all configured regions.
+2. When the platform reports that the phone is inside a region, the measure starts ranging all configured regions.
+3. Each ranging result for a region becomes one measurement, with the beacons of that region whose estimated distance is at most `beaconDistance`.
+4. Ranging continues until the measure pauses, also after the phone leaves the region. Measurements then have an empty `scanResult`.
+
+Ranging reports every configured region at each scan cycle of the platform. The measure therefore records a steady stream of measurements while it runs, many with an empty `scanResult`. Plan storage and upload for this volume, and drop empty measurements in the analysis when you do not need them.
+
+## Permissions
+
+The measure needs Bluetooth access and location access all the time, which CARP Mobile Sensing (CAMS) asks for. Bluetooth and Location Services must also be turned on:
+
+| Platform | Permissions | Who asks |
+| --- | --- | --- |
+| Android | `BLUETOOTH_SCAN` on Android 12 or later, location **Allow all the time** | CAMS asks for the Bluetooth scan permission, location while the app is in use and then location all the time. The measure starts only when the Bluetooth scan permission and location all the time are granted. |
+| iOS | Bluetooth, location **Always** | CAMS asks for Bluetooth, location while the app is in use and then location always. |
+
+On Android 11 and later, the participant chooses **Allow all the time** on the app's location settings page, not in a dialog. See Android's [Request background location](https://developer.android.com/develop/sensors-and-location/location/permissions/background) guide.
+
+On Android 11 and lower, the measure also needs the legacy `BLUETOOTH` permission, which the plugin's Android Beacon Library adds to the merged manifest. See [Installation](/docs/sampling-packages/connectivity/installation).
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- The plugin uses the Android Beacon Library 2.21.2 and registers the iBeacon layout next to the library's default AltBeacon layout.
+- Android reports no proximity, so the plugin derives `proximity` from the estimated distance. It reports `unknown` at 0, `immediate` up to 0.5 meters, `near` below 3 meters and `far` from 3 meters.
+- The package exposes none of the plugin's scan settings, such as the foreground and background scan periods, so the library defaults apply.
+
+</Tab>
+<Tab value="iOS">
+
+- The plugin uses Core Location, which also provides `proximity`.
+- For what iOS allows while the app is in the background or not running, see Apple's [Determining the proximity to an iBeacon device](https://developer.apple.com/documentation/corelocation/determining-the-proximity-to-an-ibeacon-device).
+
+</Tab>
+</Tabs>
+
+## Data
+
+Each measurement holds a [`BeaconData`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BeaconData-class.html) object with the `__type` `dk.cachet.carp.beacon`, for one region:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `region` | `String` | The `identifier` of the region. |
+| `scanResult` | `List<BeaconDevice>` | The beacons of the region within `beaconDistance`, at most one per UUID. Empty when none is in range. |
+
+<Callout type="warning" title="Known issue">
+
+`scanResult` keeps one beacon per UUID. When several beacons in a region share a UUID and differ only in `major` and `minor`, the measurement lists only one of them. Give each beacon its own region with its `major` and `minor` values, as in the example above, or give the beacons different UUIDs.
+
+</Callout>
+
+Each entry in `scanResult` is a [`BeaconDevice`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/BeaconDevice-class.html):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `uuid` | `String` | Proximity UUID, in uppercase. |
+| `rssi` | `int` | Received signal strength in dBm. |
+| `major` | `int?` | iBeacon major value, 0–65535. |
+| `minor` | `int?` | iBeacon minor value, 0–65535. |
+| `accuracy` | `double?` | Estimated distance in meters, rounded to two decimals. A negative value means that the distance is unknown, and the `beaconDistance` filter keeps such beacons. |
+| `proximity` | `Proximity?` | `immediate`, `near`, `far` or `unknown`. |
+
+`Proximity` is a type of `dchs_flutter_beacon`, which `carp_connectivity_package` does not export. To name it in Dart, add the plugin with `flutter pub add dchs_flutter_beacon` and import `package:dchs_flutter_beacon/dchs_flutter_beacon.dart`.
+
+The measurement's `sensorStartTime` is the time of the ranging result. The data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.beacon",
+  "region": "lab-entrance",
+  "scanResult": [
+    {
+      "uuid": "FDA50693-A4E2-4FB1-AFCF-C6EB07647825",
+      "rssi": -61,
+      "major": 1,
+      "minor": 1,
+      "accuracy": 1.35,
+      "proximity": "near"
+    }
+  ]
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

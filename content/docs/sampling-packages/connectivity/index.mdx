@@ -1,0 +1,153 @@
+---
+title: Connectivity Sampling Package
+description: Collect network status, Wi-Fi, nearby Bluetooth devices and iBeacons from the phone in a CARP Mobile Sensing study.
+icon: Wifi
+---
+
+`carp_connectivity_package` adds four phone measures to a [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) study. They record the networks the phone uses, the Wi-Fi network it is connected to, and the Bluetooth Low Energy (BLE) devices and iBeacons around it. Use them when a study needs the network context of a participant's phone, or the devices and places around it.
+
+The package builds on four Flutter plugins: [`connectivity_plus`](https://pub.dev/packages/connectivity_plus) for the network status, [`network_info_plus`](https://pub.dev/packages/network_info_plus) for the Wi-Fi network, [`flutter_blue_plus`](https://pub.dev/packages/flutter_blue_plus) for Bluetooth scans and [`dchs_flutter_beacon`](https://pub.dev/packages/dchs_flutter_beacon) for iBeacons.
+
+<Chips>
+<Chip href="https://pub.dev/packages/carp_connectivity_package" icon="Package" tone="primary">pub.dev</Chip>
+<Chip href="https://pub.dev/documentation/carp_connectivity_package/latest/" icon="Description" tone="tertiary">API reference</Chip>
+<Chip href="https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_connectivity_package" icon="Code" tone="success">GitHub</Chip>
+</Chips>
+
+<Callout type="warning" title="Bluetooth plugin license">
+
+An app resolves `flutter_blue_plus` 2.x unless another dependency pins 1.x. Version 2.x is under the [FlutterBluePlus License](https://pub.dev/packages/flutter_blue_plus/license), which is free for nonprofits and educational institutions but paid for commercial use. To stay on the BSD-licensed 1.x, see [Installation](/docs/sampling-packages/connectivity/installation).
+
+</Callout>
+
+## Features
+
+<Cards>
+<Card title="Connectivity status" icon="CellTower">
+
+Records the network types the phone uses, such as Wi-Fi or mobile data, every time they change.
+
+</Card>
+<Card title="Wi-Fi" icon="Wifi">
+
+Reads the name, access point and IP address of the connected Wi-Fi network at a fixed interval. The default privacy schema hashes the network name.
+
+</Card>
+<Card title="Bluetooth" icon="Bluetooth">
+
+Scans for nearby BLE devices in short windows and lists each device with its signal strength. The default privacy schema hashes the device names.
+
+</Card>
+<Card title="Beacons" icon="Radar">
+
+Detects iBeacons in the regions you configure and estimates their distance from the phone.
+
+</Card>
+</Cards>
+
+## Measure types
+
+The package has four [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure types, all collected on the phone:
+
+| Measure type | Data | Android | iOS |
+| --- | --- | --- | --- |
+| [`dk.cachet.carp.connectivity`](/docs/sampling-packages/connectivity/connectivity-status) | Network types in use, such as `wifi` or `mobile` | Yes | Yes |
+| [`dk.cachet.carp.wifi`](/docs/sampling-packages/connectivity/wifi) | Name, access point and IP address of the connected Wi-Fi network | Yes | Yes |
+| [`dk.cachet.carp.bluetooth`](/docs/sampling-packages/connectivity/bluetooth) | BLE devices found in a scan window | Yes | Foreground only |
+| [`dk.cachet.carp.beacon`](/docs/sampling-packages/connectivity/beacons) | iBeacons in a configured region | Yes | Yes |
+
+For the measure types of the other sampling packages, see [Measure types](/docs/mobile-sensing/measure-types).
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| Dart SDK | 3.10 or later |
+| Flutter | 3.38.1 or later |
+| `carp_mobile_sensing` | 2.3.0 or later |
+| Android | API level 24 (Android 7.0) or later, the CAMS minimum |
+| iOS | 15.0 or later, the CAMS minimum |
+| Android build | Android Gradle Plugin 8.12.1 or later, Gradle 8.13 or later, Java 17 and Kotlin 2.2.0, as `connectivity_plus` and `network_info_plus` require |
+| Xcode | 26.1.1 or later, as `connectivity_plus` requires |
+| Testing | A physical phone. The iOS simulator returns no Wi-Fi information and has no Bluetooth. |
+
+## How it works
+
+Adding the package to a study takes three steps:
+
+<Steps>
+<Step title="Register the package">
+
+Registering a [`ConnectivitySamplingPackage`](https://pub.dev/documentation/carp_connectivity_package/latest/connectivity/ConnectivitySamplingPackage-class.html) in the [`SamplingPackageRegistry`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/SamplingPackageRegistry-class.html) makes the four measure types and their data and configuration classes known to CAMS. It also adds the Wi-Fi and Bluetooth name hashing to the default privacy schema.
+
+</Step>
+<Step title="Add the measures to a protocol">
+
+The measures run on the phone. Start them with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html), and they run until the study pauses. Wi-Fi and Bluetooth sample at their own interval, and beacons need the regions to monitor.
+
+</Step>
+<Step title="Deploy the protocol">
+
+CAMS asks for the Bluetooth and location permissions that the measures declare, then starts them. Wi-Fi also needs location access, which CAMS does not ask for. To ask for it in the app, see [Location permission](/docs/sampling-packages/connectivity/wifi#location-permission).
+
+</Step>
+</Steps>
+
+This example registers the package and collects the connectivity status and nearby Bluetooth devices:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_connectivity_package/connectivity.dart';
+
+void main() {
+  CarpMobileSensing.ensureInitialized();
+  SamplingPackageRegistry().register(ConnectivitySamplingPackage()); // [!code highlight]
+
+  final phone = Smartphone();
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Phone connectivity',
+    dataEndPoint: SQLiteDataEndPoint(),
+  )..addPrimaryDevice(phone);
+
+  // Event-based measures run from the time the study starts
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: ConnectivitySamplingPackage.CONNECTIVITY), // [!code highlight]
+        Measure(type: ConnectivitySamplingPackage.BLUETOOTH), // [!code highlight]
+      ],
+    ),
+    phone,
+  );
+
+  // ... deploy the protocol and start sampling
+}
+```
+
+## Next steps
+
+<Cards>
+<Card title="Installation" href="/docs/sampling-packages/connectivity/installation" icon="Download">
+
+Add the package and the permissions that each measure needs.
+
+</Card>
+<Card title="Quickstart" href="/docs/sampling-packages/connectivity/quickstart" icon="Bolt">
+
+Build an app that collects all four measures and prints them.
+
+</Card>
+<Card title="Bluetooth scanning" href="/docs/sampling-packages/connectivity/bluetooth" icon="Bluetooth">
+
+Nearby Bluetooth Low Energy devices found in periodic scan windows.
+
+</Card>
+<Card title="Beacons" href="/docs/sampling-packages/connectivity/beacons" icon="Radar">
+
+iBeacons in configured regions, with their estimated distance.
+
+</Card>
+</Cards>

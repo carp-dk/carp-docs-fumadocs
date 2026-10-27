@@ -1,0 +1,130 @@
+---
+title: Mobility features
+description: How the MOBILITY measure computes daily stops, moves, places, home stay and entropy from location on the phone.
+icon: Route
+---
+
+`dk.cachet.carp.mobility` (`ContextSamplingPackage.MOBILITY`) computes daily **mobility features**: summaries of a day's movement, derived from the phone's location. They count stops, moves and places, and measure location variance, entropy, home stay and distance traveled.
+
+The [`mobility_features`](https://pub.dev/packages/mobility_features) plugin computes them on the phone, and the measurements hold only the features, not the location trace. `MOBILITY` is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure that runs on the [`LocationService`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/LocationService-class.html), on Android and iOS.
+
+## Add the measure to a protocol
+
+Start `MOBILITY` with an `ImmediateTrigger` and target the task at the location service:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(measures: [Measure(type: ContextSamplingPackage.MOBILITY)]),
+  locationService,
+);
+```
+
+`MOBILITY` can share a task with `LOCATION`, as in the [quickstart](/docs/sampling-packages/context/quickstart). Give the location service a low `distance`. See [Location service settings](#location-service-settings).
+
+## How stop detection works
+
+The plugin turns the stream of locations into stops, places and moves:
+
+1. Each location becomes a sample, timestamped with the time it reaches the app.
+2. A sample joins the current cluster if it lies within `stopRadius` of the cluster's center, the mean of its positions. The first sample farther away closes the cluster.
+3. A closed cluster becomes a **stop** if more than `stopDuration` passed between its first and last sample. Shorter clusters are dropped.
+4. Stops within 50 meters of each other form a **place**, and consecutive stops at the same place merge into one stop.
+5. A **move** is the path between two consecutive stops. Its distance is the sum of the distances between the samples along the way. When the samples are missing, for example after an app restart, it is the straight line between the stops.
+6. Each new stop updates the features of the day, and the probe emits them as a measurement.
+7. The first sample after midnight closes the last cluster of the previous day, which can give a final measurement for that day. The plugin then clears the stops, moves and places.
+
+A measurement therefore arrives only when the phone leaves a place where it stayed longer than `stopDuration`. While the participant stays in one place, no measurement arrives. Each measurement holds the features of the day so far.
+
+## Configuration
+
+Without an override, `MOBILITY` uses the defaults below. To change them, override the sampling configuration with a [`MobilitySamplingConfiguration`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/MobilitySamplingConfiguration-class.html):
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `stopRadius` | `double` | `5` | The largest distance in meters between a sample and the center of the current cluster. |
+| `stopDuration` | `Duration` | `Duration(seconds: 30)` | The shortest stay that counts as a stop. |
+| `placeRadius` | `double` | `50` | The distance in meters within which stops form one place. |
+| `usePriorContexts` | `bool` | `true` | Not used by the package. |
+
+A `MobilitySamplingConfiguration` that you create sets `stopRadius` to `25` unless you pass it, so set every value you rely on. For example, to count only stays of more than 2 minutes within 20 meters:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(type: ContextSamplingPackage.MOBILITY)
+        ..overrideSamplingConfiguration = MobilitySamplingConfiguration(
+          stopRadius: 20,
+          placeRadius: 50,
+          stopDuration: const Duration(minutes: 2),
+        ),
+    ],
+  ),
+  locationService,
+);
+```
+
+The `mobility_features` plugin recommends a stop radius of 5–20 meters, a place radius of 25–50 meters and a stop duration below 3 minutes. Lower values give finer features but more noise: with a short stop duration, a wait at a red light counts as a stop.
+
+`placeRadius` has a limited effect in `mobility_features` 6.2.1. The plugin applies it only when it reloads stored stops at startup, and uses 50 meters for the places it finds while it runs.
+
+## Location service settings
+
+`MOBILITY` uses the locations of the `LocationService`, so the service's settings shape the features:
+
+- **Distance:** stops are built from the samples that arrive while the phone stays in one place. With a `distance` filter, a still phone gets few or no samples, and a stay may look too short to count as a stop. For `MOBILITY`, use a low `distance`, for example `0`.
+- **Interval:** a stop needs samples that span more than `stopDuration`, so stays shorter than about one `interval` may be missed.
+
+The settings also apply to `LOCATION` and `GEOFENCE` in the same protocol. See [`LocationService`](/docs/sampling-packages/context/services#locationservice).
+
+## Files on the phone
+
+The plugin keeps its working data as JSON lines in three files in the app's documents directory: `stops.json`, `moves.json` and `location_samples.json`. They hold the stops and moves of the current day and the samples of the current cluster, with coordinates. The features therefore survive an app restart.
+
+The package never deletes the files, so include them in your data protection plan. On iOS, `UIFileSharingEnabled` makes them visible in Finder.
+
+## Limitations
+
+- The time of a sample is the time it reaches the app, not the time of the location fix.
+- `homeStay` is `null` on days without a stop between 00:00 and 06:00, such as the first day of a study that starts in the morning.
+- The features start again at local midnight, in the phone's time zone.
+- On Android, `MOBILITY` needs location access all the time. On iOS, it collects in the background only with location access **Always**.
+
+## Data
+
+Each measurement holds a [`Mobility`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/Mobility-class.html) with the type `dk.cachet.carp.mobility`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `DateTime?` | When the features were computed, in local time. |
+| `date` | `DateTime?` | The day of the features: local midnight. |
+| `numberOfStops` | `int?` | The number of stops on `date`. |
+| `numberOfMoves` | `int?` | The number of moves between stops on `date`. |
+| `numberOfPlaces` | `int?` | The number of significant places on `date`: places where the participant stayed more than 3 minutes in total. |
+| `locationVariance` | `double?` | `ln(σ²lat + σ²lon + 1)`, where σ² is the sample variance of the stop latitudes and longitudes in degrees. `0` with fewer than two stops. |
+| `entropy` | `double?` | Location entropy, `-Σ p·ln(p)`, where p is the share of the day's stop time spent at each place. High when time is spread evenly over places. `0` with one place. |
+| `normalizedEntropy` | `double?` | `entropy` divided by the natural logarithm of the number of places, from 0 to 1. `0` with one place. |
+| `homeStay` | `double?` | The share of time at home, from 0 to 1: time at home divided by the time from midnight to the last stop's departure. Home is the place with the most time between 00:00 and 06:00. `null` when no stop falls in those hours. |
+| `distanceTraveled` | `double?` | The sum of the move distances on `date`, in meters. |
+
+The times have no UTC offset. A measurement in the evening looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.mobility",
+  "timestamp": "2026-10-26T18:42:10.123456",
+  "date": "2026-10-26T00:00:00.000",
+  "numberOfStops": 4,
+  "numberOfMoves": 3,
+  "numberOfPlaces": 3,
+  "locationVariance": 0.0016,
+  "entropy": 0.64,
+  "normalizedEntropy": 0.58,
+  "homeStay": 0.71,
+  "distanceTraveled": 12650.4
+}
+```
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).

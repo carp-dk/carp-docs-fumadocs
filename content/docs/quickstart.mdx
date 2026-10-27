@@ -200,9 +200,9 @@ Measure(type: ContextSamplingPackage.LOCATION),
 Measure(type: ContextSamplingPackage.ACTIVITY),
 ```
 
-<Callout type="info" title="Package permissions">
+<Callout type="info" title="Package setup">
 
-Each sampling package may need its own permissions, for example for location. The package's page on pub.dev lists the configuration to add for Android and iOS.
+Each sampling package adds its own permissions and platform settings. `carp_context_package`, for example, needs Android API level 26 or later and Swift Package Manager on iOS, and `LOCATION` collects data only with location access all the time. Its accuracy, distance and interval come from a `LocationService` in the protocol. See the package's [Installation](/docs/sampling-packages/context/installation) and [Quickstart](/docs/sampling-packages/context/quickstart).
 
 </Callout>
 

@@ -32,8 +32,20 @@ Pages are MDX files in `content/docs`, ordered by each folder's `meta.json`.
 | Overview: introduction, quickstart, concepts, architecture, storing data, API reference | `content/docs` | |
 | Mobile Sensing | `content/docs/mobile-sensing` | `carp_mobile_sensing` |
 | Health | `content/docs/flutter-plugins/health` | `health` |
+| Research Package | `content/docs/flutter-plugins/research-package` | `research_package` |
 | Debug Toolkit | `content/docs/flutter-plugins/debug-toolkit` | `carp_debug_flutter` |
+| Context Sampling | `content/docs/sampling-packages/context` | `carp_context_package` |
+| Survey Sampling | `content/docs/sampling-packages/survey` | `carp_survey_package` |
+| Health Sampling | `content/docs/sampling-packages/health` | `carp_health_package` |
+| Audio Sampling | `content/docs/sampling-packages/audio` | `carp_audio_package` |
+| Connectivity Sampling | `content/docs/sampling-packages/connectivity` | `carp_connectivity_package` |
+| Communication Sampling | `content/docs/sampling-packages/communication` | `carp_communication_package` |
+| Apps Sampling | `content/docs/sampling-packages/apps` | `carp_apps_package` |
 | Apple Watch Sensing | `content/docs/sampling-packages/apple-watch` | `carp_aware_package` |
+| Polar Sampling | `content/docs/sampling-packages/polar` | `carp_polar_package` |
+| Movesense Sampling | `content/docs/sampling-packages/movesense` | `carp_movesense_package` |
+| Movisens Sampling | `content/docs/sampling-packages/movisens` | `carp_movisens_package` |
+| eSense Sampling | `content/docs/sampling-packages/esense` | `carp_esense_package` |
 
 - Packages are grouped like the navbar: `mobile-sensing`, `flutter-plugins/<package>` and
   `sampling-packages/<package>`. Each package folder has `"root": true` in its `meta.json`, which

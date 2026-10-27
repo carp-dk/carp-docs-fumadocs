@@ -1,0 +1,205 @@
+---
+title: Quickstart
+description: Build a Flutter app that collects connectivity, Wi-Fi, Bluetooth and beacon data and prints each measurement.
+icon: Bolt
+---
+
+The finished app records the network status, the Wi-Fi network, nearby Bluetooth devices and iBeacons, and prints each measurement with Wi-Fi and Bluetooth names hashed.
+
+## Prerequisites
+
+- The package and its Android and iOS setup, as described in [Installation](/docs/sampling-packages/connectivity/installation).
+- A physical phone with Bluetooth, Wi-Fi and Location Services turned on. The iOS simulator has no Bluetooth and returns no Wi-Fi information.
+- Optionally, an iBeacon near the phone. Replace the UUID in the example with the UUID of your beacons.
+
+## Complete example
+
+The example asks for location with [`permission_handler`](https://pub.dev/packages/permission_handler). Add it to the app:
+
+```bash
+flutter pub add permission_handler
+```
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_connectivity_package/connectivity.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(ConnectivitySamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol that hashes Wi-Fi and Bluetooth names
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Nearby networks and devices',
+    dataEndPoint: SQLiteDataEndPoint(),
+    privacySchemaName: PrivacySchema.DEFAULT, // [!code highlight]
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Collect all four measures while the study runs
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: ConnectivitySamplingPackage.CONNECTIVITY),
+        Measure(
+          type: ConnectivitySamplingPackage.WIFI,
+          samplingConfiguration: IntervalSamplingConfiguration(
+            interval: const Duration(minutes: 1),
+          ),
+        ),
+        Measure(
+          type: ConnectivitySamplingPackage.BLUETOOTH,
+          samplingConfiguration: PeriodicSamplingConfiguration(
+            interval: const Duration(minutes: 1),
+            duration: const Duration(seconds: 10),
+          ),
+        ),
+        Measure(
+          type: ConnectivitySamplingPackage.BEACON,
+          samplingConfiguration: BeaconRangingPeriodicSamplingConfiguration(
+            beaconRegions: [
+              BeaconRegion(
+                identifier: 'lab',
+                uuid: 'fda50693-a4e2-4fb1-afcf-c6eb07647825', // [!code highlight]
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+    phone,
+  );
+
+  // 4. Configure the client and add the permissions that CAMS does not ask for
+  final client = SmartPhoneClientManager();
+  await client.configure(
+    permissionRequester: (permissions) => requestPermissionsInOrder([
+      ...permissions,
+      Permission.locationWhenInUse, // [!code highlight]
+      if (Platform.isAndroid) Permission.bluetoothConnect, // [!code highlight]
+    ]),
+  );
+
+  // 5. Deploy the protocol on the first run and start sampling
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 6. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes the four measure types known to CARP Mobile Sensing (CAMS) and adds the name hashing to the default privacy schema. Register before `configure()`. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | `privacySchemaName: PrivacySchema.DEFAULT` turns on the privacy schema, which replaces Wi-Fi and Bluetooth names with SHA-1 hashes before the measurements are stored or printed. |
+| **3. Measures** | All four measures are event-based, so an `ImmediateTrigger` starts them and they run until the study pauses. Wi-Fi and Bluetooth sample every minute here, instead of every 10 minutes by default, so that data arrives soon. Beacons need at least one region. |
+| **4. Permissions** | CAMS asks for the permissions that the measures declare. The `permissionRequester` adds location for the Wi-Fi name and, on Android, `BLUETOOTH_CONNECT` for Bluetooth scans. |
+| **5. Deploy** | Adds the protocol as a study, deploys it and resumes sampling. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **6. Measurements** | Prints every measurement as JSON. The measurements are also saved in the SQLite database on the phone. |
+
+Shorter intervals deliver data sooner but drain the battery faster. Use longer intervals in a study.
+
+## Check the data
+
+Run the app on a phone:
+
+```bash
+flutter run
+```
+
+When the study is deployed, Android asks for access to nearby devices and to location, and iOS asks for Bluetooth and location access. Allow them.
+
+On Android, the beacon measure starts only after you choose **Allow all the time** for location. Android 11 and later offer this choice only on the app's location settings page.
+
+The connectivity status arrives first, as soon as sampling starts. Wi-Fi and Bluetooth measurements follow after about a minute, and beacon measurements once the phone is inside the region. The first measurement looks like this, formatted for readability:
+
+```json
+{
+  "sensorStartTime": 1793024400123456,
+  "data": {
+    "__type": "dk.cachet.carp.connectivity",
+    "connectivityStatus": ["wifi"]
+  }
+}
+```
+
+To use the data in the app, check the type of `measurement.data`:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is Wifi) {
+    print('Connected to ${data.ssid}');
+  } else if (data is Bluetooth) {
+    print('${data.scanResult.length} Bluetooth devices nearby');
+  }
+});
+```
+
+With the privacy schema on, `data.ssid` holds a SHA-1 hash instead of the network name.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Wi-Fi measurements have no network name">
+
+On Android, allow precise location when the app asks, and turn on Location Services. On iOS, add the **Access Wi-Fi Information** capability and allow location access. See [Location permission](/docs/sampling-packages/connectivity/wifi#location-permission).
+
+</Accordion>
+<Accordion title="No beacon measurements">
+
+Check that the region's UUID matches your beacons, that Bluetooth and Location Services are on and, on Android, that location is allowed all the time. Beacon measurements start only after the platform reports that the phone is inside a region.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Connectivity status" href="/docs/sampling-packages/connectivity/connectivity-status" icon="CellTower">
+
+The network types the phone uses, recorded each time they change.
+
+</Card>
+<Card title="Wi-Fi" href="/docs/sampling-packages/connectivity/wifi" icon="Wifi">
+
+Name, access point and IP address of the connected Wi-Fi network.
+
+</Card>
+<Card title="Bluetooth scanning" href="/docs/sampling-packages/connectivity/bluetooth" icon="Bluetooth">
+
+Nearby Bluetooth Low Energy devices found in periodic scan windows.
+
+</Card>
+<Card title="Beacons" href="/docs/sampling-packages/connectivity/beacons" icon="Radar">
+
+iBeacons in configured regions, with their estimated distance.
+
+</Card>
+</Cards>

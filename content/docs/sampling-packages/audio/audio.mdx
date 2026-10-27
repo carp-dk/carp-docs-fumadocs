@@ -1,0 +1,160 @@
+---
+title: Audio recordings
+description: How the audio measure records sound to files, how a protocol starts and stops a recording, and where the files go.
+icon: Mic
+---
+
+`AUDIO` (`dk.cachet.carp.audio`) records sound from the phone's microphone to a file and adds one [`AudioMedia`](https://pub.dev/documentation/carp_audio_package/latest/media/AudioMedia-class.html) measurement that refers to the file when the recording stops. It runs on the phone, on Android and iOS, and records with the `flutter_sound` plugin. The constant is on [`MediaSamplingPackage`](https://pub.dev/documentation/carp_audio_package/latest/media/MediaSamplingPackage-class.html).
+
+## Add the measure to a protocol
+
+A recording starts when its task starts and runs until the task stops, so every recording needs a task that stops. Stop it in one of three ways:
+
+<Tabs items={['Task duration', 'Start and stop', 'Participant task']}>
+<Tab value="Task duration">
+
+```dart
+// Record 30 seconds every hour
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 1)),
+  BackgroundTask(
+    measures: [Measure(type: MediaSamplingPackage.AUDIO)],
+    duration: const Duration(seconds: 30),
+  ),
+  phone,
+);
+```
+
+The task stops itself after its `duration`, counted in whole seconds.
+
+</Tab>
+<Tab value="Start and stop">
+
+```dart
+final audioTask = BackgroundTask(
+  name: 'Audio recording',
+  measures: [Measure(type: MediaSamplingPackage.AUDIO)],
+);
+
+// Start 1 minute after sampling starts, and stop 2 minutes later
+protocol
+  ..addTaskControl(
+    DelayedTrigger(delay: const Duration(minutes: 1)),
+    audioTask,
+    phone,
+    Control.Start,
+  )
+  ..addTaskControl(
+    DelayedTrigger(delay: const Duration(minutes: 3)),
+    audioTask,
+    phone,
+    Control.Stop,
+  );
+```
+
+Both task controls must use the same task, so that the stop control stops the recording that the start control started.
+
+</Tab>
+<Tab value="Participant task">
+
+```dart
+// Put a recording task on the task list once a day
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 1)),
+  AppTask(
+    type: AppTask.SENSING_TYPE,
+    title: 'Record ambient sound',
+    measures: [Measure(type: MediaSamplingPackage.AUDIO)],
+  ),
+  phone,
+);
+```
+
+The recording runs from when the app calls `onStart()` on the user task until it calls `onDone()`. See [App task model](/docs/mobile-sensing/app-task-model). CAMS puts scheduled tasks on the task list only when the study resumes after it has connected the phone, so start sampling as the Survey Sampling [quickstart](/docs/sampling-packages/survey/quickstart) does.
+
+</Tab>
+</Tabs>
+
+Each `AUDIO` measure records one file at a time. If its task starts again during a recording, the recording goes on and the second start is ignored.
+
+## Audio files
+
+The recordings are AAC audio in an MPEG-4 container, with the `.mp4` extension. The package requests mono audio at 16 kHz and 16 kbit/s, the `flutter_sound` defaults. At that bit rate, an hour of recording takes about 7 MB.
+
+Each file is named after the `id` of its measurement and stored in the media folder of the study deployment:
+
+```text
+<documents>/carp/deployments/<study_deployment_id>/data/media/<id>.mp4
+```
+
+`<documents>` is the app's documents folder, as returned by `getApplicationDocumentsDirectory()` from `path_provider`. The measurement holds the full path in `path`.
+
+The measurement is added when the recording stops. If the app is killed during a recording, no measurement is added, and the file of the unfinished recording stays in the folder.
+
+The on-phone data endpoints, such as `SQLiteDataEndPoint`, store only the measurements. The files stay in the media folder until your app deletes them, for example after it has exported them.
+
+## File upload
+
+[`CarpDataManager`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataManager-class.html) from the [`carp_backend`](https://pub.dev/packages/carp_backend) package uploads the recordings to CARP Web Services (CAWS). With each batch of measurements, it also uploads the files of the measurements whose data is a [`FileData`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/FileData-class.html) with `upload` set to `true`. `AUDIO` always sets `upload` to `true`.
+
+The data manager adds `device_id`, `study_id` and `study_deployment_id` to the metadata of the uploaded file. It deletes the file from the phone after the upload when `deleteWhenUploaded` is `true` (default `true`) on the [`CarpDataEndPoint`](https://pub.dev/documentation/carp_backend/latest/carp_backend/CarpDataEndPoint-class.html). For the CAWS setup, see [CARP Web Services](/docs/data-storage/caws).
+
+## Privacy and consent
+
+A recording holds everything the microphone picks up, including the speech of people nearby who are not in the study. The package has no privacy transformer for recordings, so `PrivacySchema.DEFAULT` leaves them unchanged.
+
+The study's ethics approval and consent must cover audio recordings. To measure sound levels without storing sound, use [Noise](/docs/sampling-packages/audio/noise) instead.
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- CARP Mobile Sensing (CAMS) asks for `RECORD_AUDIO` when the study is deployed.
+- If the permission is missing when a recording task starts, the measure asks for it again and records only if the participant grants it.
+
+</Tab>
+<Tab value="iOS">
+
+- The measure checks the microphone permission through `permission_handler`, so microphone access must be enabled there, as described in [Installation](/docs/sampling-packages/audio/installation).
+- Without the `audio` background mode, a recording cannot continue when the app moves to the background.
+
+</Tab>
+</Tabs>
+
+## Limitations
+
+- **Measurement at the end:** the measurement is added when the recording stops, and an unfinished recording leaves only a file.
+- **Background recording:** Android 11 or later lets a background app use the microphone only from a foreground service of type `microphone`. The CAMS setup declares its foreground service as `dataSync|specialUse`, not `microphone`, so test background recordings on the phones of your study.
+- **Storage:** files accumulate on the phone unless a data manager uploads and deletes them.
+
+## Data
+
+Each `AudioMedia` describes one recording and its file with these fields; a field without a value is left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `path` | `String?` | Absolute path of the file on the phone. |
+| `filename` | `String` | Name of the file, `<id>.mp4`. |
+| `upload` | `bool` | Whether a data manager uploads the file as well as this data. Always `true` for recordings. |
+| `metadata` | `Map<String, String>?` | Key-value metadata of the file. Empty when the recording is collected. |
+| `id` | `String` | A UUID for the recording, generated when the recording starts. |
+| `mediaType` | `MediaType` | `audio` |
+| `startRecordingTime` | `DateTime?` | When the recording started, in UTC. |
+| `endRecordingTime` | `DateTime?` | When the recording stopped, in UTC. |
+
+The measurement's `sensorStartTime` and `sensorEndTime` hold the same times in microseconds since the epoch. For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data). An example of the data on Android:
+
+```json
+{
+  "__type": "dk.cachet.carp.audio",
+  "path": "/data/user/0/dk.carp.myapp/app_flutter/carp/deployments/2b4a5c3e-1f2d-4c6b-8a9e-0d1c2b3a4f5e/data/media/9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60.mp4",
+  "filename": "9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60.mp4",
+  "upload": true,
+  "metadata": {},
+  "id": "9f1c2d7e-4b8a-4f0e-9a3d-1c2b3d4e5f60",
+  "mediaType": "audio",
+  "startRecordingTime": "2026-10-26T13:00:30.104882Z",
+  "endRecordingTime": "2026-10-26T13:01:00.211337Z"
+}
+```

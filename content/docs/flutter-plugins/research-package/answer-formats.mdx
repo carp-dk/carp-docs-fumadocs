@@ -1,0 +1,276 @@
+---
+title: Answer formats
+description: The seven answer formats of a question step, what the participant sees and the value each one stores.
+icon: EditNote
+---
+
+An **answer format** decides how the participant answers a question step and which value the step stores as its answer. Every format extends [`RPAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPAnswerFormat-class.html), and a question step takes one as `answerFormat`, also inside a form step.
+
+| Answer format | The participant | Answer value |
+| --- | --- | --- |
+| [`RPChoiceAnswerFormat`](#choice) | Selects one or more options | `List<RPChoice>` |
+| [`RPIntegerAnswerFormat`](#integer) | Types a whole number | `String` |
+| [`RPDoubleAnswerFormat`](#decimal-number) | Types a decimal number | `String` |
+| [`RPSliderAnswerFormat`](#slider) | Moves a slider | `double` |
+| [`RPImageChoiceAnswerFormat`](#image-choice) | Taps one of several images | `RPImageChoice` |
+| [`RPDateTimeAnswerFormat`](#date-and-time) | Turns the wheels of a date or time picker | `String` |
+| [`RPTextAnswerFormat`](#text) | Types free text | `String` |
+
+The step stores the value under the key `answer` in the `results` map of its [`RPStepResult`](https://pub.dev/documentation/research_package/latest/model/RPStepResult-class.html). Until the participant gives a valid answer, the answer is `null` and **NEXT** stays disabled. For how to read the values, see [Answer values](/docs/flutter-plugins/research-package/results#answer-values).
+
+## Choice
+
+[`RPChoiceAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPChoiceAnswerFormat-class.html) lists options as rows, with a radio button for a single choice or a checkbox for multiple choice. Above the rows, the step shows "(Choose one option)" or "(Choose one or more options)".
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `answerStyle` | `RPChoiceAnswerStyle` | Yes | `SingleChoice` or `MultipleChoice`. |
+| `choices` | `List<RPChoice>` | Yes | The options, in the order shown. |
+
+Each option is an [`RPChoice`](https://pub.dev/documentation/research_package/latest/model/RPChoice-class.html):
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `text` | `String` | Yes | — | The label of the option. |
+| `value` | `int` | Yes | — | The value of the option, such as its score on a scale. Navigation rules match on it. |
+| `detailText` | `String?` | No | — | A longer text behind an info icon at the end of the row, shown on a page of its own. |
+| `isFreeText` | `bool` | No | `false` | Turns the label into a text field, with `text` as its hint. |
+
+A multiple choice question with an explained option and a free-text option:
+
+```dart
+final activities = RPQuestionStep(
+  identifier: 'activities',
+  title: 'What did you do for exercise this week?',
+  answerFormat: RPChoiceAnswerFormat(
+    answerStyle: RPChoiceAnswerStyle.MultipleChoice,
+    choices: [
+      RPChoice(text: 'Walking', value: 1),
+      RPChoice(text: 'Cycling', value: 2),
+      RPChoice(
+        text: 'Strength training',
+        value: 3,
+        detailText: 'Exercise with weights, machines or your own body weight.',
+      ),
+      RPChoice(text: 'Something else', value: 9, isFreeText: true),
+    ],
+  ),
+);
+```
+
+The answer is a list of the selected `RPChoice` objects, in the order the participant selected them. It is a list for a single choice too, with one element. For example, after the participant selects **Cycling**, types "Climbing" into the free-text option and selects it, the `results` map of the step holds:
+
+```json
+{
+  "answer": [
+    { "__type": "RPChoice", "text": "Cycling", "value": 2, "isFreeText": false },
+    { "__type": "RPChoice", "text": "Climbing", "value": 9, "isFreeText": true }
+  ]
+}
+```
+
+The options behave as follows:
+
+- In a single choice, tapping the selected option clears the selection, and the answer becomes `null`.
+- Typing into a free-text option does not select it: the participant also taps its radio button or checkbox.
+- The typed text replaces `text` of the free-text option, in the answer and in the task itself. Build a new task for the next run.
+
+A yes or no question is a single choice with two options: Research Package has no Boolean answer format.
+
+## Integer
+
+[`RPIntegerAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPIntegerAnswerFormat-class.html) shows a text field with the hint "Tap to answer" and a number keyboard.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `minValue` | `int` | Yes | — | The lowest accepted value. |
+| `maxValue` | `int` | Yes | — | The highest accepted value. |
+| `suffix` | `String?` | No | — | A unit at the end of the field, such as `kg`. |
+
+A question about weight:
+
+```dart
+final weight = RPQuestionStep(
+  identifier: 'weight',
+  title: 'What is your weight?',
+  answerFormat: RPIntegerAnswerFormat(
+    minValue: 30,
+    maxValue: 250,
+    suffix: 'kg',
+  ),
+);
+```
+
+The field accepts whole numbers from `minValue` to `maxValue`, both included. For other input, it shows "Input a number" or "Should be between 30 and 250", and the answer stays `null`. The answer is the typed text as a `String`, such as `"72"`, not an `int`.
+
+## Decimal number
+
+[`RPDoubleAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPDoubleAnswerFormat-class.html) works like the integer format, with a keyboard that offers a decimal separator.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `minValue` | `double` | Yes | — | The lowest accepted value. |
+| `maxValue` | `double` | Yes | — | The highest accepted value. |
+| `suffix` | `String?` | No | — | A unit at the end of the field, such as `°C`. |
+
+A question about body temperature:
+
+```dart
+final temperature = RPQuestionStep(
+  identifier: 'temperature',
+  title: 'What is your body temperature?',
+  answerFormat: RPDoubleAnswerFormat(minValue: 34, maxValue: 43, suffix: '°C'),
+);
+```
+
+The answer is the typed text as a `String`, such as `"37.5"`. The field accepts only a period as the decimal separator: a comma, which keyboards in many languages offer, gives "Input a number".
+
+## Slider
+
+[`RPSliderAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPSliderAnswerFormat-class.html) shows a Material slider in a card, with the selected value above it.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `minValue` | `double` | Yes | — | The value at the left end. |
+| `maxValue` | `double` | Yes | — | The value at the right end. |
+| `divisions` | `int` | Yes | — | The number of intervals between the ends. For whole numbers, use `maxValue` minus `minValue`. |
+| `prefix` | `String?` | No | `''` | Text before the value. |
+| `suffix` | `String?` | No | `''` | Text after the value. |
+
+A stress rating on a 0–10 scale:
+
+```dart
+final stress = RPQuestionStep(
+  identifier: 'stress',
+  title: 'How stressed do you feel right now?',
+  answerFormat: RPSliderAnswerFormat(
+    minValue: 0,
+    maxValue: 10,
+    divisions: 10,
+    suffix: ' of 10',
+  ),
+);
+```
+
+The label joins `prefix`, the value and `suffix` without spaces, so include any space in them; this example shows "7.0 of 10". The answer is a `double`, such as `7.0`.
+
+The thumb starts at `minValue`, and the question counts as answered only after the participant moves it. To answer `minValue`, the participant moves the thumb away and back.
+
+## Image choice
+
+[`RPImageChoiceAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPImageChoiceAnswerFormat-class.html) shows the images in rows, each in a 72-pixel square. The participant taps one image, which gets a round border in the primary color. Its description then replaces the text "Select an image" below the images.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `choices` | `List<RPImageChoice>` | Yes | The images, in the order shown. |
+
+Each image is an [`RPImageChoice`](https://pub.dev/documentation/research_package/latest/model/RPImageChoice-class.html):
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `imageUrl` | `String` | Yes | — | The asset key of the image, such as `assets/images/happy.png`. URLs do not work here. |
+| `description` | `String` | Yes | — | The text shown when the image is selected. |
+| `value` | `dynamic` | No | — | The value of the choice. Use a value that JSON can encode, such as a number or a string. |
+| `key` | `String?` | No | — | Not used. |
+
+A mood question with three images:
+
+```dart
+final mood = RPQuestionStep(
+  identifier: 'mood',
+  title: 'How do you feel right now?',
+  answerFormat: RPImageChoiceAnswerFormat(
+    choices: [
+      RPImageChoice(
+        imageUrl: 'assets/images/sad.png',
+        value: -1,
+        description: 'Sad',
+      ),
+      RPImageChoice(
+        imageUrl: 'assets/images/neutral.png',
+        value: 0,
+        description: 'Neutral',
+      ),
+      RPImageChoice(
+        imageUrl: 'assets/images/happy.png',
+        value: 1,
+        description: 'Happy',
+      ),
+    ],
+  ),
+);
+```
+
+The answer is the selected `RPImageChoice` itself, not a list. Tapping the selected image again clears the answer. To add the images to your app, see [Add media and sound assets](/docs/flutter-plugins/research-package/installation#add-media-and-sound-assets).
+
+## Date and time
+
+[`RPDateTimeAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPDateTimeAnswerFormat-class.html) shows an iOS-style wheel picker on both platforms. It uses the 24-hour clock when the device does.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `dateTimeAnswerStyle` | `RPDateTimeAnswerStyle` | Yes | `Date`, `TimeOfDay` or `DateAndTime`. |
+
+A question about the time of waking up:
+
+```dart
+final wakeUp = RPQuestionStep(
+  identifier: 'wakeUp',
+  title: 'When did you wake up today?',
+  answerFormat: RPDateTimeAnswerFormat(
+    dateTimeAnswerStyle: RPDateTimeAnswerStyle.TimeOfDay,
+  ),
+);
+```
+
+The answer is a `String` from `DateTime.toString()` in local time, which `DateTime.parse()` reads back:
+
+| Style | Wheels | Example answer |
+| --- | --- | --- |
+| `Date` | Day, month and year | `"2026-10-25 00:00:00.000"`, at midnight |
+| `TimeOfDay` | Hour and minute | `"2026-10-27 07:30:00.000"`, on the day the question is answered |
+| `DateAndTime` | Date, hour and minute | `"2026-10-26 21:15:00.000"` |
+
+The picker starts at the current date and time, and the participant cannot turn it past them. A `Date` or `DateAndTime` question therefore takes no future dates, and a `TimeOfDay` question takes no time later than the current time of day. To ask for a later time, such as a planned bedtime, use a choice question.
+
+The question counts as answered only after the participant turns a wheel. To answer the current date or time, the participant turns a wheel away and back.
+
+## Text
+
+[`RPTextAnswerFormat`](https://pub.dev/documentation/research_package/latest/model/RPTextAnswerFormat-class.html) shows an outlined text field that is 10 lines high. Longer text scrolls inside the field.
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `hintText` | `String?` | No | — | A hint in the empty field. |
+| `autoFocus` | `bool` | No | `false` | Opens the keyboard when the question appears. |
+| `disableHelpers` | `bool` | No | `false` | Turns off autocorrect and suggestions, for example in a typing test. |
+
+An optional question with free text:
+
+```dart
+final notes = RPQuestionStep(
+  identifier: 'notes',
+  title: 'Is there anything else you want to tell the study team?',
+  answerFormat: RPTextAnswerFormat(hintText: 'Write your answer here'),
+  optional: true,
+);
+```
+
+The answer is the text as a `String`. An empty field gives `null`.
+
+## Question types
+
+Each answer format sets its `questionType`, a value of `RPQuestionType` that appears in the JSON of tasks and results:
+
+| Answer format | `questionType` |
+| --- | --- |
+| `RPChoiceAnswerFormat` | `SingleChoice` or `MultipleChoice`, from `answerStyle` |
+| `RPIntegerAnswerFormat` | `Integer` |
+| `RPDoubleAnswerFormat` | `Double` |
+| `RPSliderAnswerFormat` | `Scale` |
+| `RPImageChoiceAnswerFormat` | `ImageChoice` |
+| `RPDateTimeAnswerFormat` | `Date`, `TimeOfDay` or `DateAndTime`, from `dateTimeAnswerStyle` |
+| `RPTextAnswerFormat` | `Text` |
+| `RPFormAnswerFormat` | `Form`, set by every form step |
+
+The enum also has `None`, `Decimal`, `Boolean` and `Duration`, which no answer format uses. The steps choose their input from the class of the answer format, not from `questionType`. For tasks in JSON, see [JSON surveys](/docs/flutter-plugins/research-package/json).

@@ -1,0 +1,175 @@
+---
+title: Cognitive tests
+description: Add the 14 Cognition Package tests to a study and sample sensors while the participant does them.
+icon: Psychology
+---
+
+Add cognitive tests from [`cognition_package`](https://pub.dev/packages/cognition_package) to a study, alone or mixed with survey steps. Each test is a Research Package activity step. It runs in an `RPAppTask` like any other step, and its result ends up in the same survey measurement.
+
+## Choose a test
+
+Every test extends [`RPActivityStep`](https://pub.dev/documentation/research_package/latest/model/RPActivityStep-class.html) and takes a required `identifier`. `includeInstructions` (default `true`) shows the test's own instruction screen, and `includeResults` (default `true`) shows its result screen. The other parameters configure the test:
+
+| Class | Test | What the participant does | Parameters and defaults |
+| --- | --- | --- | --- |
+| `RPContinuousVisualTrackingActivity` | Multiple object tracking | Follows the target dots while they move, then taps them | `lengthOfTest: 90` (s), `numberOfTests: 3`, `amountOfDots: 5`, `amountOfTargets: 2`, `dotSize: 100` (pixels), `trackingSpeed: Duration(seconds: 5)` (per move) |
+| `RPCorsiBlockTappingActivity` | Corsi block tapping | Taps highlighted tiles in the same order, with more tiles in each round | None |
+| `RPWordRecallActivity` | Verbal recognition memory | Listens to a list of words, then writes the words recalled | `lengthOfTest: 90` (s), `numberOfTests: 3` |
+| `RPDelayedRecallActivity` | Delayed recall | Writes the words heard in an earlier verbal recognition memory test | `lengthOfTest: 90` (s), `numberOfTests: 3` |
+| `RPFlankerActivity` | Flanker | Swipes cards in the direction of the middle arrow | `lengthOfTest: 90` (s), `numberOfCards: 25` |
+| `RPLetterTappingActivity` | Letter tapping | Taps a button whenever the letter A is spoken | None |
+| `RPPairedAssociatesLearningActivity` | Paired associates learning | Watches figures appear under six tiles, then taps the tile that matches the figure in the middle | `maxTestDuration: 100` (s) |
+| `RPPictureSequenceMemoryActivity` | Picture sequence memory | Memorizes the positions of pictures and drags them back after they move | `lengthOfTest: 90` (s), `numberOfTests: 3`, `numberOfPics: 3` |
+| `RPRapidVisualInfoProcessingActivity` | Rapid visual information processing | Taps a button when a target sequence of three digits appears in a stream of digits | `interval: 9`, `lengthOfTest: 90` (s), `sequence: [3, 6, 9]` |
+| `RPReactionTimeActivity` | Reaction time | Taps the screen as fast as possible when it turns from blue to yellow | `lengthOfTest: 30` (s), `switchInterval: 4` (the change comes after a random 1–4 s) |
+| `RPStroopEffectActivity` | Stroop effect | Taps the box that names the color of the word on screen | `lengthOfTest: 40` (s), `displayTime: 1000` (ms), `delayTime: 750` (ms) |
+| `RPTappingActivity` | Finger tapping | Taps two buttons as often as possible with the index and middle finger | `lengthOfTest: 30` (s) |
+| `RPTrailMakingActivity` | Trail making | Connects numbered boxes in order, or alternates numbers and letters with `TrailType.B` | `trailType: TrailType.A` |
+| `RPVisualArrayChangeActivity` | Visual array change | Memorizes the colors of shapes and tells whether any color changed | `numberOfShapes: 3`, `lengthOfTest: 90` (s), `waitTime: 2` (s), `numberOfTests: 3` |
+
+## Add tests to a study
+
+Import `research_package` and `cognition_package`, put the tests in a task and wrap it in an `RPAppTask` of type `AppTask.COGNITIVE_ASSESSMENT_TYPE`:
+
+```dart
+import 'package:research_package/research_package.dart';
+import 'package:cognition_package/cognition_package.dart';
+
+final attentionTests = RPOrderedTask(
+  identifier: 'attention_tests',
+  steps: [
+    RPInstructionStep(
+      identifier: 'attention_intro',
+      title: 'Attention tests',
+      text: 'Two short tests. Sit down and hold the phone in one hand.',
+    ),
+    RPFlankerActivity(identifier: 'flanker', lengthOfTest: 60), // [!code highlight]
+    RPStroopEffectActivity(identifier: 'stroop'), // [!code highlight]
+    RPCompletionStep(
+      identifier: 'attention_done',
+      title: 'Done',
+      text: 'Thank you for completing the tests.',
+    ),
+  ],
+);
+
+protocol.addTaskControl(
+  RecurrentScheduledTrigger(
+    type: RecurrentType.weekly,
+    dayOfWeek: DateTime.saturday,
+    time: const TimeOfDay(hour: 10),
+  ),
+  RPAppTask(
+    type: AppTask.COGNITIVE_ASSESSMENT_TYPE, // [!code highlight]
+    name: 'Attention tests',
+    title: 'Attention tests',
+    description: 'Two short tests, about four minutes',
+    minutesToComplete: 4,
+    notification: true,
+    rpTask: attentionTests,
+  ),
+  phone,
+);
+```
+
+The type only names the completed app task measurement, `dk.cachet.carp.completedapptask.cognition`; the tests also run in a task of type `AppTask.SURVEY_TYPE`. Each test shows its own instructions, so the instruction step is optional.
+
+Use `RPDelayedRecallActivity` only after an `RPWordRecallActivity`: it asks for the words that the participant heard in that test. Both tests use the same five words in every run.
+
+## Sample sensors during a test
+
+Add measures to the `RPAppTask` to sample them while the participant does the task. This tremor and tapping test records the accelerometer and gyroscope:
+
+```dart
+protocol.addTaskControl(
+  RecurrentScheduledTrigger(
+    type: RecurrentType.daily,
+    time: const TimeOfDay(hour: 18),
+  ),
+  RPAppTask(
+    type: AppTask.COGNITIVE_ASSESSMENT_TYPE,
+    name: 'Tremor and tapping',
+    title: 'Tremor and tapping test',
+    description: 'Hold the phone still, then tap as fast as you can',
+    minutesToComplete: 2,
+    notification: true,
+    measures: [
+      Measure(type: SensorSamplingPackage.ACCELERATION), // [!code highlight]
+      Measure(type: SensorSamplingPackage.ROTATION), // [!code highlight]
+    ],
+    rpTask: RPOrderedTask(
+      identifier: 'tremor_tapping',
+      steps: [
+        RPTimerStep(
+          identifier: 'tremor_hold',
+          title: 'Stand up and hold the phone in your outstretched hand.',
+          timeout: const Duration(seconds: 10),
+          playSound: true,
+        ),
+        RPTappingActivity(identifier: 'tapping', lengthOfTest: 20),
+        RPCompletionStep(
+          identifier: 'tremor_done',
+          title: 'Done',
+          text: 'Thank you.',
+        ),
+      ],
+    ),
+  ),
+  phone,
+);
+```
+
+The measures start when your app calls `onStart()` on the task and pause when the participant submits or leaves it. They are stored as ordinary measurements of their own types, so match them to the test by time. The timer step plays its sound after 10 seconds only if the app ships the sound file; see [Add optional assets](/docs/sampling-packages/survey/installation#add-optional-assets).
+
+## Read the test results
+
+Each test adds an `RPActivityResult` to the task result, under the test's `identifier`. The test's values are in its `results` map under the key `result`, and the keys of these values contain spaces and capitals exactly as listed:
+
+| Class | Keys in `result` |
+| --- | --- |
+| `RPContinuousVisualTrackingActivity` | `mistakes`, `times`, `score` |
+| `RPCorsiBlockTappingActivity` | None: the value is the Corsi span as a number |
+| `RPWordRecallActivity` | `wordlist`, `resultlist1`, `resultlist2`, `times taken`, `score` |
+| `RPDelayedRecallActivity` | `wordlist delayed`, `resultlist3`, `time taken`, `score` |
+| `RPFlankerActivity` | `wrong swipes`, `right swipes`, `time`, `score`, `meanCongruent`, `meanIncongruent`, `numberCardsCongruent`, `numberCardsIncongruent` |
+| `RPLetterTappingActivity` | `amount of errors`, `score` |
+| `RPPairedAssociatesLearningActivity` | `successes`, `mistakes` |
+| `RPPictureSequenceMemoryActivity` | `Amount of moves`, `Amount of correct pairs`, `Time taken to memorize`, `Time taken to move pictures`, `score` |
+| `RPRapidVisualInfoProcessingActivity` | `Correct taps`, `incorrect taps`, `passed sequences`, `Delay on correct taps` |
+| `RPReactionTimeActivity` | `avg. reaction time` (ms), `Wrong taps`, `Correct taps` |
+| `RPStroopEffectActivity` | `mistakes`, `correct taps` |
+| `RPTappingActivity` | `Total taps` |
+| `RPTrailMakingActivity` | `Completion time`, `score` |
+| `RPVisualArrayChangeActivity` | `Wrong guesses`, `Right guesses`, `Time taken to memorize`, `Time taken to guess`, `score` |
+
+Three tests store a different value in some cases:
+
+- **Paired associates learning:** stores `successes` and `mistakes` when `maxTestDuration` ends the test, and the number `0` when the participant completes every level first.
+- **Picture sequence memory and Visual array change:** replace the value with a single `Correct swipes` key when `lengthOfTest` passes before the participant leaves the test.
+
+Next to `result`, the activity result holds `stepTimes` and `interactions`. `stepTimes` records when the instruction and test phases start and end and when the result screen appears, as far as each test logs them. `interactions` holds one entry for each interaction that the test logs, such as a tap or a drawn path.
+
+See [Step results](/docs/sampling-packages/survey/survey-data#step-results) for the fields and an example.
+
+## Translate the tests
+
+Cognition Package ships its texts in Danish, English, French and Portuguese. To add `CPLocalizations.delegate` to the app, see [Translate the survey](/docs/sampling-packages/survey/surveys#translate-the-survey). The spoken letters and words of the Letter tapping and Word recall tests are in English only.
+
+## Check the copyright of each test
+
+<Callout type="warning" title="Copyright">
+
+The tests may be subject to different copyright terms. Check that you may use each test in your study, and get permission from the copyright holder where needed.
+
+</Callout>
+
+The Cognition Package README names these copyright holders:
+
+| Test | Copyright |
+| --- | --- |
+| Multiple object tracking, Flanker, Reaction time, Stroop effect, Finger tapping, Visual array change | Copenhagen Center for Health Technology (CACHET), under the package's MIT license |
+| Corsi block tapping | [PsyToolkit](https://www.psytoolkit.org/copyright.html) |
+| Verbal recognition memory, Delayed recall, Letter tapping | [Montreal Cognitive Assessment (MoCA)](https://www.mocatest.org/permission/) |
+| Paired associates learning, Rapid visual information processing | [Cambridge Cognition Ltd](https://www.cambridgecognition.com/company/terms-of-use) |
+| Picture sequence memory | NIH Toolbox Cognition Battery (NIHTB-CB) |
+| Trail making | [Public domain](https://datashare.nida.nih.gov/instrument/trail-making-test) |

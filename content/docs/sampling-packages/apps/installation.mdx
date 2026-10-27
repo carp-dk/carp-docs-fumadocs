@@ -1,0 +1,125 @@
+---
+title: Installation
+description: Add carp_apps_package to a CAMS app and configure the Android manifest.
+icon: Download
+---
+
+The package needs the CARP Mobile Sensing (CAMS) setup, one Android permission and a setting that the participant turns on.
+
+<Callout type="warning" title="Android only">
+
+The package supports Android only, so iOS needs no setup. On iOS, CAMS skips the measures.
+
+</Callout>
+
+Set up the package in three steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_apps_package
+```
+
+The package runs on CAMS, so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first.
+
+</Step>
+<Step title="Configure Android">
+
+Declare the `tools` namespace and the usage statistics permission in `android/app/src/main/AndroidManifest.xml`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" /> <!-- [!code ++] -->
+
+    <!-- ... the rest of your manifest -->
+</manifest>
+```
+
+`PACKAGE_USAGE_STATS` lets the app read Android's usage statistics for `APP_USAGE`. Android grants it only through the **Usage access** setting, not in a dialog. `tools:ignore="ProtectedPermissions"` suppresses the Android lint error for this protected permission.
+
+The `installed_apps` plugin adds `QUERY_ALL_PACKAGES` and `REQUEST_DELETE_PACKAGES` to the merged manifest. `APPS` needs `QUERY_ALL_PACKAGES` to see all apps on Android 11 or later. The package never uninstalls apps, so you can remove `REQUEST_DELETE_PACKAGES`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" tools:node="remove" />
+```
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure the client:
+
+```dart
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_apps_package/apps.dart'; // [!code ++]
+
+void main() async {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(AppsSamplingPackage()); // [!code ++]
+
+  await SmartPhoneClientManager().configure();
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering makes the two measure types and their data classes known to CAMS. `configure()` restores the studies saved on the phone and needs these classes to read them.
+
+</Step>
+</Steps>
+
+## Usage access
+
+`APP_USAGE` reads usage statistics only after the participant turns on **Usage access** for the app in Android settings:
+
+- CAMS does not ask for it, and `permission_handler` cannot request it.
+- When access is missing, the `app_usage` plugin opens the **Usage access** settings screen each time the measure collects. The measurement then has an empty `usage` map.
+- The package cannot check whether access is granted.
+
+Explain the setting to participants before the first collection, for example during onboarding. Until they turn access on, a frequent trigger opens the settings screen again and again. The labels on the settings screen may differ between phone makers.
+
+## Google Play policy
+
+Google Play restricts `QUERY_ALL_PACKAGES`. Its [policy for this permission](https://support.google.com/googleplay/android-developer/answer/10158779) allows it only for apps whose core purpose is to discover all installed apps.
+
+The policy names device search, antivirus apps, file managers and browsers as examples, and research studies are not among the permitted uses it lists. Apps that use the permission must also declare it in Play Console and follow Google's User Data policy, including prominent disclosure and consent.
+
+If you publish on Google Play and cannot justify the permission, remove it from the build that you publish:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:node="remove" />
+```
+
+Without it, Android 11 or later shows the app only a limited set of other apps, so `APPS` lists fewer apps. With build flavors, keep the permission in development builds and remove it in the manifest of the Play Store flavor.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="App usage measurements have an empty usage map">
+
+Turn on **Usage access** for the app in Android settings. Measurements collected before access was granted stay empty. Apps without foreground time in the window are always left out of `usage`.
+
+</Accordion>
+<Accordion title="Few apps in the installed apps list">
+
+Check that the merged manifest contains `QUERY_ALL_PACKAGES`, for example in the **Merged Manifest** tab of Android Studio. Without it, Android 11 or later hides most apps. System apps and apps without a launcher entry are never in the list.
+
+</Accordion>
+<Accordion title="No app measurements on iOS">
+
+Use an Android phone: the package supports Android only, and CAMS skips both measures on iOS.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/apps/quickstart" icon="Bolt">
+
+Build an app that collects both measures and prints them.
+
+</Card>
+</Cards>

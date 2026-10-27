@@ -1,0 +1,179 @@
+---
+title: Installation
+description: Add carp_connectivity_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+The package needs the CARP Mobile Sensing (CAMS) setup plus the permissions of the measures you collect:
+
+| Measure | Android permissions | iOS keys and capabilities |
+| --- | --- | --- |
+| `CONNECTIVITY` | None | None |
+| `WIFI` | `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | `NSLocationWhenInUseUsageDescription`, the **Access Wi-Fi Information** capability |
+| `BLUETOOTH` | `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`; on Android 11 and lower also `BLUETOOTH`, `BLUETOOTH_ADMIN` and `ACCESS_FINE_LOCATION` | `NSBluetoothAlwaysUsageDescription` |
+| `BEACON` | `BLUETOOTH_SCAN`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`; on Android 11 and lower also `BLUETOOTH` and `BLUETOOTH_ADMIN` | `NSBluetoothAlwaysUsageDescription`, `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription` |
+
+Set up the package in four steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_connectivity_package
+```
+
+The package runs on CAMS, so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first.
+
+<Callout type="info">
+
+By default, an app resolves `flutter_blue_plus` 2.x, which needs a commercial license for commercial use. When the app is built for Android, version 2.x also tries to send license telemetry. To keep the BSD-licensed 1.x, add it with a version constraint:
+
+```bash
+flutter pub add 'flutter_blue_plus:^1.36.8'
+```
+
+</Callout>
+
+</Step>
+<Step title="Configure Android">
+
+Add the permissions that your measures need, as listed in the table above, to `android/app/src/main/AndroidManifest.xml`. With all four measures, the manifest has these entries:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> <!-- [!code ++] -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" /> <!-- [!code ++] -->
+
+    <!-- ... the rest of your manifest -->
+</manifest>
+```
+
+Each entry has this purpose:
+
+| Entry | Why |
+| --- | --- |
+| `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | Android returns the Wi-Fi name and access point address only to apps with precise location, and beacon scanning needs precise location. On Android 11 and lower, `flutter_blue_plus` also needs it to scan. Android asks for both permissions in one dialog. |
+| `ACCESS_BACKGROUND_LOCATION` | CAMS asks for location all the time for `BEACON` and starts the measure only when it is granted. |
+| `BLUETOOTH_SCAN` | Bluetooth scanning on Android 12 or later. CAMS asks for it for `BLUETOOTH` and `BEACON`. |
+| `BLUETOOTH_CONNECT` | `flutter_blue_plus` needs it to scan on Android 12 or later, because it reads device names, and asks for it when a scan starts. |
+| `BLUETOOTH`, `BLUETOOTH_ADMIN` | Bluetooth scanning on Android 11 and lower. The Android Beacon Library, which `dchs_flutter_beacon` uses, adds both to the merged manifest too. |
+| `bluetooth_le` feature | Tells Google Play that the app uses Bluetooth Low Energy but also installs on phones without it. |
+
+The plugins add `ACCESS_NETWORK_STATE` and `ACCESS_WIFI_STATE` to the merged manifest themselves. The Android Beacon Library also adds `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE_LOCATION` and `RECEIVE_BOOT_COMPLETED`, even when the app does not collect `BEACON`.
+
+If the app does not collect `BEACON`, you can add `android:usesPermissionFlags="neverForLocation"` to `BLUETOOTH_SCAN` to declare that the app does not derive location from Bluetooth scans. Leave the flag off for `BEACON`: with it, Android filters some beacons out of the scan results, as Android's [Bluetooth permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions) guide explains.
+
+</Step>
+<Step title="Configure iOS">
+
+Add the usage descriptions to `ios/Runner/Info.plist`. `NSBluetoothAlwaysUsageDescription` is for `BLUETOOTH` and `BEACON`, `NSLocationWhenInUseUsageDescription` for `WIFI` and `BEACON`, and `NSLocationAlwaysAndWhenInUseUsageDescription` for `BEACON`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>This app scans for nearby Bluetooth devices and beacons for a research study.</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>This app uses your location to read the Wi-Fi network name and detect nearby beacons.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>This app detects nearby beacons in the background for a research study.</string>
+```
+
+To read the Wi-Fi name and access point address, select **Runner → Signing & Capabilities** in Xcode, click **+ Capability** and add **Access Wi-Fi Information**. A Personal Team, the free team of an Apple account, cannot add this capability.
+
+Xcode adds the entitlement to `ios/Runner/Runner.entitlements`:
+
+```xml title="ios/Runner/Runner.entitlements"
+<key>com.apple.developer.networking.wifi-info</key>
+<true/>
+```
+
+CAMS asks for the iOS permissions through `permission_handler`, which compiles in only the permissions that the app turns on. How you turn them on depends on how Flutter builds the iOS plugins: with Swift Package Manager, the default from Flutter 3.44, or with CocoaPods:
+
+<Tabs items={['Swift Package Manager', 'CocoaPods']}>
+<Tab value="Swift Package Manager">
+
+`permission_handler` turns on the permissions whose usage descriptions are in `Info.plist`, so no other change is needed. After you change the keys, delete Xcode's derived data once so that Xcode reads them again:
+
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData
+```
+
+</Tab>
+<Tab value="CocoaPods">
+
+Turn on the Bluetooth and location permissions in the `post_install` block of `ios/Podfile`. Keep any other permissions that your app uses in the same list:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_BLUETOOTH=1', # [!code ++]
+        'PERMISSION_LOCATION=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure the client:
+
+```dart
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_connectivity_package/connectivity.dart'; // [!code ++]
+
+void main() async {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(ConnectivitySamplingPackage()); // [!code ++]
+
+  await SmartPhoneClientManager().configure();
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering makes the four measure types and their data and configuration classes known to CAMS. It also adds the Wi-Fi and Bluetooth name hashing to the default privacy schema. `configure()` restores the studies saved on the phone and needs these classes to read them.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Bluetooth measurements hold errors">
+
+Check that Bluetooth is on and that the participant granted the Bluetooth permissions. On Android 11 and lower, also check that precise location is granted and Location Services are on. Each failed scan window records an error whose message starts with `Error scanning for bluetooth - `.
+
+</Accordion>
+<Accordion title="Wi-Fi measurements have no network name">
+
+Ask for location access in the app: CAMS does not ask for it on behalf of `WIFI`. See [Location permission](/docs/sampling-packages/connectivity/wifi#location-permission).
+
+On Android, the participant must also allow precise location, and Location Services must be on. On iOS, the app also needs the **Access Wi-Fi Information** capability.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/connectivity/quickstart" icon="Bolt">
+
+Build an app that collects all four measures and prints them.
+
+</Card>
+</Cards>

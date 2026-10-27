@@ -1,0 +1,188 @@
+---
+title: Installation
+description: Add carp_context_package to a CAMS app and configure Android and iOS.
+icon: Download
+---
+
+Adding the package to a CARP Mobile Sensing (CAMS) app takes four steps:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_context_package
+```
+
+The package runs on CAMS, so complete the CAMS setup in [Installation](/docs/mobile-sensing/installation) first. The steps below add only what this package needs on top of it.
+
+</Step>
+<Step title="Configure Android">
+
+The `activity_recognition_flutter` plugin requires API level 26 (Android 8.0), which is higher than the `flutter.minSdkVersion` default. Set `minSdk` to 26 or later:
+
+```kotlin title="android/app/build.gradle.kts"
+android {
+    defaultConfig {
+        minSdk = flutter.minSdkVersion // [!code --]
+        minSdk = 26 // [!code ++]
+        // ... the other defaultConfig settings
+    }
+}
+```
+
+Add the background location and internet permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> <!-- [!code ++] -->
+    <uses-permission android:name="android.permission.INTERNET" /> <!-- [!code ++] -->
+    <!-- ... the rest of your manifest -->
+</manifest>
+```
+
+`ACCESS_BACKGROUND_LOCATION` lets the participant allow location all the time; without it, `LOCATION`, `GEOFENCE` and `MOBILITY` collect nothing on Android 10 and later. `WEATHER` and `AIR_QUALITY` need `INTERNET` in release builds, because Flutter declares it only in the debug and profile manifests.
+
+<Accordions>
+<Accordion title="Permissions that the plugins add">
+
+The plugins merge these entries into your app's manifest, so you do not add them yourself:
+
+| Plugin | Merged permissions and components |
+| --- | --- |
+| `location` | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` and a foreground service of type `location` |
+| `activity_recognition_flutter` | `ACTIVITY_RECOGNITION`, `com.google.android.gms.permission.ACTIVITY_RECOGNITION`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_HEALTH`, a broadcast receiver and a foreground service of type `health` |
+
+</Accordion>
+</Accordions>
+
+</Step>
+<Step title="Configure iOS">
+
+Add the location usage descriptions and the `location` background mode to `ios/Runner/Info.plist`, inside the top-level `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>The study uses your location to describe where you spend your time.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>The study collects your location in the background to measure your daily mobility.</string>
+<key>UIBackgroundModes</key>
+<array>
+  <string>location</string>
+</array>
+```
+
+iOS shows the two texts in its location prompts. The `location` background mode lets the app receive locations in the background; in Xcode, it is **Location updates** under **Signing & Capabilities → Background Modes**. If `UIBackgroundModes` already exists, add `location` to its array.
+
+`ACTIVITY` also needs the `NSMotionUsageDescription` key from the CAMS setup. The package needs iOS 15.0 or later, the same minimum as CAMS.
+
+The `activity_recognition_flutter` plugin ships its iOS code only as a Swift package, so the iOS build must use Swift Package Manager. Flutter 3.44 and later turn it on by default. If you turned it off, turn it on again:
+
+```bash
+flutter config --enable-swift-package-manager
+```
+
+How `permission_handler` turns on the location, motion and notification permissions depends on how it is built:
+
+<Tabs items={['Swift Package Manager', 'CocoaPods']}>
+<Tab value="Swift Package Manager">
+
+`permission_handler` reads the usage descriptions in `Info.plist` and turns on each matching permission, so the keys above are all it needs. When you build from Xcode.app instead of `flutter run` or `flutter build ios`, point it at the file and clear the build cache:
+
+```bash
+launchctl setenv PERMISSION_HANDLER_INFO_PLIST /path/to/your_app/ios/Runner/Info.plist
+rm -rf ~/Library/Developer/Xcode/DerivedData
+```
+
+</Tab>
+<Tab value="CocoaPods">
+
+Older versions of `permission_handler` build with CocoaPods. In that case, turn the permissions on with preprocessor macros in the `post_install` block of `ios/Podfile`:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_LOCATION=1', # [!code ++]
+        'PERMISSION_NOTIFICATIONS=1', # [!code ++]
+        'PERMISSION_SENSORS=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure the `SmartPhoneClientManager`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_context_package/carp_context_package.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(ContextSamplingPackage()); // [!code ++]
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+Registering [`ContextSamplingPackage`](https://pub.dev/documentation/carp_context_package/latest/carp_context_package/ContextSamplingPackage-class.html) makes the six measure types and the three services known to CAMS. CAMS can then deploy protocols that use them and read them from JSON. It also registers the sub-packages for the location, weather and air quality measures, so do not register those yourself.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Android build fails because of minSdk">
+
+Set `minSdk` to 26 or later in `android/app/build.gradle.kts`. The `activity_recognition_flutter` plugin requires API level 26.
+
+</Accordion>
+<Accordion title="iOS build fails with Swift Package Manager turned off">
+
+Turn Swift Package Manager on and build again:
+
+```bash
+flutter config --enable-swift-package-manager
+```
+
+The `activity_recognition_flutter` plugin has no CocoaPods support, so the iOS build needs Swift Package Manager.
+
+</Accordion>
+<Accordion title="The app crashes on iOS when activity recognition starts">
+
+Add `NSMotionUsageDescription` to `ios/Runner/Info.plist`, as the CAMS setup in [Installation](/docs/mobile-sensing/installation#configure-ios) describes. iOS terminates an app that uses motion data without this key.
+
+</Accordion>
+<Accordion title="iOS never shows the location prompts">
+
+Build with `flutter run`, or set `PERMISSION_HANDLER_INFO_PLIST` as in the Configure iOS step. When you build from Xcode.app, `permission_handler` cannot find `Info.plist`. It then compiles out every permission that needs an `Info.plist` key and reports each one as denied.
+
+</Accordion>
+<Accordion title="Weather and air quality fail in Android release builds">
+
+Add the `INTERNET` permission to `android/app/src/main/AndroidManifest.xml`. Flutter declares it only in the debug and profile manifests, so debug builds work without it.
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/context/quickstart" icon="Bolt">
+
+Build an app that collects activity, location and mobility features.
+
+</Card>
+</Cards>

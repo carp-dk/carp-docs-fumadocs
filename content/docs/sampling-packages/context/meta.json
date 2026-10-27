@@ -1,0 +1,7 @@
+{
+  "title": "Context Sampling",
+  "description": "carp_context_package",
+  "icon": "Location",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Concepts---", "services", "permissions", "---Measures---", "location", "activity", "geofences", "mobility", "weather-and-air-quality", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_context_package)", "[API reference](https://pub.dev/documentation/carp_context_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_context_package)"]
+}

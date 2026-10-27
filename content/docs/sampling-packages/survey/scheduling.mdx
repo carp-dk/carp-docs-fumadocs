@@ -1,0 +1,224 @@
+---
+title: Scheduling and notifications
+description: Choose triggers for survey tasks, notify participants and keep your task list in sync with the CAMS task queue.
+icon: Notifications
+---
+
+Choose when each survey appears and notify the participant when it is due. Then keep your app's task list in step with the task queue of CARP Mobile Sensing (CAMS). For the app task model of CAMS in general, see [App task model](/docs/mobile-sensing/app-task-model).
+
+## Choose a trigger
+
+A trigger decides when CAMS puts a survey task on the task queue of the [`AppTaskController`](https://pub.dev/documentation/carp_mobile_sensing/latest/runtime/AppTaskController-class.html). CAMS handles two kinds of triggers differently:
+
+| | Schedulable triggers | Runtime triggers |
+| --- | --- | --- |
+| **Triggers** | `PeriodicTrigger`, `DateTimeTrigger`, `RecurrentScheduledTrigger`, `CronScheduledTrigger`, `RandomRecurrentTrigger` and `ElapsedTimeTrigger` | All other triggers, for example `OneTimeTrigger`, `DelayedTrigger`, `UserTaskTrigger`, `NoUserTaskTrigger` and `SamplingEventTrigger` |
+| **How CAMS uses them** | Computes their times up to 15 days ahead and schedules the tasks and their notifications in advance | Puts the task on the queue when the trigger fires |
+| **While the app is not running** | Scheduled notifications still arrive | Nothing happens until the app runs again |
+
+These triggers suit surveys:
+
+| Trigger | Use for |
+| --- | --- |
+| `RecurrentScheduledTrigger` | Daily, weekly or monthly surveys at a fixed time |
+| `RandomRecurrentTrigger` | Experience sampling at random times within a daily window |
+| `CronScheduledTrigger` | Schedules that a cron expression describes |
+| `PeriodicTrigger` | A fixed interval, with the first task due when the study first runs |
+| `DateTimeTrigger` | One survey at a fixed date and time |
+| `OneTimeTrigger` | One survey per deployment, for example a demographics survey |
+| `UserTaskTrigger` | A task that follows another task, for example a baseline survey after informed consent |
+| `NoUserTaskTrigger` | A task that is always on the list: CAMS adds it again when it is done or expired |
+
+Add each survey task with its trigger:
+
+```dart
+// Once per deployment
+protocol.addTaskControl(OneTimeTrigger(), demographicsSurvey, phone);
+
+// Every Monday at 9:00
+protocol.addTaskControl(
+  RecurrentScheduledTrigger(
+    type: RecurrentType.weekly,
+    dayOfWeek: DateTime.monday,
+    time: const TimeOfDay(hour: 9),
+  ),
+  weeklySurvey,
+  phone,
+);
+
+// Two to four times a day at random times between 9:00 and 21:00
+protocol.addTaskControl(
+  RandomRecurrentTrigger(
+    minNumberOfTriggers: 1,
+    maxNumberOfTriggers: 3,
+    startTime: const TimeOfDay(hour: 9),
+    endTime: const TimeOfDay(hour: 21),
+  ),
+  moodSurvey,
+  phone,
+);
+
+// When the participant has completed the task named 'Informed consent'
+protocol.addTaskControl(
+  UserTaskTrigger(taskName: 'Informed consent'),
+  baselineSurvey,
+  phone,
+);
+```
+
+Two details of `RecurrentScheduledTrigger` matter for surveys:
+
+- a monthly trigger counts a month as 30 days, so its date drifts from month to month;
+- CAMS 2.5.1 ignores the trigger's `end` and `maxNumberOfSampling` for app tasks, so the survey recurs until the study is removed from the phone.
+
+`RandomRecurrentTrigger` schedules between `minNumberOfTriggers + 1` and `minNumberOfTriggers + maxNumberOfTriggers` surveys a day in CAMS 2.5.1, so the example above gives two to four. For one to three a day, set `minNumberOfTriggers: 0` and `maxNumberOfTriggers: 3`.
+
+## Plan for the 15-day window
+
+Each time the study resumes, CAMS computes the times of every schedulable trigger. It starts at the last scheduled time and goes up to 15 days ahead, with at most 100 times per trigger other than a `RandomRecurrentTrigger`.
+
+CAMS then puts the earliest of these tasks on the queue, as many as there are free notification slots. The other times are computed again at the next resume.
+
+iOS has 64 slots and Android 500, minus the notifications already pending. The slots limit every task, also tasks without notifications.
+
+CAMS queues newly computed tasks only when the study resumes after CAMS has connected the phone. Start sampling at every app start as the [quickstart](/docs/sampling-packages/survey/quickstart) does: wait for the phone to connect, call `AppTaskController().enqueueBufferedTasks()` and then `resume()`. A `resume()` right after `tryDeployment()` comes too early and is ignored, and a later `resume()` without `enqueueBufferedTasks()` queues every task twice. A return from the background does not resume the study. This has two consequences:
+
+- If the app does not start again, no new tasks or notifications appear after the last scheduled one, at most 15 days ahead. On Android, background mode may keep the app running that long.
+- On iOS, the 64 slots hold less than three days of an hourly survey, so the app must start again within that time.
+
+## Set the notification text
+
+With `notification: true`, CAMS notifies the participant when a task is due. The notification shows the task's `title` as its title and the `description` as its body. Both are empty by default, so set them.
+
+CAMS handles task notifications as follows:
+
+- **Timing:** for a runtime trigger, the notification appears at once. For a schedulable trigger, CAMS schedules it for the trigger time. A task whose time has already passed gets none, for example the first task of a `PeriodicTrigger`.
+- **Android:** the notifications use the **CARP Basic Notifications** channel with maximum importance. They are ongoing, so the participant may not be able to swipe them away. Scheduled notifications use exact alarms only if the app may schedule them; otherwise Android may deliver them late.
+- **Cleanup:** CAMS cancels a task's notification when the task is done, expires or leaves the queue.
+- **Permission:** CAMS asks for permission to send notifications when `configure()` runs. To turn off task notifications for all tasks, pass `enableNotifications: false` to `configure()`.
+
+## Open a task from its notification
+
+When the participant taps a task notification while the app runs, CAMS sets the task's state to `notified` and emits the task on `userTaskEvents`. A `SurveyUserTask` does not open itself, so listen for `notified` tasks and push their widget.
+
+When the tap launches the app from a terminated state, [`flutter_local_notifications`](https://pub.dev/packages/flutter_local_notifications), which shows the CAMS notifications, does not pass the tap to CAMS. Read the launch details yourself after `configure()`, and add the plugin as a direct dependency:
+
+```bash
+flutter pub add flutter_local_notifications
+```
+
+Then add a listener for taps while the app runs and a handler for the tap that launched the app:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
+
+/// Opens a task when the participant taps its notification
+void openTasksFromNotifications() {
+  AppTaskController().userTaskEvents
+      .where((task) => task.state == UserTaskState.notified && task.hasWidget)
+      .listen((task) {
+        task.onStart();
+        navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(builder: (context) => task.widget!),
+        );
+      });
+}
+
+/// Passes a notification tap that launched the app on to CAMS
+Future<void> openTaskFromLaunchNotification() async {
+  final details = await FlutterLocalNotificationsPlugin()
+      .getNotificationAppLaunchDetails();
+  final payload = details?.notificationResponse?.payload;
+  if ((details?.didNotificationLaunchApp ?? false) && payload != null) {
+    AppTaskController().onNotification(payload);
+  }
+}
+```
+
+The payload of a task notification is the task's id. Call both functions in `main()`:
+
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+  SamplingPackageRegistry().register(SurveySamplingPackage());
+  await SmartPhoneClientManager().configure();
+  openTasksFromNotifications(); // [!code highlight]
+
+  // ... add, deploy and start the study as in the quickstart
+
+  runApp(MaterialApp(navigatorKey: navigatorKey, home: const TaskListPage()));
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => openTaskFromLaunchNotification(), // [!code highlight]
+  );
+}
+```
+
+The listener must exist before the launch tap is handled, because `userTaskEvents` does not replay events. The launch tap is handled after the first frame, when the navigator exists.
+
+## Keep the task list current
+
+`AppTaskController().userTaskQueue` holds the tasks whose trigger time has passed, including done, canceled and expired tasks until you remove them. Show the tasks for which `availableForUser` is `true`. A task is in one of these states:
+
+| State | When | On `userTaskEvents` | `availableForUser` |
+| --- | --- | --- | --- |
+| `enqueued` | The trigger fired, or CAMS scheduled the task | Yes | Yes |
+| `notified` | The participant tapped the notification | Yes | Yes |
+| `started` | Your app called `onStart()` | No | No |
+| `canceled` | The participant left the survey | No | Yes |
+| `done` | The participant submitted the survey | Yes | No |
+| `expired` | The `expire` duration passed | Yes | No |
+| `dequeued` | Your app called `dequeue()`, and the task left the queue | Yes | No |
+
+A scheduled task enters `userTaskQueue` when its trigger time passes, without an event. Rebuild the list when the app resumes, as the [quickstart app](/docs/sampling-packages/survey/quickstart) does. To follow the states that `userTaskEvents` leaves out, listen to the task's own `stateEvents`.
+
+Done, canceled and expired tasks stay on the queue, and in the phone's database, until you remove them:
+
+```dart
+/// Removes done and expired tasks from the queue
+void removeFinishedTasks() {
+  final finished = AppTaskController().userTaskQueue.where(
+    (task) =>
+        task.state == UserTaskState.done || task.state == UserTaskState.expired,
+  );
+  for (final task in finished.toList()) {
+    AppTaskController().dequeue(task.id);
+  }
+}
+```
+
+`taskTotal`, `taskCompleted`, `taskExpired` and `taskPending` on the `AppTaskController` count the tasks in `userTaskQueue`, for example for a progress screen.
+
+## Let participants leave and retake a survey
+
+While a survey is open, the system back gesture does nothing. The participant leaves through the close button, which asks "Leave survey?"; consent tasks have no close button and are left with **DISAGREE**. After **LEAVE**, the task becomes `canceled` and stays available, so the participant can start it again.
+
+The answers given until then are stored as a `canceled` measurement. See [Canceled surveys](/docs/sampling-packages/survey/survey-data#canceled-surveys).
+
+## Expire tasks
+
+Set `expire` on the `RPAppTask` to limit how long a task stays available. The duration counts from the task's trigger time:
+
+```dart
+final eveningCheckIn = RPAppTask(
+  type: AppTask.SURVEY_TYPE,
+  name: 'Evening check-in',
+  title: 'Evening check-in',
+  description: 'Two minutes about your day',
+  notification: true,
+  expire: const Duration(hours: 3), // [!code highlight]
+  rpTask: eveningSurvey,
+);
+```
+
+CAMS checks for expired tasks once an hour while the app runs, starting an hour after `configure()`. Until the next check, an expired task stays available; to hide it at once, check `task.expiresIn`, which turns negative at the expiry time. An expired task gets the state `expired` and loses its notification, and it stays on the queue until you remove it.
+
+## Handle app restarts
+
+`configure()` restores the task queue from the phone's database and creates a `SurveyUserTask` for each saved task, with the factory of the registered package. Scheduled times that were not yet on the queue are computed again when the study resumes.
+
+A task returns in the last state that CAMS saved with a `userTaskEvents` event: `enqueued`, `notified`, `done` or `expired`. A `started` or `canceled` state is not saved, so such a task returns as available.

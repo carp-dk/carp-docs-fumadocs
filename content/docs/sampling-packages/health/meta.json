@@ -1,0 +1,7 @@
+{
+  "title": "Health Sampling",
+  "description": "carp_health_package",
+  "icon": "MonitorHeart",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "collecting-data", "permissions", "---Reference---", "health-data", "data-types", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_health_package)", "[API reference](https://pub.dev/documentation/carp_health_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_health_package)"]
+}

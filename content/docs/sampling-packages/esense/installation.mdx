@@ -1,0 +1,142 @@
+---
+title: Installation
+description: Add carp_esense_package to a CAMS app and configure Bluetooth on Android and iOS.
+icon: Download
+---
+
+Setting up the eSense package takes four steps on top of the CARP Mobile Sensing (CAMS) setup:
+
+<Steps>
+<Step title="Add the packages">
+
+```bash
+flutter pub add carp_core carp_mobile_sensing carp_esense_package
+```
+
+The package needs CAMS, so complete [Installation](/docs/mobile-sensing/installation) for CAMS first. It brings in the [`esense_flutter`](https://pub.dev/packages/esense_flutter) plugin, which contains the eSense library for Android and uses the `ESense` CocoaPods pod on iOS.
+
+If your code imports `package:esense_flutter/esense.dart`, for example to use `ESenseManager`, also add the plugin as a direct dependency:
+
+```bash
+flutter pub add esense_flutter
+```
+
+</Step>
+<Step title="Configure Android">
+
+Add the Bluetooth permissions that Android 12 or later requires to `android/app/src/main/AndroidManifest.xml`, directly above the `<application>` element:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+    android:usesPermissionFlags="neverForLocation" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+```
+
+`BLUETOOTH_SCAN` lets the plugin find the earbud by its name, and `neverForLocation` declares that the app does not derive location from the scan. `BLUETOOTH_CONNECT` lets it connect to the earbud.
+
+The `esense_flutter` plugin adds the rest to the merged manifest:
+
+- `BLUETOOTH` and `BLUETOOTH_ADMIN`, the Bluetooth permissions of Android 11 and earlier;
+- `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`, because CAMS checks the location permission on every Android version before it connects to a Bluetooth device;
+- the `android.hardware.bluetooth_le` feature as required, so Google Play offers the app only to phones with Bluetooth Low Energy.
+
+Because the plugin declares `ACCESS_FINE_LOCATION`, the participant must allow precise location on Android 12 or later. With approximate location only, `permission_handler` reports the location permission as denied, and CAMS does not connect to the earbud.
+
+<Callout type="warning">
+
+If your manifest declares the location permissions itself, do not limit them with `android:maxSdkVersion`. CAMS needs the location permission on every Android version.
+
+</Callout>
+
+</Step>
+<Step title="Configure iOS">
+
+Add a Bluetooth usage description and the `bluetooth-central` background mode to `ios/Runner/Info.plist`, inside the `<dict>`:
+
+```xml title="ios/Runner/Info.plist"
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>This app connects to your eSense earbud to record your head movements for a research study.</string>
+<key>UIBackgroundModes</key>
+<array>
+  <string>bluetooth-central</string>
+</array>
+```
+
+If `UIBackgroundModes` already exists, add the `bluetooth-central` string to it. The background mode keeps the connection to the earbud, and the data, flowing while the app is in the background. In Xcode, it is **Uses Bluetooth LE accessories** under **Signing & Capabilities → Background Modes**.
+
+The package acts only as a Bluetooth central, which scans for the earbud and connects to it, so it needs no other background mode.
+
+CAMS requests the Bluetooth permission through the `permission_handler` plugin. If your iOS project uses CocoaPods, enable that permission in the `post_install` block of `ios/Podfile`:
+
+```ruby title="ios/Podfile"
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config| # [!code ++]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [ # [!code ++]
+        '$(inherited)', # [!code ++]
+        'PERMISSION_BLUETOOTH=1', # [!code ++]
+      ] # [!code ++]
+    end # [!code ++]
+  end
+end
+```
+
+If the list already exists, add only the `PERMISSION_BLUETOOTH=1` line. With Swift Package Manager, `permission_handler` enables the permission by itself when `Info.plist` contains `NSBluetoothAlwaysUsageDescription`.
+
+`esense_flutter` is available only as a CocoaPods pod, so the iOS project keeps its Podfile. If the project uses Swift Package Manager, Flutter still installs this plugin with CocoaPods. The plugin needs iOS 10.0 or later, which the CAMS minimum of 15.0 covers.
+
+</Step>
+<Step title="Register the sampling package">
+
+Register the package in `main()`, before you configure `SmartPhoneClientManager`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_esense_package/esense.dart'; // [!code ++]
+
+void main() {
+  CarpMobileSensing.ensureInitialized(); // [!code ++]
+  SamplingPackageRegistry().register(ESenseSamplingPackage()); // [!code ++]
+  // ... the rest of your app
+}
+```
+
+Call `CarpMobileSensing.ensureInitialized()` before `register()`: registering a sampling package before CAMS is initialized throws a null check error.
+
+The library is `esense.dart`, not `carp_esense_package.dart`. Registering makes the two eSense measure types and the `ESenseDevice` configuration known to CAMS, and adds the `ESenseDeviceManager` that connects to the earbud. It also registers the eSense classes for JSON, so that CAMS can read protocols and data that contain them.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The analyzer reports that Smartphone is ambiguous">
+
+Hide `Smartphone` when you import `carp_core`. Both `carp_core` and `carp_mobile_sensing` define the class, and CAMS apps use the one in `carp_mobile_sensing`:
+
+```dart
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+```
+
+</Accordion>
+<Accordion title="The log says the permissions required to connect are missing">
+
+Call `requestPermissions()` on the eSense device manager before it connects, because neither CAMS nor the plugin asks for Bluetooth permissions by itself. On Android, also check that the merged manifest declares both location permissions without `android:maxSdkVersion`. On Android 12 or later, the participant must allow precise location.
+
+See [Request Bluetooth permissions](/docs/sampling-packages/esense/connecting#request-bluetooth-permissions).
+
+</Accordion>
+</Accordions>
+
+## Next step
+
+<Cards>
+<Card title="Quickstart" href="/docs/sampling-packages/esense/quickstart" icon="Bolt">
+
+Connect to an eSense earbud and print its button and motion events.
+
+</Card>
+</Cards>

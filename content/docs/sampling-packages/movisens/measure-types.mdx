@@ -1,0 +1,319 @@
+---
+title: Measure types
+description: The six measure types in carp_movisens_package, the data types they produce and when the data arrives.
+icon: Dataset
+---
+
+`carp_movisens_package` has six measure types in the `dk.cachet.carp.movisens` namespace, which CARP Mobile Sensing (CAMS) collects from a Movisens sensor. Add each one to a protocol as `Measure(type: MovisensSamplingPackage.<constant>)`, in a task that runs on a [`MovisensDevice`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensDevice-class.html):
+
+| Measure type | Constant | Kind | Android | iOS |
+| --- | --- | --- | --- | --- |
+| [`dk.cachet.carp.movisens.activity`](#physical-activity) | `ACTIVITY` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movisens.hr`](#heart-rate-and-hrv) | `HR` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movisens.eda`](#electrodermal-activity) | `EDA` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movisens.skin_temperature`](#skin-temperature) | `SKIN_TEMPERATURE` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movisens.respiration`](#respiration) | `RESPIRATION` | Event-based | Yes | Yes |
+| [`dk.cachet.carp.movisens.tap_marker`](#tap-markers) | `TAP_MARKER` | Event-based | Yes | Yes |
+
+All six are event-based; see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures). They stream while the sensor is connected, so start them with an [`ImmediateTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/ImmediateTrigger-class.html). The measures have no sampling configuration.
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+
+## Measures and data types
+
+A measure type says what to collect, and the data type of each measurement says what it holds. For four measures, the two are the same. `ACTIVITY` and `HR` produce several data types:
+
+| Measure | Data type | Data class |
+| --- | --- | --- |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.steps` | `MovisensStepCount` |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.body_position` | `MovisensBodyPosition` |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.inclination` | `MovisensInclination` |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.movement_acceleration` | `MovisensMovementAcceleration` |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.met` | `MovisensMET` |
+| `ACTIVITY` | `dk.cachet.carp.movisens.activity.met_level` | `MovisensMETLevel` |
+| `HR` | `dk.cachet.carp.movisens.hr.hr_mean` | `MovisensHR`, `MovisensHRV` and `MovisensIsHrvValid` |
+
+To select measurements, use the data type, not the measure type, for example in `measurementsByType()` or in a `SamplingEventTrigger`. [`MovisensData`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensData-class.html) has constants for these data types, such as `MovisensData.STEPS`:
+
+```dart
+client
+    .getStudyController(study)
+    ?.measurementsByType(MovisensData.STEPS)
+    .listen((measurement) => print(jsonEncode(measurement)));
+```
+
+## Delays and timestamps
+
+The sensor computes most values over one minute and sends each one 0–84 seconds after measuring it, depending on the sensor and the value. Tap markers arrive without delay. Movisens lists the delay of each signal in [Available signals per sensor](https://docs.movisens.com/BluetoothLowEnergy/#available-signals-per-sensor).
+
+The package does not correct for the delay: `timestamp` and `sensorStartTime` both give the phone's time when the value arrived. `timestamp` is in the phone's local time, without a time zone offset, and `sensorStartTime` is in microseconds since the epoch.
+
+The package reads only live values. Values that the sensor measures while it is disconnected are not transferred later.
+
+## Common fields
+
+Every Movisens data class extends `MovisensData`, which has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `DateTime` | The phone's local time when the value arrived, in ISO 8601 without a time zone offset. |
+| `deviceId` | `String` | Bluetooth ID of the sensor: a MAC address on Android, or on iOS a UUID that differs between phones. |
+| `type` | `String` | The `movisens_flutter` characteristic that sent the value, such as `steps` or `hrMean`. |
+
+## Physical activity
+
+`ACTIVITY` collects the values of the sensor's physical activity service, about once per minute each. Body position, the metabolic equivalent of task (MET) and MET levels depend on the wearer's data in the `MovisensDevice`. See [Add the device to the protocol](/docs/sampling-packages/movisens/connecting#add-the-device-to-the-protocol).
+
+<Callout type="warning" title="Known issue">
+
+CAMS creates the probes when it deploys or restores a study, before it connects the sensor. The activity probe starts only if the sensor's physical activity service is known at that moment, so `ACTIVITY` collects no data.
+
+</Callout>
+
+The six data classes add these fields to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `steps` | `int` | In `MovisensStepCount`: steps in the last minute. |
+| `bodyPosition` | `String` | In `MovisensBodyPosition`: the wearer's position, one of `unknown`, `lyingSupine`, `lyingLeft`, `lyingProne`, `lyingRight`, `upright`, `sittingUpright`, `standing` and `notWorn`. |
+| `x`, `y`, `z` | `int` | In `MovisensInclination`: mean inclination of the three body axes, in degrees from 0 to 180. |
+| `movementAcceleration` | `double` | In `MovisensMovementAcceleration`: intensity of movement in g, where 1 g is 9.81 m/s². |
+| `met` | `int` | In `MovisensMET`: the MET value, as the raw integer that the sensor sends. |
+| `sedentary`, `light`, `moderate`, `vigorous` | `int` | In `MovisensMETLevel`: seconds spent at each MET level in the last minute. |
+
+<Accordions>
+<Accordion title="Example data">
+
+Step count:
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.activity.steps",
+  "timestamp": "2026-10-26T10:23:20.123456",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "steps",
+  "steps": 56
+}
+```
+
+Body position:
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.activity.body_position",
+  "timestamp": "2026-10-26T10:23:20.894110",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "bodyPosition",
+  "bodyPosition": "standing"
+}
+```
+
+Time per MET level:
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.activity.met_level",
+  "timestamp": "2026-10-26T10:23:21.012345",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "metLevel",
+  "sedentary": 12,
+  "light": 38,
+  "moderate": 10,
+  "vigorous": 0
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Heart rate and HRV
+
+`HR` collects the values of the heart rate variability (HRV) service of an EcgMove4, about once per minute each. The package does not collect the beat-by-beat heart rate that the sensor also sends.
+
+<Callout type="warning" title="Known issue">
+
+CAMS creates the probes when it deploys or restores a study, before it connects the sensor. The heart rate probe starts only if the sensor's HRV service is known at that moment, so `HR` collects no data.
+
+</Callout>
+
+The three data classes add these fields to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `hr` | `int` | In `MovisensHR`, with `type` `hrMean`: mean heart rate of the previous 60 seconds, in beats per minute (BPM). |
+| `hrv` | `int` | In `MovisensHRV`, with `type` `rmssd`: the root mean square of successive differences (RMSSD) of the beat intervals, in milliseconds. |
+| `isHrvValid` | `bool` | In `MovisensIsHrvValid`, with `type` `hrvIsValid`: whether the current HRV values are valid. |
+
+All three classes use the data type `dk.cachet.carp.movisens.hr.hr_mean`. The constants `MovisensData.HRV` and `MovisensData.IS_HRV_VALID` exist, but no data uses them. Tell the three apart by the `type` field, or by class:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is MovisensHR) print('Mean heart rate: ${data.hr} BPM');
+  if (data is MovisensHRV) print('RMSSD: ${data.hrv} ms');
+  if (data is MovisensIsHrvValid) print('HRV valid: ${data.isHrvValid}');
+});
+```
+
+<Accordions>
+<Accordion title="Example data">
+
+Mean heart rate:
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.hr.hr_mean",
+  "timestamp": "2026-10-26T10:24:30.218930",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "hrMean",
+  "hr": 72
+}
+```
+
+RMSSD:
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.hr.hr_mean",
+  "timestamp": "2026-10-26T10:24:44.731002",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "rmssd",
+  "hrv": 42
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Electrodermal activity
+
+`EDA` collects the mean skin conductance level (SCL) of an EdaMove4, about once per minute.
+
+[`MovisensEDA`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensEDA-class.html) adds this field to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `edaSclMean` | `double` | Mean skin conductance level in microsiemens (µS). |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.eda",
+  "timestamp": "2026-10-26T10:25:44.731002",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "edaSclMean",
+  "edaSclMean": 2.447584459974975
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Skin temperature
+
+`SKIN_TEMPERATURE` collects the mean skin temperature of the last minute, about once per minute.
+
+[`MovisensSkinTemperature`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensSkinTemperature-class.html) adds this field to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `skinTemperature` | `double` | Mean skin temperature in °C. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.skin_temperature",
+  "timestamp": "2026-10-26T10:26:12.004518",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "skinTemperature",
+  "skinTemperature": 33.12
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Respiration
+
+`RESPIRATION` reads the respiratory movement value of the sensor's respiration service.
+
+<Callout type="warning" title="Known issue">
+
+The respiration probe turns on the notifications of the skin temperature service instead of the respiration service. The sensor then sends no respiration values, so `RESPIRATION` collects no data.
+
+</Callout>
+
+[`MovisensRespiration`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensRespiration-class.html) adds this field to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `value` | `int` | Respiratory movement. Neither Movisens nor `movisens_flutter` documents its unit. |
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.respiration",
+  "timestamp": "2026-10-26T10:26:12.004518",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "respiratoryMovement",
+  "value": 1342
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Tap markers
+
+`TAP_MARKER` reports each tap on the sensor without delay, for example when the participant marks a moment in the day.
+
+[`MovisensTapMarker`](https://pub.dev/documentation/carp_movisens_package/latest/carp_movisens_package/MovisensTapMarker-class.html) adds this field to the [common fields](#common-fields):
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `tapMarker` | `int` | The marker value that the sensor sends. Movisens does not document its meaning. |
+
+A [`SamplingEventTrigger`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/SamplingEventTrigger-class.html) with `measureType: MovisensSamplingPackage.TAP_MARKER` starts a task on every tap. Leave out `triggerCondition`: Movisens data classes do not support conditions, so a trigger with one never fires.
+
+<Accordions>
+<Accordion title="Example data">
+
+```json
+{
+  "__type": "dk.cachet.carp.movisens.tap_marker",
+  "timestamp": "2026-10-26T10:23:20.123456",
+  "deviceId": "88:6B:0F:3A:52:C1",
+  "type": "tapMarker",
+  "tapMarker": 1203
+}
+```
+
+</Accordion>
+</Accordions>
+
+## Data transformers
+
+Registering the package adds transformers to the Open mHealth (OMH) and Fast Healthcare Interoperability Resources (FHIR) formats of CAMS:
+
+| Data type | OMH | FHIR |
+| --- | --- | --- |
+| `dk.cachet.carp.movisens.hr.hr_mean` | `OMHHeartRateDataPoint` | `FHIRHeartRateObservation` |
+| `dk.cachet.carp.movisens.activity.steps` | `OMHStepCountDataPoint` | None |
+
+To store data in one of these formats, set `dataFormat` on the data endpoint:
+
+```dart
+final protocol = SmartphoneStudyProtocol(
+  ownerId: 'owner@example.com',
+  name: 'Heart rate and steps in Open mHealth format',
+  dataEndPoint: SQLiteDataEndPoint(dataFormat: NameSpace.OMH),
+);
+```
+
+Data of the other data types keeps the CARP format. See [Data transformation](/docs/mobile-sensing/privacy#data-transformation).

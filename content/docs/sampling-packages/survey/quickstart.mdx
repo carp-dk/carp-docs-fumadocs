@@ -1,0 +1,283 @@
+---
+title: Quickstart
+description: Build a CAMS app that schedules a daily WHO-5 survey and prints the answers as measurements.
+icon: Bolt
+---
+
+Build an app that schedules the WHO-5 well-being survey every day at 13:00, lists the due surveys and prints each result as a measurement.
+
+## Prerequisites
+
+- A Flutter app set up as described in [Installation](/docs/sampling-packages/survey/installation), including the CARP Mobile Sensing (CAMS) base setup.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart' hide TimeOfDay;
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_survey_package/survey.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(SurveySamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone as the primary device
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Daily well-being',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  protocol.addPrimaryDevice(phone);
+
+  // 3. Add the WHO-5 survey every day at 13:00
+  protocol.addTaskControl(
+    RecurrentScheduledTrigger(
+      type: RecurrentType.daily,
+      time: const TimeOfDay(hour: 13),
+    ),
+    RPAppTask( // [!code highlight]
+      type: AppTask.SURVEY_TYPE,
+      name: 'WHO-5 Survey',
+      title: 'Well-being survey',
+      description: 'Five questions about how you have been feeling',
+      notification: true,
+      rpTask: who5Task, // [!code highlight]
+    ),
+    phone,
+  );
+
+  // 4. Deploy the protocol on the first run
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+
+  // 5. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  // 6. Start sampling once CAMS has set up the study on the phone
+  await startSampling(client); // [!code highlight]
+
+  runApp(const MaterialApp(home: TaskListPage()));
+}
+
+// Resume sampling once CAMS has connected the phone, its last setup step
+Future<void> startSampling(SmartPhoneClientManager client) async {
+  final phoneManager = client.deviceController.getDeviceManager(
+    Smartphone.DEVICE_TYPE,
+  )!;
+  if (!phoneManager.isConnected) {
+    await phoneManager.statusEvents.firstWhere(
+      (status) => status == DeviceStatus.connected,
+    );
+  }
+  // Queue the tasks that connecting the phone scheduled, so resume() does not schedule them again
+  await AppTaskController().enqueueBufferedTasks();
+  client.resume();
+}
+
+// 7. List the due tasks and open a survey when the participant taps it
+class TaskListPage extends StatefulWidget {
+  const TaskListPage({super.key});
+
+  @override
+  State<TaskListPage> createState() => _TaskListPageState();
+}
+
+class _TaskListPageState extends State<TaskListPage> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // A scheduled task becomes due without an event, so rebuild on resume
+    _lifecycle = AppLifecycleListener(onResume: () => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tasks')),
+    body: StreamBuilder<UserTask>(
+      stream: AppTaskController().userTaskEvents,
+      builder: (context, _) {
+        final tasks = AppTaskController().userTaskQueue
+            .where((task) => task.availableForUser)
+            .toList();
+        return ListView(
+          children: [
+            for (final task in tasks)
+              ListTile(
+                title: Text(task.title),
+                subtitle: Text(task.description),
+                onTap: () => _open(task),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+
+  void _open(UserTask task) {
+    task.onStart(); // [!code highlight]
+    if (task.hasWidget) {
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (context) => task.widget!)); // [!code highlight]
+    }
+  }
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | Makes `RPAppTask` and the survey measure known to CAMS, and registers the factory that turns a triggered survey task into a `SurveyUserTask`. It must run before `configure()`. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | Defines the study with the phone as the only device and a SQLite database on the phone as the data endpoint. |
+| **3. Survey task** | Wraps `who5Task`, the WHO-5 survey that ships with the package, in an `RPAppTask`. The trigger repeats it every day at 13:00, and `notification: true` shows a notification with the task's `title` and `description`. |
+| **4. Deploy** | Deploys the study on the first run. On later runs, `configure()` restores the saved study, so the app does not add a second one with its own survey schedule. |
+| **5. Measurements** | Prints every measurement, including the survey result when the participant submits or leaves a survey. |
+| **6. Start sampling** | `startSampling()` waits until CAMS has connected the phone, the last step of setting up the study. It then queues the survey tasks that CAMS scheduled for the next 15 days and resumes sampling. A `resume()` right after `tryDeployment()` comes too early: CAMS ignores it, and no survey reaches the task list. |
+| **7. Task list** | Lists the due tasks that the participant can start. Tapping one calls `onStart()` and pushes `task.widget`, which closes itself when the participant finishes or leaves the survey. |
+
+The `material.dart` import hides Flutter's `TimeOfDay`, because the trigger takes the `TimeOfDay` class from `carp_core`.
+
+## Run the app
+
+<Callout type="tip" title="See the survey sooner">
+
+Before the first run, change `TimeOfDay(hour: 13)` to a time a few minutes from now, for example `TimeOfDay(hour: 9, minute: 41)`. The app deploys the protocol only once, so after a change, uninstall the app and run it again.
+
+</Callout>
+
+<Steps>
+<Step title="Start the app">
+
+```bash
+flutter run
+```
+
+Allow notifications when the app asks. The task list stays empty until the first survey is due.
+
+</Step>
+<Step title="Open the survey">
+
+At 13:00, a notification with the title **Well-being survey** appears. Tap it to open the app, then tap the task in the list. To open the survey straight from the notification, see [Open a task from its notification](/docs/sampling-packages/survey/scheduling#open-a-task-from-its-notification).
+
+</Step>
+<Step title="Answer the questions">
+
+Answer the five questions and tap **DONE** on the last screen. The survey closes, and the task leaves the list.
+
+</Step>
+</Steps>
+
+## Check the data
+
+The console prints the survey result as a `dk.cachet.carp.survey` measurement. Formatted, and with four of the five question results left out, it looks like this:
+
+```json
+{
+  "sensorStartTime": 1793016161231945,
+  "data": {
+    "__type": "dk.cachet.carp.survey",
+    "status": "submitted",
+    "result": {
+      "__type": "RPTaskResult",
+      "identifier": "who5_task",
+      "startDate": "2026-10-26T13:02:05.412907",
+      "endDate": "2026-10-26T13:02:41.230518",
+      "results": {
+        "who5_question_1": {
+          "__type": "RPStepResult",
+          "identifier": "who5_question_1",
+          "startDate": "2026-10-26T13:02:05.498120",
+          "endDate": "2026-10-26T13:02:09.871244",
+          "questionTitle": "I have felt cheerful and in good spirits",
+          "results": {
+            "answer": [
+              {
+                "__type": "RPChoice",
+                "text": "Most of the time",
+                "value": 4,
+                "isFreeText": false
+              }
+            ]
+          },
+          "answerFormat": {
+            "__type": "RPChoiceAnswerFormat",
+            "questionType": "SingleChoice",
+            "choices": [
+              { "__type": "RPChoice", "text": "All of the time", "value": 5, "isFreeText": false },
+              { "__type": "RPChoice", "text": "Most of the time", "value": 4, "isFreeText": false },
+              { "__type": "RPChoice", "text": "More than half of the time", "value": 3, "isFreeText": false },
+              { "__type": "RPChoice", "text": "Less than half of the time", "value": 2, "isFreeText": false },
+              { "__type": "RPChoice", "text": "Some of the time", "value": 1, "isFreeText": false },
+              { "__type": "RPChoice", "text": "At no time", "value": 0, "isFreeText": false }
+            ],
+            "answerStyle": "SingleChoice"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+The answer to each question is a list of the selected choices. CAMS also prints a `dk.cachet.carp.completedapptask.survey` measurement that holds the same result. See [Survey data](/docs/sampling-packages/survey/survey-data) for every field.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="The survey does not appear in the list">
+
+Wait until the trigger time. A scheduled task enters the list only when its time has passed, and a changed trigger time takes effect only after you uninstall the app. Also check that the app registers `SurveySamplingPackage` before it calls `configure()`.
+
+</Accordion>
+<Accordion title="No notification appears">
+
+Allow notifications for the app in the system settings. On Android, a scheduled notification may arrive late when the app is not allowed to schedule exact alarms.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Building surveys" href="/docs/sampling-packages/survey/surveys" icon="EditNote">
+
+Build a survey from Research Package steps and add it to a protocol.
+
+</Card>
+<Card title="Scheduling and notifications" href="/docs/sampling-packages/survey/scheduling" icon="Notifications">
+
+Choose triggers, notify participants and keep the task list in sync.
+
+</Card>
+<Card title="Cognitive tests" href="/docs/sampling-packages/survey/cognitive-tests" icon="Psychology">
+
+Add Cognition Package tests and sample sensors during them.
+
+</Card>
+<Card title="Survey data" href="/docs/sampling-packages/survey/survey-data" icon="Dataset">
+
+The survey measurement and the Research Package result inside it.
+
+</Card>
+</Cards>

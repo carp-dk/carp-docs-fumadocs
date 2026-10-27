@@ -1,0 +1,195 @@
+---
+title: Building surveys
+description: Build a survey from Research Package steps and add it to a study protocol as an RPAppTask.
+icon: EditNote
+---
+
+A survey in a CARP Mobile Sensing (CAMS) study is a Research Package task wrapped in an `RPAppTask`. Build the task from steps and answer formats, then add the `RPAppTask` to the protocol with a trigger. For every step and answer format, see [Tasks and steps](/docs/flutter-plugins/research-package/tasks-and-steps) and [Answer formats](/docs/flutter-plugins/research-package/answer-formats).
+
+## Build the task
+
+Build an [`RPOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPOrderedTask-class.html) for a linear survey, or an [`RPNavigableOrderedTask`](https://pub.dev/documentation/research_package/latest/model/RPNavigableOrderedTask-class.html) for one with branches. Import `research_package` in the file that builds it:
+
+```dart
+import 'package:research_package/research_package.dart';
+
+final sleepSurvey = RPOrderedTask(
+  identifier: 'sleep_diary',
+  steps: [
+    RPInstructionStep(
+      identifier: 'sleep_intro',
+      title: 'Sleep diary',
+      text: 'Three questions about last night.',
+    ),
+    RPQuestionStep(
+      identifier: 'sleep_hours',
+      title: 'How many hours did you sleep?',
+      answerFormat: RPIntegerAnswerFormat(
+        minValue: 0,
+        maxValue: 24,
+        suffix: 'hours',
+      ),
+    ),
+    RPQuestionStep(
+      identifier: 'sleep_quality',
+      title: 'How well did you sleep?',
+      answerFormat: RPChoiceAnswerFormat(
+        answerStyle: RPChoiceAnswerStyle.SingleChoice,
+        choices: [
+          RPChoice(text: 'Very well', value: 3),
+          RPChoice(text: 'Fairly well', value: 2),
+          RPChoice(text: 'Fairly badly', value: 1),
+          RPChoice(text: 'Very badly', value: 0),
+        ],
+      ),
+    ),
+    RPQuestionStep(
+      identifier: 'sleep_notes',
+      title: 'Anything else about your sleep?',
+      optional: true,
+      answerFormat: RPTextAnswerFormat(hintText: 'Optional'),
+    ),
+    RPCompletionStep(
+      identifier: 'sleep_done',
+      title: 'Thank you',
+      text: 'Your answers are saved.',
+    ),
+  ],
+);
+```
+
+The result of each step is stored under the step's `identifier`, so keep the identifiers unique within a task. The task's `identifier` appears in every result of the task.
+
+The package shows the task with Research Package's [`RPUITask`](https://pub.dev/documentation/research_package/latest/ui/RPUITask-class.html), so you can use every Research Package step and answer format. With `research_package` 3.2.0, keep four points in mind:
+
+- **Text:** give every `RPInstructionStep` and `RPCompletionStep` a `text`. Without it, the screen fails to build.
+- **Auto-skip:** leave `autoSkip` off on an `RPQuestionStep`. A question with `autoSkip: true` is skipped about one second after it appears, whatever its `timeout`.
+- **Timer sound:** `RPTimerStep(playSound: true)` plays a sound only if the app ships it; see [Add optional assets](/docs/sampling-packages/survey/installation#add-optional-assets).
+- **Task class:** `rpTask` accepts any `RPTask`, but the survey screen expects an `RPOrderedTask` or `RPNavigableOrderedTask`. A plain `RPTask` fails when the survey opens.
+
+## Add the task to the protocol
+
+Wrap the task in an [`RPAppTask`](https://pub.dev/documentation/carp_survey_package/latest/survey/RPAppTask-class.html) and add it to the phone with a trigger:
+
+```dart
+protocol.addTaskControl(
+  RecurrentScheduledTrigger(
+    type: RecurrentType.daily,
+    time: const TimeOfDay(hour: 8),
+  ),
+  RPAppTask(
+    type: AppTask.SURVEY_TYPE,
+    name: 'Sleep diary',
+    title: 'Sleep diary',
+    description: 'Three questions about last night',
+    minutesToComplete: 2,
+    expire: const Duration(hours: 4),
+    notification: true,
+    rpTask: sleepSurvey,
+  ),
+  phone,
+);
+```
+
+The `RPAppTask` constructor takes these parameters:
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `type` | `String` | Yes | — | `AppTask.SURVEY_TYPE`, `AppTask.COGNITIVE_ASSESSMENT_TYPE` or `AppTask.INFORMED_CONSENT_TYPE`. All three show the same survey screen; the type names the completed app task measurement. |
+| `rpTask` | `RPTask` | Yes | — | The Research Package task: an `RPOrderedTask` or `RPNavigableOrderedTask`. |
+| `name` | `String?` | No | `Task #<n>` | A unique name. CAMS uses it in the completed app task measurement and in `UserTaskTrigger` and `NoUserTaskTrigger`. |
+| `title` | `String` | No | `''` | The title in your task list and in the notification. |
+| `description` | `String?` | No | `''` | The text in your task list and the body of the notification. |
+| `instructions` | `String` | No | `''` | Longer instructions for your app's UI. CAMS does not use them. |
+| `minutesToComplete` | `int?` | No | — | The expected duration in minutes, for your app's UI. |
+| `expire` | `Duration?` | No | — | How long after its trigger time the task expires. Without it, the task never expires. |
+| `notification` | `bool` | No | `false` | Whether CAMS notifies the participant when the task is due. |
+| `measures` | `List<Measure>?` | No | — | Measures to sample while the participant does the task. |
+
+Give every `RPAppTask` an explicit, unique `name`. The automatic names depend on the order in which tasks are created. The protocol looks tasks up by name, so a duplicate name replaces the earlier task.
+
+`RPAppTask` adds two measures to `measures` itself: `dk.cachet.carp.survey` and `dk.cachet.carp.completedapptask.<type>`. Any other measure in the list is sampled only while the participant does the task; see [Sample sensors during a test](/docs/sampling-packages/survey/cognitive-tests#sample-sensors-during-a-test).
+
+Use `RPAppTask`, not a plain `AppTask`, for the three survey types. With the package registered, a plain `AppTask` of these types becomes a `SurveyUserTask`, which fails when its widget opens.
+
+The protocol JSON holds the whole survey, because `RPAppTask` serializes its `rpTask`. A protocol stored in CARP Web Services (CAWS) or loaded from a file needs no survey code in the app, only the registered package.
+
+## Branch with navigation rules
+
+To skip questions based on earlier answers, use an `RPNavigableOrderedTask` with navigation rules. It works in an `RPAppTask` like a linear task. See [Branching](/docs/flutter-plugins/research-package/branching).
+
+## Use the built-in WHO-5 survey
+
+`who5Task` is an English version of the WHO-5 Well-Being Index, included in the package as an example. It has five single-choice questions with the identifiers `who5_question_1` to `who5_question_5` and six choices, from "All of the time" (`5`) to "At no time" (`0`). A completion step follows the questions.
+
+The task has no instruction step, and the package computes no score. To compute one from the answers, see [Read results in the app](/docs/sampling-packages/survey/survey-data#read-results-in-the-app).
+
+## Translate the survey
+
+Research Package and Cognition Package show their own texts, such as button labels, in English until the app adds their localization delegates. Flutter's own delegates come from `flutter_localizations`, so add it first:
+
+```bash
+flutter pub add "flutter_localizations@{sdk: flutter}"
+```
+
+Then add the package delegates next to Flutter's own:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:research_package/research_package.dart';
+import 'package:cognition_package/cognition_package.dart';
+
+class StudyApp extends StatelessWidget {
+  const StudyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    supportedLocales: const [Locale('en'), Locale('da')],
+    localizationsDelegates: [
+      RPLocalizations.delegate,
+      CPLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    home: const TaskListPage(),
+  );
+}
+```
+
+The package delegates differ in what they need:
+
+| Delegate | Package languages | App files |
+| --- | --- | --- |
+| `RPLocalizations.delegate` | `da`, `en`, `es`, `fr`, `hu`, `pt`, `zh` | `assets/lang/<language_code>.json` for every supported language. Without the file, the delegate fails to load. |
+| `CPLocalizations.delegate` | `da`, `en`, `fr`, `pt` | None |
+
+The app files hold your translations, and step titles, texts and choices in the task can be their keys. To use only the package texts, without app files, pass `RPLocalizationsDelegate(loaders: const [])` instead of `RPLocalizations.delegate`. For the file format and the package's own keys, see [Localization](/docs/flutter-plugins/research-package/localization).
+
+The sounds of the Letter tapping and Word recall tests are in English only. With `RPLocalizations` in the app, the submitted result holds translated choice texts, so analyze the choice values, not the texts.
+
+## Add informed consent
+
+Show an informed consent flow as an `RPAppTask` of type `AppTask.INFORMED_CONSENT_TYPE`, usually once per deployment:
+
+```dart
+protocol.addTaskControl(
+  OneTimeTrigger(),
+  RPAppTask(
+    type: AppTask.INFORMED_CONSENT_TYPE,
+    name: 'Informed consent',
+    title: 'Informed consent',
+    description: 'Read about the study and give your consent',
+    notification: true,
+    rpTask: consentTask,
+  ),
+  phone,
+);
+```
+
+To build `consentTask` from a consent document, see [Informed consent](/docs/flutter-plugins/research-package/informed-consent). The consent result, with the participant's name and signature image, is stored as a `dk.cachet.carp.survey` measurement like any survey result.
+
+Add `RPLocalizations.delegate` to the app: without it, a consent section without its own `title` shows a translation key, such as `title.overview`, as its title. See [Translate the survey](#translate-the-survey).
+
+In `research_package` 3.2.0, `RPConsentSection.healthDataTypes` takes `HealthDataType` values, not names, and `askPermission: true` asks for the permissions through `permission_handler` and `health` itself. For the platform setup of each permission, see [Permissions](/docs/flutter-plugins/research-package/permissions#configure-android-and-ios).

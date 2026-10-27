@@ -1,0 +1,7 @@
+{
+  "title": "Movesense Sampling",
+  "description": "carp_movesense_package",
+  "icon": "VitalSigns",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Guides---", "connecting", "---Reference---", "measure-types", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_movesense_package)", "[API reference](https://pub.dev/documentation/carp_movesense_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_movesense_package)"]
+}

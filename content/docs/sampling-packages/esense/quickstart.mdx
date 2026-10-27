@@ -1,0 +1,205 @@
+---
+title: Quickstart
+description: Build an app that connects to an eSense earbud and prints its button and motion events.
+icon: Bolt
+---
+
+The finished app connects to an eSense earbud by its Bluetooth name and prints each button and motion measurement as JSON.
+
+## Prerequisites
+
+- The setup in [Installation](/docs/sampling-packages/esense/installation), including the CARP Mobile Sensing (CAMS) setup it builds on.
+- An eSense pair and the Bluetooth name of its left earbud, such as `eSense-0332`. A Bluetooth scanner app, such as nRF Connect, shows the name.
+- A physical Android or iOS phone. Emulators and simulators cannot connect to a Bluetooth device.
+
+## Complete example
+
+Replace the contents of `lib/main.dart` with this program, and set `bleName` to the name of your left earbud:
+
+```dart title="lib/main.dart"
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:carp_core/carp_core.dart' hide Smartphone;
+import 'package:carp_mobile_sensing/carp_mobile_sensing.dart';
+import 'package:carp_esense_package/esense.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  CarpMobileSensing.ensureInitialized();
+
+  // 1. Register the sampling package
+  SamplingPackageRegistry().register(ESenseSamplingPackage()); // [!code highlight]
+
+  // 2. Create a protocol with the phone and an eSense earbud connected to it
+  final protocol = SmartphoneStudyProtocol(
+    ownerId: 'owner@example.com',
+    name: 'Head movements and button presses',
+    dataEndPoint: SQLiteDataEndPoint(),
+  );
+  final phone = Smartphone();
+  final eSense = ESenseDevice( // [!code highlight]
+    roleName: 'eSense',
+    samplingRate: 20, // Hz
+  );
+  protocol
+    ..addPrimaryDevice(phone)
+    ..addConnectedDevice(eSense, phone);
+
+  // 3. Collect button and motion events while the earbud is connected
+  protocol.addTaskControl(
+    ImmediateTrigger(),
+    BackgroundTask(
+      measures: [
+        Measure(type: ESenseSamplingPackage.ESENSE_BUTTON), // [!code highlight]
+        Measure(type: ESenseSamplingPackage.ESENSE_SENSOR), // [!code highlight]
+      ],
+    ),
+    eSense,
+  );
+
+  // 4. Configure the client, ask for Bluetooth permissions and bind the earbud
+  final client = SmartPhoneClientManager();
+  await client.configure();
+  final eSenseManager = client.deviceController.getDeviceManager(
+    ESenseDevice.DEVICE_TYPE,
+  ) as ESenseDeviceManager;
+  await eSenseManager.requestPermissions(); // [!code highlight]
+  eSenseManager.bleName = 'eSense-0332'; // [!code highlight]
+
+  // 5. Deploy the protocol on the first run; CAMS connects to the earbud and starts sampling
+  if (client.studies.isEmpty) {
+    final study = await client.addStudyFromProtocol(protocol);
+    await client.tryDeployment(study.studyDeploymentId, study.deviceRoleName);
+  }
+  client.resume();
+
+  // 6. Print each measurement as JSON
+  client.measurements.listen((measurement) => print(jsonEncode(measurement)));
+
+  runApp(
+    const MaterialApp(
+      home: Scaffold(body: Center(child: Text('Collecting data'))),
+    ),
+  );
+}
+```
+
+## How it works
+
+| Stage | What it does |
+| --- | --- |
+| **1. Register** | `ESenseSamplingPackage` makes the eSense measure types, the `ESenseDevice` configuration and its device manager known to CAMS. `CarpMobileSensing.ensureInitialized()` runs first, because registering needs an initialized CAMS. |
+| **2. Protocol** | The phone is the primary device, and an `ESenseDevice` with the role `eSense` is connected to it. `samplingRate` sets the motion data to 20 Hz. The protocol does not identify the physical earbud. |
+| **3. Task** | A `BackgroundTask` on the eSense device collects button and motion events. Both measures are event-based, so an `ImmediateTrigger` starts them once, and they stream while the earbud is connected. |
+| **4. Bind** | `requestPermissions()` asks for Bluetooth and, on Android, location. Setting `bleName` binds the `eSense` role to your earbud. |
+| **5. Deploy** | During the deployment, CAMS configures the eSense device manager and connects to the earbud, because the manager has a name. The eSense measures start when the earbud is connected. The app adds the study only on the first run: on later runs, `configure()` restores the saved study. |
+| **6. Print** | `client.measurements` streams every measurement, and the example prints each one as JSON. |
+
+The example binds the earbud before it deploys the study, so CAMS connects to it as part of the deployment. To bind an earbud later, for example from a settings screen, see [Connecting a device](/docs/sampling-packages/esense/connecting).
+
+## Run the app
+
+<Steps>
+<Step title="Turn on the left earbud">
+
+Press and hold the button under the eSense logo until the LED turns blue, then release it. Keep the earbud near the phone.
+
+</Step>
+<Step title="Start the app on your phone">
+
+```bash
+flutter run
+```
+
+Allow the Bluetooth permission. On Android, also allow location access, with precise location on Android 12 or later: CAMS needs it to connect to Bluetooth devices. On iOS, connecting to the earbud may take several seconds.
+
+</Step>
+<Step title="Check the console">
+
+Once the earbud is connected, the console prints one motion measurement per sensor packet, at about the 20 Hz of `samplingRate`:
+
+```json
+{
+  "sensorStartTime": 1793023392123000,
+  "data": {
+    "__type": "dk.cachet.carp.esense.sensor",
+    "timestamp": "2026-10-26T15:03:12.123",
+    "device_name": "eSense-0332",
+    "packet_index": 42,
+    "accel": [-415, 8126, 1024],
+    "gyro": [12, -7, 3]
+  }
+}
+```
+
+Each press and each release of the button adds a button measurement:
+
+```json
+{
+  "sensorStartTime": 1793023393250412,
+  "data": {
+    "__type": "dk.cachet.carp.esense.button",
+    "timestamp": "2026-10-26T15:03:13.250397",
+    "device_name": "eSense-0332",
+    "pressed": true
+  }
+}
+```
+
+</Step>
+</Steps>
+
+To work with the values in code, check the type of the data:
+
+```dart
+client.measurements.listen((measurement) {
+  final data = measurement.data;
+  if (data is ESenseButton) {
+    print('${data.deviceName}: ${data.pressed ? 'pressed' : 'released'}');
+  }
+});
+```
+
+The motion values are raw sensor values. To convert them to g and degrees per second, see [Unit conversion](/docs/sampling-packages/esense/measure-types#unit-conversion).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="No eSense measurements appear">
+
+Print the status of the eSense device manager and act on it:
+
+- `disconnected` right after the start: the Bluetooth permissions are missing. Allow them, and on Android 12 or later, choose precise location.
+- `disconnected` after about 5 seconds: on Android, the plugin scans for the earbud for 5 seconds, and CAMS does not try again. Check that `bleName` matches the name of the earbud exactly and that the left earbud is on and near the phone. Also check that no other phone or app is connected to it, and then restart the app.
+- `connecting` for a long time: on iOS, the phone has not found the earbud. Check the same points.
+
+For the code that prints the status, see [Monitor the connection](/docs/sampling-packages/esense/connecting#monitor-the-connection).
+
+</Accordion>
+<Accordion title="Button events arrive but motion events do not">
+
+Set `samplingRate` to a value from 1 to 100. On Android, a rate outside this range starts no sampling in release builds.
+
+</Accordion>
+</Accordions>
+
+## Next steps
+
+<Cards>
+<Card title="Connecting a device" href="/docs/sampling-packages/esense/connecting" icon="Bluetooth">
+
+Bind an eSense earbud, connect to it and follow its status.
+
+</Card>
+<Card title="Measure types" href="/docs/sampling-packages/esense/measure-types" icon="Dataset">
+
+The two eSense measure types, their raw values and timestamps.
+
+</Card>
+<Card title="Data managers" href="/docs/mobile-sensing/data-managers" icon="Storage">
+
+Store the measurements on the phone or upload them to a server.
+
+</Card>
+</Cards>

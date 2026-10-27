@@ -1,0 +1,201 @@
+---
+title: Calls and text messages
+description: The phone log, text message log and incoming text message measures on Android, and the data each one produces.
+icon: Sms
+---
+
+Three measures collect calls and text messages (SMS) from the phone that runs the study, on Android only. iOS gives apps no access to the call log or to text messages, so CARP Mobile Sensing (CAMS) skips these measures on iOS. Their constants are on [`CommunicationSamplingPackage`](https://pub.dev/documentation/carp_communication_package/latest/communication/CommunicationSamplingPackage-class.html):
+
+| Measure type | Constant | Kind | Data |
+| --- | --- | --- | --- |
+| `dk.cachet.carp.phonelog` | `PHONE_LOG` | One-time | [`PhoneLog`](https://pub.dev/documentation/carp_communication_package/latest/communication/PhoneLog-class.html) |
+| `dk.cachet.carp.textmessagelog` | `TEXT_MESSAGE_LOG` | One-time | [`TextMessageLog`](https://pub.dev/documentation/carp_communication_package/latest/communication/TextMessageLog-class.html) |
+| `dk.cachet.carp.textmessage` | `TEXT_MESSAGE` | Event-based | [`TextMessage`](https://pub.dev/documentation/carp_communication_package/latest/communication/TextMessage-class.html) |
+
+For the two kinds, see [Event-based and one-time measures](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures).
+
+## Add the measures to a protocol
+
+A one-time measure collects once each time its task is triggered, so add the two logs with a trigger that repeats:
+
+```dart
+// Collect the call log every 3 hours
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 3)),
+  BackgroundTask(
+    measures: [Measure(type: CommunicationSamplingPackage.PHONE_LOG)],
+  ),
+  phone,
+);
+
+// Collect the text message log once a day
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(days: 1)),
+  BackgroundTask(
+    measures: [Measure(type: CommunicationSamplingPackage.TEXT_MESSAGE_LOG)],
+  ),
+  phone,
+);
+```
+
+The text message log returns every message on each run, so trigger it less often than the phone log.
+
+## Configuration
+
+The phone log takes its time window from a [`HistoricSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/HistoricSamplingConfiguration-class.html):
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `past` | `Duration` | 1 day | How far back the first run collects. |
+| `future` | `Duration` | 1 day | Not used by this package. |
+| `lastTime` | `DateTime?` | `null` | When the measure last added a measurement. CAMS sets it after each run. |
+
+`past` only matters for the first run. Later runs start at `lastTime`, so each run continues where the previous one ended.
+
+The default configuration lives in memory, so `lastTime` is lost when the app restarts, and the next run goes back `past` again. To keep `lastTime` across restarts, set the configuration on the measure; CAMS then saves it with the deployment:
+
+```dart
+protocol.addTaskControl(
+  PeriodicTrigger(period: const Duration(hours: 3)),
+  BackgroundTask(
+    measures: [
+      Measure(type: CommunicationSamplingPackage.PHONE_LOG)
+        ..overrideSamplingConfiguration = HistoricSamplingConfiguration(
+          past: const Duration(days: 7),
+        ),
+    ],
+  ),
+  phone,
+);
+```
+
+This phone log goes back 7 days on its first run and then continues from the previous run, also after a restart. The text message log ignores the configuration.
+
+## Phone log
+
+`PHONE_LOG` reads the Android call log through the `call_e_log` plugin. Each run adds one `PhoneLog` measurement with the calls between the start of the window and now, newest first. The window starts at `lastTime`, or `past` before now on the first run.
+
+CAMS asks the participant for `Permission.phone` and starts the measure only when it is granted. The plugin reads the call log with `READ_CALL_LOG` and `READ_PHONE_STATE`.
+
+<Callout type="warning" title="Known issue">
+
+In version 2.1.0, the package reads the call time in milliseconds as microseconds, so every `timestamp` falls in January 1970 in the phone's local time. To recover the call time, parse `timestamp` in the phone's time zone and read its microseconds since the epoch as milliseconds since the epoch.
+
+</Callout>
+
+### Phone log data
+
+Each `PhoneLog` holds the window and the calls in it:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `start` | `DateTime` | Start of the window, in UTC. |
+| `end` | `DateTime` | Time of the run, in UTC. |
+| `phoneLog` | `List<PhoneCall>` | The calls in the window, newest first. Empty if there were none. |
+
+Each [`PhoneCall`](https://pub.dev/documentation/carp_communication_package/latest/communication/PhoneCall-class.html) has these fields; a field without a value is left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timestamp` | `DateTime?` | The time of the call in the call log, in the phone's local time without a time zone offset. |
+| `callType` | `String?` | `incoming`, `outgoing`, `missed`, `rejected`, `blocked`, `voice_mail`, `answered_externally` or `unknown`. Calls that `call_e_log` reports as Wi-Fi calls are also `unknown`. |
+| `duration` | `int?` | Duration of the call in seconds. |
+| `formattedNumber` | `String?` | The number formatted for display, if Android has cached it. |
+| `number` | `String?` | The phone number of the other party. |
+| `name` | `String?` | The contact name, if the number is in the phone's contacts. |
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data). Without the privacy schema, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.phonelog",
+  "start": "2026-10-25T13:00:00.514Z",
+  "end": "2026-10-26T13:00:00.531877Z",
+  "phoneLog": [
+    {
+      "timestamp": "1970-01-21T19:03:22.445",
+      "callType": "outgoing",
+      "duration": 125,
+      "formattedNumber": "+45 25 55 04 46",
+      "number": "+4525550446",
+      "name": "Jakob"
+    }
+  ]
+}
+```
+
+## Text message log
+
+`TEXT_MESSAGE_LOG` reads the inbox and the sent folder through the `another_telephony` plugin and adds them as one `TextMessageLog` measurement. Every run returns all messages in both folders, so consecutive measurements repeat the same messages. Drafts, messages in the outbox, and failed or queued messages are not included.
+
+CAMS asks the participant for `Permission.sms` and starts the measure only when it is granted. The plugin reads the messages with `READ_SMS`.
+
+<Callout type="warning" title="Known issue">
+
+In version 2.1.0, the package reads the message times in milliseconds as microseconds, so every `date` and `dateSent` falls in January 1970. To recover a time, read the microseconds since the epoch of the stored value as milliseconds since the epoch.
+
+</Callout>
+
+### Text message log data
+
+Each `TextMessageLog` holds the messages:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `textMessageLog` | `List<TextMessage>` | The messages in the inbox, followed by the messages in the sent folder. Each one carries `"__type": "dk.cachet.carp.textmessage"`. |
+
+Each `TextMessage` has these fields; a field without a value is left out of the JSON:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `int?` | The message's row ID in the phone's SMS database. Use it to find the same message in later runs. |
+| `address` | `String?` | The phone number of the other party. |
+| `body` | `String?` | The text of the message. |
+| `size` | `int?` | The length of the text in UTF-16 code units, not bytes. |
+| `read` | `bool?` | Whether the message has been read. |
+| `date` | `DateTime?` | When the message was received, in UTC. |
+| `dateSent` | `DateTime?` | When the message was sent, in UTC. |
+| `type` | `SmsType?` | `MESSAGE_TYPE_INBOX` or `MESSAGE_TYPE_SENT`. |
+| `status` | `SmsStatus?` | `STATUS_NONE`, `STATUS_PENDING`, `STATUS_COMPLETE` or `STATUS_FAILED`. |
+
+Without the privacy schema, the data looks like this:
+
+```json
+{
+  "__type": "dk.cachet.carp.textmessagelog",
+  "textMessageLog": [
+    {
+      "__type": "dk.cachet.carp.textmessage",
+      "id": 1234,
+      "address": "+4525550446",
+      "body": "See you at 5",
+      "size": 12,
+      "read": true,
+      "date": "1970-01-21T18:03:24.087153Z",
+      "dateSent": "1970-01-21T18:03:24.085Z",
+      "type": "MESSAGE_TYPE_INBOX",
+      "status": "STATUS_NONE"
+    }
+  ]
+}
+```
+
+## Incoming text messages
+
+`TEXT_MESSAGE` listens for text messages as they arrive and is meant to add one `TextMessage` measurement per message. It is event-based: add it with an `ImmediateTrigger()`, and it listens from when its task starts until the task stops.
+
+CAMS asks the participant for `Permission.phone`, not `Permission.sms`, before it starts the measure. The app must declare `RECEIVE_SMS` and the `IncomingSmsReceiver` receiver, as described in [Installation](/docs/sampling-packages/communication/installation).
+
+<Callout type="warning" title="Known issue">
+
+In version 2.1.0, `TEXT_MESSAGE` adds no measurements: the plugin delivers incoming messages without a sent date, and creating the `TextMessage` fails. Use `TEXT_MESSAGE_LOG` to collect text messages instead.
+
+</Callout>
+
+## Limitations
+
+- **Android only:** iOS gives apps no access to the call log or to text messages, so CAMS skips the three measures on iOS.
+- **Repeated messages:** each run of the text message log returns all messages again. Use `id` to remove the duplicates.
+- **Restarts:** with the default configuration, the first phone log after an app restart goes back `past` again and can repeat calls from the previous measurement. Set the configuration on the measure, as shown in [Configuration](#configuration).
+- **Google Play:** the call log and SMS permissions are restricted. See [Google Play policy](/docs/sampling-packages/communication/installation#google-play-policy).
+- **Privacy:** numbers, names and texts are stored in clear text unless the protocol uses the privacy schema. See [Privacy](/docs/sampling-packages/communication/privacy).

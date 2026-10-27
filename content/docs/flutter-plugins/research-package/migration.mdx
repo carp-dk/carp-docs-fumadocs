@@ -1,0 +1,125 @@
+---
+title: Migrate to 4.0
+description: Update an app from Research Package 3.x to 4.0.0, which leaves permission requests to the app.
+icon: Upload
+---
+
+Research Package 4.0.0 no longer depends on the `health` and `permission_handler` plugins, and it no longer asks for permissions itself. An app that asks for permissions during informed consent now provides a permission requester. An app that asks for no permissions updates the version and, if its code uses health data types, fixes a few compile errors.
+
+<Callout type="info" title="Version 3.2.0 in CAMS apps">
+
+CARP Mobile Sensing (CAMS) apps that use `carp_survey_package` or `cognition_package` resolve `research_package` 3.2.0, because both packages require version 3. Such an app cannot use 4.0.0 and needs no migration.
+
+</Callout>
+
+## Changes in 4.0.0
+
+Version 4.0.0 differs from 3.2.0 in these points:
+
+|  | 3.2.0 | 4.0.0 |
+| --- | --- | --- |
+| **Permission requests** | Research Package asks through `permission_handler` and `health` | Your requester asks |
+| **`ensureInitialized()`** | Takes no parameters | Takes an optional `permissionRequester` |
+| **`healthDataTypes`** | A list of `HealthDataType` values | A list of `HealthDataType` names |
+| **`HealthDataType`** | Exported by `research_package` | Imported from `health` |
+| **`RPPermissions.requestHealthData()`** | Asks for read access to health data types | Removed |
+| **Android `minSdk`** | 26, required by `health` | 24, required by `video_player` |
+| **HealthKit** | Linked into every app | Linked only into apps that add `health` |
+| **Instruction step without `text`** | Fails to build | Shows the title without a text |
+
+The JSON of tasks and results is the same in both versions, so stored tasks and consent documents load as before.
+
+## Update the dependency
+
+Raise the version constraint:
+
+```bash
+flutter pub add "research_package:^4.0.0"
+```
+
+If the app uses `HealthDataType` or asks for health data, also add the `health` plugin, which 3.x brought along:
+
+```bash
+flutter pub add "health:^13.0.0"
+```
+
+## Fix the compile errors
+
+Code written for 3.x gets these errors from the analyzer:
+
+| Error | Fix |
+| --- | --- |
+| `Undefined name 'HealthDataType'` | Import `package:health/health.dart`. |
+| `The element type 'HealthDataType' can't be assigned to the list type 'String'` | Pass the names of the data types, such as `HealthDataType.STEPS.name` or `'STEPS'`. |
+| `The method 'requestHealthData' isn't defined for the type 'RPPermissions'` | Call `RPPermissions.request()` with `RPPermissionType.health` and the names of the data types. |
+
+A consent section with health data types changes like this:
+
+```dart
+import 'package:health/health.dart'; // [!code ++]
+
+final healthSection = RPConsentSection(
+  type: RPConsentSectionType.HealthDataCollection,
+  summary: 'The app reads your steps from your health app.',
+  dataTypes: [
+    RPDataTypeSection(dataName: 'Steps', dataInformation: 'Your step count.'),
+  ],
+  permissions: [RPPermissionType.health],
+  healthDataTypes: [HealthDataType.STEPS], // [!code --]
+  healthDataTypes: [HealthDataType.STEPS.name], // [!code ++]
+);
+```
+
+A request for health data outside a consent flow changes like this:
+
+```dart
+final status = await RPPermissions.requestHealthData([HealthDataType.STEPS]); // [!code --]
+final status = await RPPermissions.request( // [!code ++]
+  RPPermissionType.health, // [!code ++]
+  healthDataTypes: [HealthDataType.STEPS.name], // [!code ++]
+); // [!code ++]
+```
+
+## Add a permission requester
+
+If the app sets `askPermission: true` or calls `RPPermissions.request()`, write a requester and pass it to `ensureInitialized()`:
+
+```dart
+void main() {
+  ResearchPackage.ensureInitialized(); // [!code --]
+  ResearchPackage.ensureInitialized(permissionRequester: requestPermission); // [!code ++]
+  runApp(const MyApp());
+}
+```
+
+Without a requester, the app compiles, but every permission is recorded as `unsupported` and no dialog appears.
+
+The [requester on the Permissions page](/docs/flutter-plugins/research-package/permissions#write-a-requester) handles the same cases as 3.2.0 did:
+
+- `locationAlways` asks for foreground location first;
+- `bluetooth` asks on Android for the two Nearby devices permissions in one dialog;
+- `ignoreBatteryOptimizations` is `unsupported` on iOS;
+- `activityRecognition` asks on iOS for the motion sensors.
+
+A requester that maps each type to one plugin call loses these cases.
+
+One status differs from 3.2.0. When Google Health Connect is missing on Android, the requester records `unsupported` and opens its store page; 3.2.0 recorded `unknown`.
+
+## Remove the health setup
+
+In 3.x, every app contained the `health` plugin. If the app reads no health data, remove the setup that only `health` needed, unless another plugin needs it:
+
+- on Android, `minSdk` 26, `FlutterFragmentActivity`, and the Health Connect permissions, queries, intent filter and activity alias in `AndroidManifest.xml`;
+- on iOS, the HealthKit capability and the `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription` keys.
+
+With `minSdk` 24, the app also installs on Android 7.
+
+## Upgrade from 2.x
+
+An app that comes from version 2.x also meets the breaking changes of the 3.x versions:
+
+- **3.0.0:** a consent task has no close button, and the visual consent step has no cancel button. The participant leaves with **DISAGREE**, which calls `onCancel`. `RPUIVisualConsentStep` takes `step:` instead of `consentDocument:`.
+- **3.1.1:** `RPUITask` no longer pops its route when it is the only route of the navigator.
+- **3.2.0:** the screens no longer read `CupertinoTheme.primaryColor`; set `ThemeData.colorScheme` instead. The leave dialog has new texts and the new keys `LEAVE`, `discard_confirmation_body` and `cancel_confirmation_body`. An app that changed `discard_confirmation` or `cancel_confirmation` shows its old title over the new text.
+
+For every change, see [Changelog](/docs/flutter-plugins/research-package/changelog).

@@ -59,8 +59,20 @@ samples included, use American spelling.
 | Overview | `content/docs` | — |
 | Mobile Sensing | `content/docs/mobile-sensing` | `carp_mobile_sensing` |
 | Health | `content/docs/flutter-plugins/health` | `health` |
+| Research Package | `content/docs/flutter-plugins/research-package` | `research_package` |
 | Debug Toolkit | `content/docs/flutter-plugins/debug-toolkit` | `carp_debug_flutter` |
+| Context Sampling | `content/docs/sampling-packages/context` | `carp_context_package` |
+| Survey Sampling | `content/docs/sampling-packages/survey` | `carp_survey_package` |
+| Health Sampling | `content/docs/sampling-packages/health` | `carp_health_package` |
+| Audio Sampling | `content/docs/sampling-packages/audio` | `carp_audio_package` |
+| Connectivity Sampling | `content/docs/sampling-packages/connectivity` | `carp_connectivity_package` |
+| Communication Sampling | `content/docs/sampling-packages/communication` | `carp_communication_package` |
+| Apps Sampling | `content/docs/sampling-packages/apps` | `carp_apps_package` |
 | Apple Watch Sensing | `content/docs/sampling-packages/apple-watch` | `carp_aware_package` |
+| Polar Sampling | `content/docs/sampling-packages/polar` | `carp_polar_package` |
+| Movesense Sampling | `content/docs/sampling-packages/movesense` | `carp_movesense_package` |
+| Movisens Sampling | `content/docs/sampling-packages/movisens` | `carp_movisens_package` |
+| eSense Sampling | `content/docs/sampling-packages/esense` | `carp_esense_package` |
 
 Each package folder is a sidebar section (`"root": true` in its `meta.json`). The folders `flutter-plugins/`
 and `sampling-packages/` only group packages the way the navbar does. They are not sections and have no
@@ -87,7 +99,7 @@ miss.
 | `"index"` | The section's overview page. A root folder lists it first. A nested folder does not list it: its `index.mdx` becomes the folder's Overview row by itself. |
 | `"<slug>"` | A page in this folder, without `.mdx`. |
 | `"<folder>"` | A sub-folder with its own `meta.json`. |
-| `"---Label---"` | A group label. Package sections use `---Concepts---`, `---Guides---`, `---Advanced---` and `---Reference---`, and end with `---Links---`. |
+| `"---Label---"` | A group label. Package sections use `---Concepts---`, `---Guides---`, `---Advanced---` and `---Reference---`, and end with `---Links---`. Sampling package sections also use `---Measures---` for pages about individual measures, after `---Concepts---`. |
 | `"[text](url)"` | A link row. Use it only in the `---Links---` group, for pub.dev, API reference and GitHub. |
 
 - In a package section, set `description` to the pub.dev package name, and put `"changelog"` last, right
@@ -109,7 +121,7 @@ icon: Download
 - `title`: one to four words in sentence case that name the subject: "Data types", "Production builds",
   "On-device storage". A gerund phrase is fine for a task area: "Reading data", "Using CAMS". Keep product
   names as they are written. A section's `index.mdx` uses the full product name ("CARP Mobile Sensing",
-  "CARP Debug Toolkit", "Health", "Apple Watch Sensing"). The title is the page heading, the sidebar label,
+  "CARP Debug Toolkit", "Health", "Research Package", "Context Sampling Package", "Apple Watch Sensing"). The title is the page heading, the sidebar label,
   the browser title and the headline of the social card, so keep it under about 30 characters.
 - `description`: one sentence of about 8 to 20 words (155 characters at most) that ends with a period. On a
   task page, start with the imperative verb: "Add ...", "Configure ...", "Fetch ...". On a concept or
@@ -155,8 +167,11 @@ in the parent's `pages`. An optional `index.mdx` introduces the group, takes the
    `summary` follows the navbar description form above.
 5. Add the section to `changelogSources` in `src/lib/changelog.ts`, keyed by its folder path under
    `content/docs`: `'flutter-plugins/<slug>': { package: '<pub.dev name>', repo: 'carp-dk/<repo>', branch: 'main', file: 'CHANGELOG.md' }`.
-6. Add a Card to `content/docs/index.mdx`, a Card under "Package guides" in `content/docs/api-reference.mdx`
-   and a row to the section table in `README.md`. If the package has no row in the package tables of
+   Use the repository's default branch. For a package in the `carp.sensing-flutter` monorepo, `file` is the
+   changelog's path in the repository: `packages/<package>/CHANGELOG.md`.
+6. Add a Card to the matching group of `content/docs/index.mdx` ("Flutter plugins and packages" or "Sampling
+   packages"), a Card under "Package guides" in `content/docs/api-reference.mdx` and a row to the section
+   table in `README.md`. If the package has no row in the package tables of
    `api-reference.mdx`, add one to the matching table.
 
 ## Writing style
@@ -548,6 +563,43 @@ These rules override the general rules for pages in that section.
   the next page; Build and verify ends with `## Next steps`.
 - Give the default and the trade-off of every setting.
 
+### Sampling packages
+
+These rules apply to the sections in `sampling-packages/` except Apple Watch Sensing, which predates them.
+
+- Name the section and its landing page after the package's README title without "CARP": the section
+  "Context Sampling", the landing page "Context Sampling Package".
+- The packages extend CAMS, so the pages use the CAMS terms and say "participant" for the person in a study.
+  Link [CARP Mobile Sensing](/docs/mobile-sensing) (CAMS) at the first mention on a landing page.
+- Every section has `index`, `installation`, `quickstart` and `changelog`. The measures share one
+  `measure-types` page, or get one page each under `---Measures---` when each needs its own configuration,
+  platform notes and data. A Bluetooth device gets a `connecting` page ("Connecting a device"), with the same
+  structure for every device package.
+- The landing page has a `## Measure types` table (`| Measure type | Data | Android | iOS |`) after
+  `## Features`, with each type string linking to its documentation.
+- Installation pages document only what the package adds to the CAMS setup, and link
+  [Installation](/docs/mobile-sensing/installation) for the rest.
+- Import `carp_core` with `hide Smartphone`, then `carp_mobile_sensing` and the package's public library:
+  `carp_core` and `carp_mobile_sensing` both define `Smartphone`, and without `hide` the code does not compile.
+- Start event-based measures with `ImmediateTrigger()`, and repeat one-time measures with a trigger such as
+  `PeriodicTrigger`. Add each measure to the device it runs on: the phone, a service such as
+  `LocationService` or a connected device such as `PolarDevice`.
+- Document each measure with its type string, constant, kind (event-based or one-time), device and
+  platforms, a field table, and example data as JSON derived from the package's `toJson` code. Link the
+  measurement envelope once per page:
+  [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data).
+- When the code shows that a measure collects no data or wrong data for every reader, add one `warning`
+  Callout titled "Known issue" where the measure is documented: the defect, its consequence and what helps.
+  Remove the Callout when a release fixes the defect. Document limitations that are by design in the text.
+
+### Research Package
+
+- The pages document research_package 4.x. Apps that use `carp_survey_package` resolve research_package 3.2.0,
+  because the survey package requires `^3.0.0`. Where an API differs between the two, say so in an `info`
+  Callout.
+- `research_package` is a standalone Flutter package: the pages say "participant" for the person who answers,
+  and use CAMS terms only on pages that connect it to CAMS.
+
 ## Components
 
 All components below work in every page without imports. They are registered in `src/components/mdx.tsx`.
@@ -828,6 +880,7 @@ navbar's Introduction entry differ; list such differences instead of changing th
 | Measure types, data types | `Dataset` |
 | Using a package, source code | `Code` |
 | Extending, custom tools | `Extension` |
+| Building sampling packages | `Build` |
 | Best practices | `Star` |
 | App task model | `Checklist` |
 | Storing data | `Database` |
@@ -849,32 +902,54 @@ navbar's Introduction entry differ; list such differences instead of changing th
 | Mobile Sensing | `Sensors` |
 | Health | `Heart` |
 | Debug Toolkit | `Bug` |
+| Research Package | `Assignment` |
+| Context Sampling | `Location` |
+| Survey Sampling | `Quiz` |
+| Health Sampling | `MonitorHeart` |
+| Audio Sampling | `Mic` |
+| Connectivity Sampling, Wi-Fi | `Wifi` |
+| Communication Sampling, phone calls | `Call` |
+| Apps Sampling, installed apps | `Apps` |
 | Apple Watch Sensing, wearables | `Watch` |
+| Polar Sampling | `EcgHeart` |
+| Movesense Sampling | `VitalSigns` |
+| Movisens Sampling | `FitnessTracker` |
+| eSense Sampling | `Headphones` |
+| Services | `Tune` |
+| Connecting a device, Bluetooth | `Bluetooth` |
 
-Feature Cards, and Cards that link to a section of a page, use a topic icon for their subject, for example
-`Schedule` (timing and background work), `Sync` (data transfer), `Mic` (audio), `Quiz` (surveys and
-questions), `Science` (cognitive tests) or `Terminal` (logs). The package Chips use `Package` (pub.dev),
+Feature Cards, measure pages, and Cards that link to a section of a page, use a topic icon for their
+subject, for example `Schedule` (timing and background work), `Sync` (data transfer), `Mic` (audio),
+`GraphicEq` (noise), `Quiz` (surveys and questions), `Psychology` (cognitive tests), `Terminal` (logs),
+`MyLocation` (location), `DirectionsWalk` (activity), `Fence` (geofences), `Route` (mobility),
+`PartlyCloudyDay` (weather), `Air` (air quality), `CellTower` (network status), `Radar` (beacons), `Sms`
+(text messages), `CalendarMonth` (calendar), `Timer` (app usage), `Ecg` (ECG), `Motion` (accelerometer,
+gyroscope and other motion data), `TouchApp` (taps and buttons), `HowToReg` (informed consent), `AltRoute`
+(branching), `Translate` (localization), `Palette` (theming) or `EditNote` (answer formats and forms). The package Chips use `Package` (pub.dev),
 `Description` (API reference) and `Code` (GitHub).
 
 ### Available icons
 
-`AccountTree`, `Android`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `Battery`, `Bloodtype`,
-`Bluetooth`, `Bolt`, `Book`, `Bug`, `Build`, `Check`, `CheckCircle`, `Checklist`, `ChevronDown`, `Clipboard`,
-`Cloud`, `Code`, `Copy`, `Database`, `Dataset`, `Delete`, `Description`, `Download`, `Edit`, `Error`,
-`Extension`, `ExternalLink`, `FileText`, `Folder`, `Forum`, `Group`, `Hash`, `Heart`, `Help`, `History`, `Hub`,
+`AccountTree`, `Air`, `AltRoute`, `Android`, `Apps`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `ArrowUp`,
+`Assignment`, `Battery`, `Bloodtype`, `Bluetooth`, `Bolt`, `Book`, `Bug`, `Build`, `CalendarMonth`, `Call`,
+`CellTower`, `Check`, `CheckCircle`, `Checklist`, `ChevronDown`, `Clipboard`, `Cloud`, `Code`, `Copy`,
+`Database`, `Dataset`, `Delete`, `Description`, `DirectionsWalk`, `Download`, `Ecg`, `EcgHeart`, `Edit`,
+`EditNote`, `Error`, `Extension`, `ExternalLink`, `FactCheck`, `Fence`, `FileText`, `FitnessTracker`,
+`Folder`, `Forum`, `GraphicEq`, `Group`, `Hash`, `Headphones`, `Heart`, `Help`, `History`, `HowToReg`, `Hub`,
 `Info`, `Insights`, `Iphone`, `Key`, `Layers`, `Lightbulb`, `Link`, `Location`, `Lock`, `Mail`, `Menu`,
-`MessageCircle`, `Mic`, `Monitor`, `Monitoring`, `Moon`, `Notifications`, `Nutrition`, `Package`, `Play`,
-`Quiz`, `RefreshCw`, `Rocket`, `Run`, `Schedule`, `School`, `Science`, `Search`, `Sensors`, `Server`,
-`Settings`, `Shield`, `Shuffle`, `Sidebar`, `SidebarOpen`, `Smartphone`, `Square`, `SquarePen`, `Star`, `Stop`,
-`Storage`, `Sun`, `Sync`, `Terminal`, `Timeline`, `Tune`, `Upload`, `Visibility`, `Warning`, `Watch`, `Web`,
-`Widgets`, `Wifi`, `X`
+`MessageCircle`, `Mic`, `Monitor`, `MonitorHeart`, `Monitoring`, `Moon`, `Motion`, `MyLocation`,
+`Notifications`, `Nutrition`, `Package`, `Palette`, `PartlyCloudyDay`, `Play`, `Psychology`, `Quiz`, `Radar`,
+`RefreshCw`, `Rocket`, `Route`, `Run`, `Schedule`, `School`, `Science`, `Search`, `Sensors`, `Server`,
+`Settings`, `Shield`, `Shuffle`, `Sidebar`, `SidebarOpen`, `Signature`, `Smartphone`, `Sms`, `Square`,
+`SquarePen`, `Star`, `Steps`, `Stop`, `Storage`, `Sun`, `Sync`, `Terminal`, `Timeline`, `Timer`, `TouchApp`,
+`Translate`, `Tune`, `Upload`, `Visibility`, `VitalSigns`, `Warning`, `Watch`, `Web`, `Widgets`, `Wifi`, `X`
 
 Many keys differ from the Material ligature, so search `icons.tsx` for a ligature before you add it. In the
 topic block, `Heart` is `favorite`, `Bug` is `bug_report`, `Server` is `dns`, `Book` is `menu_book`, `Iphone`
 is `phone_iphone`, `Run` is `directions_run`, `Nutrition` is `restaurant`, `Package` is `package_2`, `Battery`
-is `battery_full`, `Location` is `location_on`, `Play` is `play_arrow` and `Stop` is `stop_circle`. Among the
-interface glyphs, `Monitor` is `computer` and `Square` is `stop`. `FileText` and `Description` draw the same
-glyph, and so do `Copy` and `Clipboard`.
+is `battery_full`, `Location` is `location_on`, `Play` is `play_arrow`, `Stop` is `stop_circle` and `Motion`
+is `3d_rotation`. Among the interface glyphs, `Monitor` is `computer` and `Square` is `stop`. `FileText` and
+`Description` draw the same glyph, and so do `Copy` and `Clipboard`.
 
 ### Add an icon
 

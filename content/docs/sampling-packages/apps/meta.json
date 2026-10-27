@@ -1,0 +1,7 @@
+{
+  "title": "Apps Sampling",
+  "description": "carp_apps_package",
+  "icon": "Apps",
+  "root": true,
+  "pages": ["index", "installation", "quickstart", "---Measures---", "installed-apps", "app-usage", "changelog", "---Links---", "[pub.dev](https://pub.dev/packages/carp_apps_package)", "[API reference](https://pub.dev/documentation/carp_apps_package/latest/)", "[GitHub](https://github.com/carp-dk/carp.sensing-flutter/tree/main/packages/carp_apps_package)"]
+}

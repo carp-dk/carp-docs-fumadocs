@@ -1,1 +1,1 @@
-{ "title": "Sampling Packages", "icon": "Sensors", "pages": ["apple-watch"] }
+{ "title": "Sampling Packages", "icon": "Sensors", "pages": ["context", "survey", "health", "audio", "connectivity", "communication", "apps", "apple-watch", "polar", "movesense", "movisens", "esense"] }

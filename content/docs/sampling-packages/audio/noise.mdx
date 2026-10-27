@@ -1,0 +1,112 @@
+---
+title: Noise
+description: How the noise measure samples sound levels in short windows, what its decibel values mean, and the data it produces.
+icon: GraphicEq
+---
+
+`NOISE` (`dk.cachet.carp.noise`) samples the sound level from the phone's microphone in short windows and adds one [`Noise`](https://pub.dev/documentation/carp_audio_package/latest/media/Noise-class.html) measurement per window, with four statistics in decibels. It is an [event-based](/docs/mobile-sensing/measure-types#event-based-and-one-time-measures) measure on the phone, on Android and iOS.
+
+The measure stores no sound: the probe reduces the microphone samples to levels as they arrive. The constant is on [`MediaSamplingPackage`](https://pub.dev/documentation/carp_audio_package/latest/media/MediaSamplingPackage-class.html), and the levels come from the `noise_meter` plugin.
+
+## Add the measure to a protocol
+
+`NOISE` schedules its own sampling windows, so start it once with an `ImmediateTrigger()`. This task samples for 5 seconds every 30 seconds instead of the default:
+
+```dart
+protocol.addTaskControl(
+  ImmediateTrigger(),
+  BackgroundTask(
+    measures: [
+      Measure(
+        type: MediaSamplingPackage.NOISE,
+        samplingConfiguration: PeriodicSamplingConfiguration( // [!code highlight]
+          interval: const Duration(seconds: 30), // [!code highlight]
+          duration: const Duration(seconds: 5), // [!code highlight]
+        ), // [!code highlight]
+      ),
+    ],
+  ),
+  phone,
+);
+```
+
+A shorter interval gives more measurements, but the microphone is on more often and the battery drains faster.
+
+## Configuration
+
+`NOISE` uses a [`PeriodicSamplingConfiguration`](https://pub.dev/documentation/carp_mobile_sensing/latest/domain/PeriodicSamplingConfiguration-class.html):
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `interval` | `Duration` | 5 minutes | Time from the start of one window to the start of the next. |
+| `duration` | `Duration` | 10 seconds | Length of each window. |
+
+Both properties are required when you create the configuration. The defaults in the table come from the package's default sampling scheme, which samples for 10 seconds every 5 minutes.
+
+## Sampling windows
+
+While the task runs, the probe works in a cycle:
+
+1. One interval after the task starts, and then once per interval, it opens a window. With the defaults, the first window opens 5 minutes after the task starts.
+2. During the window, it listens to the microphone and turns each buffer of samples into a reading with two levels. On Android, a buffer holds 6,400 samples, about 145 milliseconds of sound at 44.1 kHz.
+3. When the window closes, it computes the four statistics from the readings and adds one measurement. The measurement's `sensorStartTime` and `sensorEndTime` are the start and end of the window.
+
+If the task stops during a window, the readings of that window are discarded. A window also adds no measurement when fewer than two of its readings have a finite level, because the standard deviation is then undefined. A window of digital silence has no finite readings, and the probe reports an error for it instead.
+
+## Decibel values
+
+The microphone samples are scaled to values between -1 and 1. The two levels of a reading come from the lowest and the highest sample in its buffer:
+
+```text
+mean level = 20 × log10(32768 × (|lowest sample| + |highest sample|) / 2)
+peak level = 20 × log10(32768 × highest sample)
+```
+
+The values are decibels relative to the smallest step of a 16-bit sample, so full scale is about 90.3 dB. They are not calibrated sound pressure levels: the same sound gives different values on different phone models. Compare noise levels within the same phone, or calibrate each phone model against a sound level meter.
+
+## Platform differences
+
+<Tabs items={['Android', 'iOS']} groupId="platform" persist>
+<Tab value="Android">
+
+- `audio_streamer` records 16-bit mono samples at 44.1 kHz with Android's `AudioRecord`.
+- CARP Mobile Sensing (CAMS) starts the measure only when the participant has granted `RECORD_AUDIO`.
+
+</Tab>
+<Tab value="iOS">
+
+- `audio_streamer` taps the microphone through `AVAudioEngine`, with 44.1 kHz as the preferred sample rate. iOS may use another rate.
+- CAMS starts the measure without checking the microphone permission.
+
+</Tab>
+</Tabs>
+
+## Limitations
+
+- **Not calibrated:** the levels depend on the phone's microphone and differ between phone models.
+- **Background sampling on Android:** Android 11 or later lets a background app use the microphone only from a foreground service of type `microphone`. The CAMS setup declares its foreground service as `dataSync|specialUse`, not `microphone`, so test background sampling on the phones of your study.
+- **Background sampling on iOS:** sampling continues in the background only with the `audio` background mode.
+- **Delayed start:** the first window starts one interval after the task starts, and a window in progress is discarded when the task stops.
+
+## Data
+
+Each `Noise` holds the statistics of one window, computed from the readings with a finite level:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `meanDecibel` | `double` | Mean of the readings' mean levels, in dB. |
+| `stdDecibel` | `double` | Sample standard deviation of the readings' mean levels, in dB. |
+| `minDecibel` | `double` | Lowest mean level of a reading, in dB. |
+| `maxDecibel` | `double` | Highest peak level of a reading, in dB. |
+
+For the measurement envelope around the data, see [Measurements and data](/docs/mobile-sensing/domain-model#measurements-and-data). An example of the data:
+
+```json
+{
+  "__type": "dk.cachet.carp.noise",
+  "meanDecibel": 47.83251874509615,
+  "stdDecibel": 3.9171604375130887,
+  "minDecibel": 41.06923398265123,
+  "maxDecibel": 68.72041385620347
+}
+```
