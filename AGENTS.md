@@ -12,7 +12,8 @@ the majority. Some existing pages and images break a rule. Do not copy them, and
 
 - The readers are developers who already build Flutter apps. Write technical documentation with no beginner
   framing, and link to Flutter's, Apple's and Google's own guides for platform basics.
-- API reference is not generated here. Link to the package's API docs on pub.dev.
+- Dart API reference is not generated here. Link to the package's API docs on pub.dev. The one generated
+  reference is the [Backend API](#backend-api) section, built from the CAWS OpenAPI document.
 - Code samples were ported verbatim from the package repositories, known bugs included. Do not change what a
   ported sample does without the maintainer's confirmation; report the problem instead. Comment-only fixes are
   fine, and so are whitespace fixes that do not change what the code does; in YAML, indentation is code.
@@ -40,6 +41,8 @@ Use Bun: `bun install` applies the M3E fix in `patches/`, which npm and pnpm ski
 | Icons | `src/components/ui/icons.tsx` (`materialIcons`), logos in `src/components/ui/brand-icons.tsx` |
 | Navbar menus | `src/lib/layout.shared.tsx` |
 | Changelog sources | `src/lib/changelog.ts` (`changelogSources`) |
+| Backend API document URL, endpoint groups, page titles and slugs | `src/lib/backend-api.ts` |
+| Backend API endpoint pages and their UI | `src/lib/openapi.ts`, `src/components/api-page.tsx`, `src/styles/openapi.css` |
 | Colors, type and component styles | `src/styles/` |
 
 Do not edit `src/routeTree.gen.ts` (generated) or `.output/` (build output).
@@ -73,6 +76,7 @@ samples included, use American spelling.
 | Movesense Sampling | `content/docs/sampling-packages/movesense` | `carp_movesense_package` |
 | Movisens Sampling | `content/docs/sampling-packages/movisens` | `carp_movisens_package` |
 | eSense Sampling | `content/docs/sampling-packages/esense` | `carp_esense_package` |
+| Backend API | `content/docs/backend-api` | — |
 
 Each package folder is a sidebar section (`"root": true` in its `meta.json`). The folders `flutter-plugins/`
 and `sampling-packages/` only group packages the way the navbar does. They are not sections and have no
@@ -600,6 +604,25 @@ These rules apply to the sections in `sampling-packages/` except Apple Watch Sen
 - `research_package` is a standalone Flutter package: the pages say "participant" for the person who answers,
   and use CAMS terms only on pages that connect it to CAMS.
 
+### Backend API
+
+- The section documents the CARP Web Services (CAWS) REST API. Its endpoint pages are generated, not
+  written: each build fetches the OpenAPI document at `backendApiDocumentUrl`
+  (`https://dev.carp.dk/doc/v3/api-docs`) and makes one page per operation, so API changes reach the docs
+  with the next build. `bun run dev` fetches it when it starts. A build fails when the document cannot be
+  fetched; the dev server warns and shows the section without endpoint pages.
+- `planBackendApiPages()` in `src/lib/backend-api.ts` sets the pages: one group per tag, named and given an
+  icon in `groupNames`, and one page per operation, titled by its summary or operation ID and named after
+  its operation ID. Add a tag to `groupNames` when the API gains a controller. Endpoint pages live at
+  `/docs/backend-api/<group>/<operation>`, so a new group name or operation ID changes their URLs.
+- `normalizeDocument()` fixes how the generated document reads: it dedents descriptions, lists success
+  responses first and gives each operation without a summary its page title. Report wrong or missing API
+  details, such as summaries, descriptions and schemas, to the CAWS team instead of patching them here.
+- `content/docs/backend-api/meta.json` lists the written pages, then `---Endpoints---` and the
+  `---Links---` group. `src/lib/source.ts` inserts the endpoint groups after `---Endpoints---`.
+- Written pages follow the concept page rules. Link an endpoint page by its URL and check the link in
+  `bun run dev`.
+
 ## Components
 
 All components below work in every page without imports. They are registered in `src/components/mdx.tsx`.
@@ -886,7 +909,7 @@ navbar's Introduction entry differ; list such differences instead of changing th
 | Storing data | `Database` |
 | Data managers | `Storage` |
 | On-device storage, phone | `Smartphone` |
-| CARP Web Services, cloud | `Cloud` |
+| CARP Web Services, Backend API, cloud | `Cloud` |
 | Custom backend, servers | `Server` |
 | Configuration, environment | `Tune` |
 | Settings | `Settings` |

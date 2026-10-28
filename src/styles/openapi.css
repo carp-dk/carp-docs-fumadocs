@@ -1,0 +1,52 @@
+/* Backend API endpoint pages (src/components/api-page.tsx). The OpenAPI UI is styled with
+   Tailwind and the fd colour tokens, which theme.css maps to the Material roles; these rules add
+   what it expects from fumadocs-ui's stylesheet, which this site does not load. */
+
+/* The example column sticks inside the docs scroll area (a size container), not the viewport. The
+   page is positioned so that the UI's absolutely positioned parts, such as the hidden inputs of
+   its selects, stay inside that scroll area: the size container is no containing block, and
+   without one they would lengthen the document and let the whole page scroll. */
+.docs-api-page { position: relative; --fd-docs-height: 100cqh; }
+
+/* Section headings sit in the UI's 14px text, so they step down from the prose headline sizes.
+   (Unlayered, to override the prose rules in the utilities layer.) */
+.docs-api-page h2 { @apply text-m3-title-large; }
+.docs-api-page :is(h3, h4, h5, h6) { @apply text-m3-title-medium; }
+
+/* Code lines take the block's inline padding, as in fumadocs-ui. */
+.docs-api-page .shiki .line { position: relative; padding-inline: 16px var(--padding-right, 16px); }
+.docs-api-page .shiki .line:empty { height: 1lh; }
+.docs-api-page .shiki code { font-family: var(--font-mono); }
+
+/* The OpenAPI UI colours methods, status codes and warnings with Tailwind's palette, which the
+   site does not use otherwise; these read the status roles instead, so they meet the site's
+   contrast in both themes. Unscoped, because the playground opens in a dialog outside the page. */
+@theme {
+  --color-green-400: var(--docs-success);
+  --color-green-500: var(--docs-success);
+  --color-green-600: var(--docs-success);
+  --color-blue-400: var(--docs-info);
+  --color-blue-500: var(--docs-info);
+  --color-blue-600: var(--docs-info);
+  --color-yellow-400: var(--docs-warning);
+  --color-yellow-600: var(--docs-warning);
+  --color-amber-400: var(--docs-warning);
+  --color-amber-500: var(--docs-warning);
+  --color-amber-600: var(--docs-warning);
+  --color-orange-400: var(--docs-warning);
+  --color-orange-600: var(--docs-warning);
+  --color-red-400: var(--md-sys-color-error);
+  --color-red-500: var(--md-sys-color-error);
+  --color-red-600: var(--md-sys-color-error);
+}
+
+/* Endpoint pages in the sidebar and the page links: the name, then the method (src/lib/openapi.ts). */
+.fd-page-tree-item-name:has(> .docs-api-method) { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.docs-api-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.docs-api-nav-name[data-deprecated] { text-decoration: line-through; }
+.docs-api-method { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.4px; }
+.docs-api-method[data-method='get'] { color: var(--docs-success); }
+.docs-api-method[data-method='post'] { color: var(--docs-info); }
+.docs-api-method:is([data-method='put'], [data-method='patch']) { color: var(--docs-warning); }
+.docs-api-method[data-method='delete'] { color: var(--md-sys-color-error); }
+.docs-api-method[data-method='head'] { color: var(--md-sys-color-on-surface-variant); }

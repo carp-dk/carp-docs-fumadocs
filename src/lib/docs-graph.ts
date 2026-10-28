@@ -4,7 +4,7 @@ import type * as PageTree from 'fumadocs-core/page-tree';
 
 export function buildDocsGraph(): DocsGraph {
   const pages = source.getPages();
-  const nodes = pages.map(page => ({ id: page.url, url: page.url, text: page.data.title }));
+  const nodes = pages.map(page => ({ id: page.url, url: page.url, text: page.data.title ?? page.url }));
   const urls = new Set(nodes.map(node => node.url));
   const links = new Map<string, { source: string; target: string }>();
   const add = (from: string, to: string) => { if (from !== to && urls.has(from) && urls.has(to)) links.set(`${from}:${to}`, { source: from, target: to }); };
@@ -30,6 +30,8 @@ export function buildReferenceGraph(): Promise<DocsGraph> {
     const urls = new Set(graph.nodes.map(node => node.url));
     const links = new Map(graph.links.map(link => [`${link.source}:${link.target}`, link]));
     await Promise.all(source.getPages().map(async page => {
+      // Backend API endpoint pages are generated from the OpenAPI document and link nowhere.
+      if (page.type !== 'docs') return;
       const data = await page.data.load();
       for (const reference of data.extractedReferences ?? []) {
         const url = reference.href.split('#')[0];

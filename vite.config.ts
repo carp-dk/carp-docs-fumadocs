@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { fumadocsMdx } from 'fumadocs-mdx/vite';
 import { nitro } from 'nitro/vite';
@@ -9,6 +9,7 @@ import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins/remark-mdx-mermaid';
 import { createGenerator, remarkAutoTypeTable } from 'fumadocs-typescript';
 import { readdirSync } from 'node:fs';
 import { codeThemes } from './src/lib/code-theme.ts';
+import { backendApiDocumentUrl, backendApiPagePaths, fetchBackendApiDocument, type BackendApiDocument } from './src/lib/backend-api.ts';
 
 const typeGenerator = createGenerator();
 const docsPages = readdirSync('content/docs', { recursive: true })
@@ -20,11 +21,34 @@ function remarkNamedAutoTypeTable() {
   return remarkAutoTypeTable({ generator: typeGenerator, name: 'AutoTypeTable', shiki: { themes: codeThemes } });
 }
 
+// The Backend API pages come from the CAWS OpenAPI document, fetched once per run and built into the
+// server as `virtual:backend-api-document` (see src/lib/backend-api.ts). A build fails without it;
+// the dev server warns and shows the section without endpoint pages.
+const backendApi = await fetchBackendApiDocument().then(
+  document => ({ document, error: undefined }),
+  (error: unknown) => ({ document: { openapi: '3.1.0', info: { title: 'CARP Web Services', version: '0' }, paths: {} } as BackendApiDocument, error }),
+);
+
+function backendApiDocument(): Plugin {
+  const id = 'virtual:backend-api-document';
+  return {
+    name: 'carp:backend-api-document',
+    configResolved(config) {
+      if (!backendApi.error) return;
+      if (config.command === 'build') throw new Error(`Could not load the Backend API document from ${backendApiDocumentUrl}`, { cause: backendApi.error });
+      config.logger.warn(`[backend-api] Could not load ${backendApiDocumentUrl}, so the Backend API section has no endpoint pages: ${backendApi.error}`);
+    },
+    resolveId: source => source === id ? `\0${id}` : undefined,
+    load: resolved => resolved === `\0${id}` ? `export default ${JSON.stringify(backendApi.document)};` : undefined,
+  };
+}
+
 export default defineConfig({
   server: {
     port: 3000,
   },
   plugins: [
+    backendApiDocument(),
     fumadocsMdx({
       globalOptions: {
         mdxOptions: {
@@ -35,9 +59,10 @@ export default defineConfig({
     }),
     tailwindcss(),
     tanstackStart({
-      // M3E link properties hydrate on the client; seed every section/version.
+      // M3E link properties hydrate on the client; seed every section/version, and the Backend API
+      // endpoint pages, which have no files in content/docs.
       // sitemap.xml and robots.txt are written as static files too.
-      pages: [...docsPages, { path: '/sitemap.xml' }, { path: '/robots.txt' }],
+      pages: [...docsPages, ...backendApiPagePaths(backendApi.document).map(path => ({ path })), { path: '/sitemap.xml' }, { path: '/robots.txt' }],
       prerender: {
         enabled: true,
         // The root only redirects to /docs (see routeRules below), so it has no page to render;

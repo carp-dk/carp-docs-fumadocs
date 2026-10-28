@@ -57,6 +57,7 @@ export function baseOptions(): BaseLayoutProps {
       { type: 'menu', text: 'Flutter Plugins', items: packageLinks('plugin') },
       // Twelve sampling packages: two columns keep the menu within the viewport.
       { type: 'menu', variant: 'navigation', text: 'Sampling Packages', items: packageLinks('sampling') },
+      { text: 'Backend API', url: '/docs/backend-api', active: 'nested-url' },
       // { type: 'menu', text: 'API Reference', items: [
       //   { text: 'All CARP packages', description: 'API documentation on pub.dev', url: '/docs/api-reference', icon: <PackageIcon /> },
       //   ...packages.map(({ name, icon }) => ({ text: name, description: 'pub.dev API reference', url: `https://pub.dev/documentation/${name}/latest/`, external: true, icon })),

@@ -12,6 +12,7 @@ import {
 } from 'ai';
 import { z } from 'zod';
 import { source } from '@/lib/source';
+import { backendApiMarkdown } from '@/lib/backend-api-markdown';
 import { Document, type DocumentData } from 'flexsearch';
 import { ChatUIMessage, SearchTool } from '../components/ai/search';
 import { createFileRoute } from '@tanstack/react-router';
@@ -36,13 +37,12 @@ async function createSearchServer() {
 
   const docs = await chunkedAll(
     source.getPages().map(async (page) => {
-      if (!('getText' in page.data)) return null;
-
       return {
         title: page.data.title,
         description: page.data.description,
         url: page.url,
-        content: await page.data.getText('processed'),
+        // Backend API endpoint pages have no MDX; index their Markdown rendering instead.
+        content: page.type === 'openapi' ? backendApiMarkdown(page) : await page.data.getText('processed'),
       } as CustomDocument;
     }),
   );

@@ -167,6 +167,7 @@ m3e-nav-menu, m3e-nav-menu-item:not(:defined), m3e-card:not(:defined) { display:
 .docs-header-actions { display: flex; align-items: center; gap: 4px; margin-inline-start: auto; }
 .docs-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-gutter: stable; container-type: size; }
 .docs-page-grid { display: grid; grid-template-columns: minmax(0, 1120px) 240px; align-items: start; justify-content: center; gap: 48px; padding: 24px 40px 48px; }
+.docs-page-grid[data-full] { grid-template-columns: minmax(0, 1408px); }
 .docs-article { min-width: 0; display: flex; flex-direction: column; gap: 16px; outline: none; }
 .docs-title { position: relative; color: var(--docs-heading); }
 /* Brand identity: a short accent-red overline above each page title. */

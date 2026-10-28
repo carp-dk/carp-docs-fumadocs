@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { DocsLayout } from '@/components/ai/layout';
 import { createServerFn } from '@tanstack/react-start';
 import { docs } from '@/lib/docs';
-import { getPageSection, source } from '@/lib/source';
+import { getPageSection, source, type SourcePage } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -15,17 +15,21 @@ import { baseOptions } from '@/lib/layout.shared';
 import { changelogKey } from '@/lib/changelog';
 import { absoluteUrl, appName, getPageImageUrl, getPageMarkdownUrl, gitConfig, siteDescription } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
-import { Suspense, use } from 'react';
+import { lazy, Suspense, use, type ComponentProps } from 'react';
 import { useMDXComponents } from '@/components/mdx';
 import { getSearchPages } from '@/components/m3e/search-results';
 import { buildDocsGraph } from '@/lib/docs-graph';
+
+// The OpenAPI UI is only loaded by Backend API endpoint pages.
+const APIPage = lazy(() => import('@/components/api-page').then(module => ({ default: module.APIPage })));
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
   loader: async ({ params }) => {
     const slugs = params._splat?.split('/') ?? [];
     const data = await serverLoader({ data: slugs });
-    await docs.getPage(data.path)?.preload();
+    // Endpoint pages render from their props; MDX pages load their content first.
+    if (data.type === 'docs') await docs.getPage(data.path)?.preload();
     return data;
   },
   head: ({ loaderData }) => {
@@ -64,7 +68,9 @@ const serverLoader = createServerFn({
     const tree = source.getPageTree();
 
     return {
-      path: page.path,
+      ...page.type === 'openapi'
+        ? { type: 'openapi' as const, title: page.data.title, props: page.data.getOpenAPIPageProps() }
+        : { type: 'docs' as const, path: page.path },
       markdownUrl: getPageMarkdownUrl(page).url,
       pageTree: await source.serializePageTree(tree),
       searchPages: getSearchPages(tree),
@@ -76,13 +82,15 @@ const serverLoader = createServerFn({
   });
 
 /** Title, description, URLs and structured data for a page's head. */
-function pageSeo(page: NonNullable<ReturnType<typeof source.getPage>>) {
+function pageSeo(page: SourcePage) {
   const url = absoluteUrl(page.url);
   const image = absoluteUrl(getPageImageUrl(page).url);
   const description = page.data.description ?? siteDescription;
   // A package section's pages repeat names like "Installation", so their titles name the section.
+  // Endpoint names like "Get all" repeat across the Backend API groups, so they name the group too.
   const section = getPageSection(page.url);
-  const title = section && !section.isOverview ? `${page.data.title} – ${section.name}` : page.data.title;
+  const name = page.type === 'openapi' && section?.group ? `${page.data.title} – ${section.group}` : page.data.title;
+  const title = section && !section.isOverview ? `${name} – ${section.name}` : name;
   // The docs home is the site itself; every other page is an article in it.
   const home = source.getPage([]);
   const isHome = page.url === home?.url;
@@ -145,13 +153,32 @@ function Content({ path, markdownUrl, changelogKey }: { path: string; markdownUr
   );
 }
 
+// A Backend API endpoint page: the OpenAPI UI for one operation, from the CAWS OpenAPI document.
+function ApiContent({ title, props, markdownUrl }: { title?: string; props: ComponentProps<typeof APIPage>; markdownUrl: string }) {
+  return (
+    <DocsPage full>
+      <DocsTitle>{title}</DocsTitle>
+      <div className="flex flex-row flex-wrap gap-2 items-center border-b pb-6">
+        <MarkdownCopyButton markdownUrl={markdownUrl} />
+        <ViewOptionsPopover markdownUrl={markdownUrl} />
+      </div>
+      <DocsBody>
+        <APIPage {...props} />
+      </DocsBody>
+    </DocsPage>
+  );
+}
+
 function Page() {
-  const { path, pageTree, searchPages, markdownUrl, graph, changelog } = useFumadocsLoader(Route.useLoaderData());
+  const data = useFumadocsLoader(Route.useLoaderData());
+  const { pageTree, searchPages, markdownUrl, graph, changelog } = data;
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree} searchPages={searchPages} graph={graph}>
       <Suspense>
-        <Content path={path} markdownUrl={markdownUrl} changelogKey={changelog} />
+        {data.type === 'openapi'
+          ? <ApiContent title={data.title} props={data.props} markdownUrl={markdownUrl} />
+          : <Content path={data.path} markdownUrl={markdownUrl} changelogKey={changelog} />}
       </Suspense>
     </DocsLayout>
   );

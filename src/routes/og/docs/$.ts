@@ -14,9 +14,10 @@ export const Route = createFileRoute('/og/docs/$')({
         const section = getPageSection(page.url);
 
         return generateOGImage({
-          title: page.data.title,
+          title: page.data.title ?? appName,
           description: page.data.description,
-          section: section && !section.isOverview ? section.name : undefined,
+          // Endpoint names like "Get all" repeat across the Backend API groups, so the card names the group.
+          section: section && !section.isOverview ? page.type === 'openapi' && section.group ? `${section.name} · ${section.group}` : section.name : undefined,
           site: appName,
           domain: new URL(siteUrl).host,
         });

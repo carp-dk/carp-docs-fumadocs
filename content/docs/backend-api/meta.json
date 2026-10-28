@@ -1,0 +1,7 @@
+{
+  "title": "Backend API",
+  "description": "CARP Web Services REST API",
+  "icon": "Cloud",
+  "root": true,
+  "pages": ["index", "---Endpoints---", "---Links---", "[OpenAPI document](https://dev.carp.dk/doc/v3/api-docs)", "[Swagger UI](https://dev.carp.dk/doc/swagger-ui/index.html)", "[GitHub](https://github.com/carp-dk/carp-webservices-spring)"]
+}

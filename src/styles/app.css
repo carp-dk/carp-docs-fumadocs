@@ -9,6 +9,12 @@
 @import './navigation.css';
 @import './component-colors.css';
 @import './tabs.css';
+@import './openapi.css';
+/* The Backend API pages: the Tailwind classes of Fumadocs' OpenAPI UI, and those of the fumadocs-ui
+   code block and button variants it renders that its preset leaves out (fumadocs-ui 16.17.1). They
+   are listed inline: an @source for fumadocs-ui's files also generates its unused components. */
+@import 'fumadocs-openapi/css/preset.css';
+@source inline('min-w-full *:flex-col my-4 h-9.5 -me-2 top-3 right-2 backdrop-blur-lg py-3.5 max-h-[600px] duration-100 hover:bg-fd-primary/80 disabled:bg-fd-secondary disabled:text-fd-secondary-foreground disabled:pointer-events-none [&_svg]:size-4 [&_svg]:size-4.5 [&_svg]:size-5');
 
 html {
   scrollbar-gutter: stable;

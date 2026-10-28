@@ -12,12 +12,14 @@ import { flattenPages, useDocsTree } from './tree-context';
 import { useAppLink } from './link';
 import { PageTOCContext } from './page-context';
 
-export function DocsPage({ toc = [], children, className, ...props }: ComponentProps<'article'> & { toc?: TOCItemType[] }) {
+// A `full` page has no table of contents, and its article takes that column too: for wide
+// content such as the Backend API endpoint pages.
+export function DocsPage({ toc = [], full = false, children, className, ...props }: ComponentProps<'article'> & { toc?: TOCItemType[]; full?: boolean }) {
   const pathname = usePathname();
   // M3E reads the page's headings once; rebuild it when headings arrive later (e.g. a changelog).
   const tocKey = `${pathname}:${toc.length}`;
   return (
-    <PageTOCContext value={toc}><div className="docs-page-grid">
+    <PageTOCContext value={toc}><div className="docs-page-grid" data-full={full || undefined}>
       {toc.length > 0 && <M3eExpansionPanel className="docs-mobile-toc"><span slot="header">On this page</span><M3eToc key={tocKey} htmlFor="docs-scroll" maxDepth={6} /></M3eExpansionPanel>}
       <article id="docs-article" tabIndex={-1} {...props} className={cn('docs-article', className)}>
         {children}

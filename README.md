@@ -46,6 +46,7 @@ Pages are MDX files in `content/docs`, ordered by each folder's `meta.json`.
 | Movesense Sampling | `content/docs/sampling-packages/movesense` | `carp_movesense_package` |
 | Movisens Sampling | `content/docs/sampling-packages/movisens` | `carp_movisens_package` |
 | eSense Sampling | `content/docs/sampling-packages/esense` | `carp_esense_package` |
+| Backend API: the CAWS REST API reference | `content/docs/backend-api` | |
 
 - Packages are grouped like the navbar: `mobile-sensing`, `flutter-plugins/<package>` and
   `sampling-packages/<package>`. Each package folder has `"root": true` in its `meta.json`, which
@@ -54,11 +55,29 @@ Pages are MDX files in `content/docs`, ordered by each folder's `meta.json`.
   Sampling Packages, API Reference and Community. To add a package, add it to the `packages` list
   there with its `category` (`plugin` or `sampling`) and create its folder; its pub.dev name shows
   as a tag beside the menu item. Menus that do not fit the window move into a "More" menu.
-- API reference docs are not generated here; link to the package's API docs on pub.dev.
+- API reference docs are not generated here; link to the package's API docs on pub.dev. The exception
+  is the [Backend API](#backend-api) section.
 - Components work without imports. The theme's live catalogue is in its
   [`content/docs/test`](https://github.com/iarata/fumadocs-material-3-theme/tree/main/content/docs/test) folder.
 - ```` ```mermaid ```` code blocks render as diagrams in the theme's colours.
 - Images live in `public/images/<section>/`. Portrait screenshots are shown at phone width.
+
+## Backend API
+
+The Backend API section (`/docs/backend-api`, also in the navbar) is the reference of the CARP Web
+Services (CAWS) REST API. Its endpoint pages are generated with
+[Fumadocs OpenAPI](https://fumadocs.dev/docs/integrations/openapi) from the OpenAPI document at
+`https://dev.carp.dk/doc/v3/api-docs`:
+
+- `vite.config.ts` fetches the document once per build (and when `bun run dev` starts) and builds it
+  into the server, so the running site never calls dev.carp.dk. API changes appear after the next
+  build. A build fails when the document cannot be fetched; the dev server warns and shows the section
+  without endpoint pages.
+- `src/lib/backend-api.ts` groups the endpoints by tag and names the pages; `src/lib/openapi.ts` makes
+  the pages, and `src/components/api-page.tsx` renders them with the theme's components and colours.
+- Each endpoint page has an API playground. It sends requests from the browser, so it works only for
+  endpoints that CAWS allows from other origins.
+- The hand-written overview is `content/docs/backend-api/index.mdx`.
 
 ## Changelogs
 
@@ -92,6 +111,7 @@ The site runs as a Docker container behind `docs.carp.dk`.
   for version tags, and a `sha-…` tag for every build), then redeploys the `docs` stack on
   `https://test.carp.dk/portainer` through the Portainer API. Pull requests only build.
 - `deploy/docker-compose.yml` is the `docs` Portainer stack; it publishes the site on host port 3333.
+- The build needs network access to `https://dev.carp.dk`, for the [Backend API](#backend-api) document.
 
 | Setting | Where | Purpose |
 | --- | --- | --- |
