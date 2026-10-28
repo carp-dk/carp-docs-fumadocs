@@ -47,6 +47,12 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  // The prerenderer fetches pages from a preview server at its local URL. Bound to "localhost", Node
+  // may listen on ::1 while the fetches go to 127.0.0.1 (as in the Docker build), and then the
+  // build prerenders no pages without failing.
+  preview: {
+    host: '127.0.0.1',
+  },
   plugins: [
     backendApiDocument(),
     fumadocsMdx({
