@@ -620,9 +620,10 @@ These rules apply to the sections in `sampling-packages/` except Apple Watch Sen
 - Endpoint pages live at `/docs/backend-api/<group>/<operation>`. A new group name, operation ID or service
   path, or a new operation whose name repeats an existing one, changes their URLs.
 - `normalizeDocument()` fixes how the generated document reads: it dedents descriptions, lists success
-  responses first and gives each operation without a summary its page title. Report wrong or missing API
-  details, such as summaries, descriptions, schemas and security, to the CAWS team instead of patching
-  them here.
+  responses first and gives each operation without a summary its page title. It also gives the OAuth flow
+  the scopes in `backendApiScopes` (`openid profile email carp`), which the playground requests. Report
+  wrong or missing API details, such as summaries, descriptions, schemas and security, to the CAWS team
+  instead of patching them here.
 - `content/docs/backend-api/meta.json` lists the written pages, then `---Endpoints---` and the
   `---Links---` group, whose rows are the OpenAPI document, the Swagger UI and GitHub.
   `src/lib/source.ts` inserts the endpoint groups after `---Endpoints---`.

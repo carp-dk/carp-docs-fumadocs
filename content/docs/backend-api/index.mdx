@@ -12,7 +12,7 @@ The endpoint pages are generated from the [OpenAPI document](https://dev.carp.dk
 
 ## Authentication
 
-Endpoints need an access token from CARP's Keycloak server, sent in the `Authorization` header as `Bearer <token>`. The OpenAPI document describes the OAuth 2.0 password flow, with the token URL `https://dev.carp.dk/auth/realms/Carp/protocol/openid-connect/token`.
+Endpoints need an access token from CARP's Keycloak server, sent in the `Authorization` header as `Bearer <token>`. The OpenAPI document describes the OAuth 2.0 password flow, with the token URL `https://dev.carp.dk/auth/realms/Carp/protocol/openid-connect/token`. Request the token with the scopes `openid profile email carp`; the playground's **Authorize** dialog selects them by default.
 
 The [self sign-up endpoint](/docs/backend-api/self-signup/sign-up) is public: it creates an anonymous participant account from a study code. The OpenAPI document does not mark it as public, so its page lists the token too.
 

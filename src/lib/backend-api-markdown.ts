@@ -31,7 +31,8 @@ function operationMarkdown(document: Document, path: string, method: string, ope
   if (operation.description) out.push(operation.description);
   const security = operation.security ?? document.security ?? [];
   const schemes = [...new Set(security.flatMap(requirement => Object.keys(requirement)))];
-  if (schemes.length) out.push(`Authorization: ${schemes.map(name => schemeMarkdown(name, document.components?.securitySchemes?.[name])).join(' or ')}.`);
+  const scopes = [...new Set(security.flatMap(requirement => Object.values(requirement).flat()))];
+  if (schemes.length) out.push(`Authorization: ${schemes.map(name => schemeMarkdown(name, document.components?.securitySchemes?.[name])).join(' or ')}.${scopes.length ? ` Scopes: \`${scopes.join(' ')}\`.` : ''}`);
   else if (operation.security) out.push('Authorization: none.');
 
   const parameters = operation.parameters?.map(item => resolve<OpenAPIV3_2.ParameterObject>(document, item)).filter(item => item !== undefined) ?? [];

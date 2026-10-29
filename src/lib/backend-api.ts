@@ -11,6 +11,17 @@ export const backendApiDocumentUrl = 'https://dev.carp.dk/doc/v3/api-docs';
 export const backendApiDir = 'backend-api';
 /** The document's ID in createOpenAPI() and in the page props. */
 export const backendApiDocumentId = 'carp-webservices';
+/**
+ * The scopes a token from CARP's Keycloak server needs, in the order they are requested. The
+ * document's OAuth flow declares none, so normalizeDocument() adds them and the playground asks
+ * for them.
+ */
+export const backendApiScopes: Record<string, string> = {
+  openid: 'OpenID Connect',
+  profile: 'User profile',
+  email: 'Email address',
+  carp: 'CARP Web Services',
+};
 
 export type BackendApiDocument = OpenAPIV3_1.Document;
 type HttpMethod = 'get' | 'put' | 'post' | 'delete' | 'patch' | 'head';
@@ -55,14 +66,26 @@ export async function fetchBackendApiDocument(url = backendApiDocumentUrl): Prom
  *   every description is dedented;
  * - springdoc lists the shared error responses before the success response, so responses are
  *   sorted by status code;
- * - most operations have no summary, so they get the page title, which the OpenAPI UI shows too.
+ * - most operations have no summary, so they get the page title, which the OpenAPI UI shows too;
+ * - the OAuth flows and the security requirements that use them name no scopes, so they get
+ *   backendApiScopes.
  */
 export function normalizeDocument(document: BackendApiDocument): BackendApiDocument {
   dedentDescriptions(document);
+  const oauth = new Set<string>();
+  for (const [name, scheme] of Object.entries(document.components?.securitySchemes ?? {})) {
+    if (!scheme || '$ref' in scheme || scheme.type !== 'oauth2') continue;
+    oauth.add(name);
+    for (const flow of Object.values(scheme.flows ?? {})) if (flow) flow.scopes = { ...backendApiScopes, ...flow.scopes };
+  }
+  // `[]` (no authorization) and `{}` (optional) stay as they are.
+  const withScopes = (security?: OpenAPIV3_1.SecurityRequirementObject[]) => security?.map(requirement => Object.fromEntries(Object.entries(requirement).map(([name, scopes]) => [name, oauth.has(name) && !scopes.length ? Object.keys(backendApiScopes) : scopes])));
+  if (document.security) document.security = withScopes(document.security);
   for (const pathItem of Object.values(document.paths ?? {})) {
     for (const method of methods) {
       const operation = pathItem?.[method];
       if (operation?.responses) operation.responses = Object.fromEntries(Object.entries(operation.responses).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true })));
+      if (operation?.security) operation.security = withScopes(operation.security);
     }
   }
   for (const group of planBackendApiPages(document)) {
