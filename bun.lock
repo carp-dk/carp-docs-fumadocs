@@ -56,6 +56,7 @@
   },
   "patchedDependencies": {
     "@m3e/web@2.9.2": "patches/@m3e%2Fweb@2.9.2.patch",
+    "fumadocs-openapi@12.5.4": "patches/fumadocs-openapi@12.5.4.patch",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.110", "", { "dependencies": { "@ai-sdk/provider": "4.0.26", "@ai-sdk/provider-utils": "5.0.58", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-5IwnOR6v7KC+D9eddUqsCobXl/FbLUVb2LaQc/uyuQdpP3/n9s0YLc9zl4/W3IS/R2pjHrqUfCzEAeOu7bFLoQ=="],

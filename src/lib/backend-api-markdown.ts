@@ -39,21 +39,35 @@ function operationMarkdown(document: Document, path: string, method: string, ope
     `\`${item.name}\``, item.in ?? '—', typeName(item.schema, schemas), item.required ? 'Yes' : 'No', cell(item.description),
   ])));
 
+  // Schemas written out in the operation (such as a multipart upload's fields) have no name to
+  // look up, so they follow their table in full.
+  const inline: string[] = [];
   const body = resolve<OpenAPIV3_2.RequestBodyObject>(document, operation.requestBody);
   if (body?.content) {
     out.push('## Request body');
     if (body.description) out.push(body.description);
-    out.push(table(['Content type', 'Schema', 'Required'], Object.entries(body.content).map(([type, content]) => [`\`${type}\``, typeName(resolve<OpenAPIV3_2.MediaTypeObject>(document, content)?.schema, schemas), body.required ? 'Yes' : 'No'])));
+    out.push(table(['Content type', 'Schema', 'Required'], Object.entries(body.content).map(([type, content]) => {
+      const schema = resolve<OpenAPIV3_2.MediaTypeObject>(document, content)?.schema;
+      if (isStructured(schema)) inline.push(`The \`${type}\` schema:\n\n${json(schema)}`);
+      return [`\`${type}\``, typeName(schema, schemas), body.required ? 'Yes' : 'No'];
+    })), ...inline.splice(0));
   }
 
   const responses = Object.entries(operation.responses ?? {});
   if (responses.length) out.push('## Responses', table(['Status', 'Description', 'Content'], responses.map(([status, item]) => {
     const response = resolve<OpenAPIV3_2.ResponseObject>(document, item);
-    const content = Object.entries(response?.content ?? {}).map(([type, value]) => `\`${type}\`: ${typeName(resolve<OpenAPIV3_2.MediaTypeObject>(document, value)?.schema, schemas)}`);
+    const content = Object.entries(response?.content ?? {}).map(([type, value]) => {
+      const schema = resolve<OpenAPIV3_2.MediaTypeObject>(document, value)?.schema;
+      if (isStructured(schema)) inline.push(`The ${status} \`${type}\` schema:\n\n${json(schema)}`);
+      return `\`${type}\`: ${typeName(schema, schemas)}`;
+    });
     return [status, cell(response?.description), content.join('<br/>') || '—'];
-  })));
+  })), ...inline.splice(0));
 
   // The schemas the operation uses, and the schemas those use.
+  for (const parameter of parameters) collectSchemas(parameter.schema, schemas);
+  collectSchemas(body?.content, schemas);
+  for (const [, item] of responses) collectSchemas(resolve<OpenAPIV3_2.ResponseObject>(document, item)?.content, schemas);
   for (const name of schemas) collectSchemas(document.components?.schemas?.[name], schemas);
   return out;
 }
@@ -93,6 +107,13 @@ function typeName(schema: Schema | undefined, schemas: Set<string>): string {
   if (types.includes('array') && 'items' in schema) return `${typeName(schema.items, schemas)}[]`;
   const name = types.join(' or ') || 'object';
   return schema.format ? `${name} (${schema.format})` : name;
+}
+
+/** An inline schema with properties of its own, which typeName() reduces to "object". */
+function isStructured(schema: Schema | undefined): boolean {
+  if (!schema || typeof schema !== 'object' || '$ref' in schema) return false;
+  if (schema.properties || (schema.additionalProperties && typeof schema.additionalProperties === 'object')) return true;
+  return 'items' in schema && isStructured(schema.items as Schema | undefined);
 }
 
 function collectSchemas(node: unknown, schemas: Set<string>) {

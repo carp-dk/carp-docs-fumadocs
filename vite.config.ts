@@ -23,11 +23,13 @@ function remarkNamedAutoTypeTable() {
 
 // The Backend API pages come from the CAWS OpenAPI document, fetched once per run and built into the
 // server as `virtual:backend-api-document` (see src/lib/backend-api.ts). A build fails without it;
-// the dev server warns and shows the section without endpoint pages.
-const backendApi = await fetchBackendApiDocument().then(
+// the dev server warns and shows the section without endpoint pages. The prerender step loads this
+// config again in the same process (TanStack Start sets TSS_PRERENDERING first) and reuses the fetch.
+const fetched = globalThis as { carpBackendApi?: Promise<{ document: BackendApiDocument; error: unknown }> };
+const backendApi = await (process.env.TSS_PRERENDERING === 'true' && fetched.carpBackendApi || (fetched.carpBackendApi = fetchBackendApiDocument().then(
   document => ({ document, error: undefined }),
   (error: unknown) => ({ document: { openapi: '3.1.0', info: { title: 'CARP Web Services', version: '0' }, paths: {} } as BackendApiDocument, error }),
-);
+)));
 
 function backendApiDocument(): Plugin {
   const id = 'virtual:backend-api-document';

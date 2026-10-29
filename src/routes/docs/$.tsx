@@ -3,6 +3,9 @@ import { DocsLayout } from '@/components/ai/layout';
 import { createServerFn } from '@tanstack/react-start';
 import { docs } from '@/lib/docs';
 import { getPageSection, source, type SourcePage } from '@/lib/source';
+import { openapi } from '@/lib/openapi';
+import { loadApiPage, loadedApiPage, openapiDocuments } from '@/lib/backend-api-client';
+import type { OpenAPIPageProps } from 'fumadocs-openapi/ui';
 import {
   DocsBody,
   DocsDescription,
@@ -15,21 +18,26 @@ import { baseOptions } from '@/lib/layout.shared';
 import { changelogKey } from '@/lib/changelog';
 import { absoluteUrl, appName, getPageImageUrl, getPageMarkdownUrl, gitConfig, siteDescription } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
-import { lazy, Suspense, use, type ComponentProps } from 'react';
+import { Suspense, use } from 'react';
 import { useMDXComponents } from '@/components/mdx';
 import { getSearchPages } from '@/components/m3e/search-results';
 import { buildDocsGraph } from '@/lib/docs-graph';
 
-// The OpenAPI UI is only loaded by Backend API endpoint pages.
-const APIPage = lazy(() => import('@/components/api-page').then(module => ({ default: module.APIPage })));
+const getDocument = createServerFn({ method: 'GET' })
+  .validator((id: string) => id)
+  .handler(async ({ data: id }) => (await openapi.getSchema(id)).bundled);
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
   loader: async ({ params }) => {
     const slugs = params._splat?.split('/') ?? [];
     const data = await serverLoader({ data: slugs });
-    // Endpoint pages render from their props; MDX pages load their content first.
+    // MDX pages load their content first; endpoint pages, the OpenAPI UI and the document.
     if (data.type === 'docs') await docs.getPage(data.path)?.preload();
+    else {
+      const { document: id, payload } = data.props;
+      [payload.bundled] = await Promise.all([openapiDocuments.get(id) ?? getDocument({ data: id }), loadApiPage()]);
+    }
     return data;
   },
   head: ({ loaderData }) => {
@@ -154,7 +162,8 @@ function Content({ path, markdownUrl, changelogKey }: { path: string; markdownUr
 }
 
 // A Backend API endpoint page: the OpenAPI UI for one operation, from the CAWS OpenAPI document.
-function ApiContent({ title, props, markdownUrl }: { title?: string; props: ComponentProps<typeof APIPage>; markdownUrl: string }) {
+function ApiContent({ title, props, markdownUrl }: { title?: string; props: OpenAPIPageProps; markdownUrl: string }) {
+  const { APIPage } = loadedApiPage() ?? use(loadApiPage());
   return (
     <DocsPage full>
       <DocsTitle>{title}</DocsTitle>
@@ -172,6 +181,8 @@ function ApiContent({ title, props, markdownUrl }: { title?: string; props: Comp
 function Page() {
   const data = useFumadocsLoader(Route.useLoaderData());
   const { pageTree, searchPages, markdownUrl, graph, changelog } = data;
+  // The first endpoint page brings its document with the page.
+  if (data.type === 'openapi' && data.props.payload.bundled && typeof window !== 'undefined') openapiDocuments.set(data.props.document, data.props.payload.bundled);
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree} searchPages={searchPages} graph={graph}>

@@ -287,6 +287,8 @@ m3e-nav-menu, m3e-nav-menu-item:not(:defined), m3e-card:not(:defined) { display:
   .docs-header-actions > m3e-button, .docs-header-actions > .docs-github-link { display: none; }
   .docs-header-actions { margin-inline-start: 0; }
   .docs-page-grid { display: flex; flex-direction: column; padding: 12px 24px 32px; gap: 24px; }
+  /* Full pages have no TOC panel to space the title from the toolbar. */
+  .docs-page-grid[data-full] { padding-top: 24px; }
   .docs-mobile-toc, .docs-article { width: 100%; }
   .docs-heading { scroll-margin-top: 72px; }
   .docs-pagination { grid-template-columns: minmax(0, 1fr); }

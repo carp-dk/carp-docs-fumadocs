@@ -1,6 +1,6 @@
 import { createOpenAPI } from 'fumadocs-openapi/server';
 import type { Document } from 'fumadocs-openapi';
-import { update, type LoaderPlugin } from 'fumadocs-core/source';
+import { PathUtils, update, type LoaderPlugin } from 'fumadocs-core/source';
 import { createElement, Fragment } from 'react';
 import document from 'virtual:backend-api-document';
 import { backendApiDir, backendApiDocumentId, planBackendApiPages } from './backend-api';
@@ -10,6 +10,8 @@ import { backendApiDir, backendApiDocumentId, planBackendApiPages } from './back
 export const openapi = createOpenAPI({
   // Fumadocs upgrades the OpenAPI 3.1 document to 3.2 when it loads it.
   input: { [backendApiDocumentId]: () => structuredClone(document) as unknown as Document },
+  // Page props leave the document out; the docs route sends it once per browser session.
+  includeDocument: false,
 });
 
 const groups = planBackendApiPages(document);
@@ -39,10 +41,13 @@ export async function getBackendApiSource() {
       });
     },
   });
+  // Fumadocs joins the paths with node:path, so they have backslashes on Windows.
+  source.files = source.files.map(file => ({ ...file, path: PathUtils.slash(file.path) }));
   const icons = new Map(groups.map(group => [`${backendApiDir}/${group.slug}/meta.json`, group.icon]));
   // The section's own meta.json lists these folders; a generated one would replace it.
   source.files = source.files.filter(file => file.type !== 'meta' || file.path !== `${backendApiDir}/meta.json`);
-  return update(source).meta(file => ({ ...file, data: { ...file.data, icon: icons.get(file.path) } })).build();
+  // The groups start closed; the sidebar opens the one that holds the current page.
+  return update(source).meta(file => ({ ...file, data: { ...file.data, icon: icons.get(file.path), defaultOpen: false } })).build();
 }
 
 /**

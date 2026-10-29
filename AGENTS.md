@@ -23,7 +23,7 @@ the majority. Some existing pages and images break a rule. Do not copy them, and
 
 ## Project
 
-Use Bun: `bun install` applies the M3E fix in `patches/`, which npm and pnpm skip.
+Use Bun: `bun install` applies the fixes in `patches/` (M3E and fumadocs-openapi), which npm and pnpm skip.
 
 | Command | Purpose |
 | --- | --- |
@@ -42,7 +42,7 @@ Use Bun: `bun install` applies the M3E fix in `patches/`, which npm and pnpm ski
 | Navbar menus | `src/lib/layout.shared.tsx` |
 | Changelog sources | `src/lib/changelog.ts` (`changelogSources`) |
 | Backend API document URL, endpoint groups, page titles and slugs | `src/lib/backend-api.ts` |
-| Backend API endpoint pages and their UI | `src/lib/openapi.ts`, `src/components/api-page.tsx`, `src/styles/openapi.css` |
+| Backend API endpoint pages and their UI | `src/lib/openapi.ts`, `src/lib/backend-api-client.ts`, `src/components/api-page.tsx`, `src/styles/openapi.css` |
 | Colors, type and component styles | `src/styles/` |
 
 Do not edit `src/routeTree.gen.ts` (generated) or `.output/` (build output).
@@ -609,19 +609,27 @@ These rules apply to the sections in `sampling-packages/` except Apple Watch Sen
 - The section documents the CARP Web Services (CAWS) REST API. Its endpoint pages are generated, not
   written: each build fetches the OpenAPI document at `backendApiDocumentUrl`
   (`https://dev.carp.dk/doc/v3/api-docs`) and makes one page per operation, so API changes reach the docs
-  with the next build. `bun run dev` fetches it when it starts. A build fails when the document cannot be
-  fetched; the dev server warns and shows the section without endpoint pages.
+  with the next pipeline run. `bun run dev` fetches it when it starts. A build fails when the document
+  cannot be fetched; the dev server warns and shows the section without endpoint pages.
 - `planBackendApiPages()` in `src/lib/backend-api.ts` sets the pages: one group per tag, named and given an
-  icon in `groupNames`, and one page per operation, titled by its summary or operation ID and named after
-  its operation ID. Add a tag to `groupNames` when the API gains a controller. Endpoint pages live at
-  `/docs/backend-api/<group>/<operation>`, so a new group name or operation ID changes their URLs.
+  icon in `groupNames`, and one page per operation. A page is titled by its summary, else by the service
+  name for `/api/<name>-service` endpoints, else by its operation ID without springdoc's `_1` suffix. Its
+  slug is that service name or operation ID in kebab case. Pages that share a title or slug in a group
+  get their path parameters, then their method, appended (`get-all-by-study-id`). Add a tag to
+  `groupNames` when the API gains a controller.
+- Endpoint pages live at `/docs/backend-api/<group>/<operation>`. A new group name, operation ID or service
+  path, or a new operation whose name repeats an existing one, changes their URLs.
 - `normalizeDocument()` fixes how the generated document reads: it dedents descriptions, lists success
   responses first and gives each operation without a summary its page title. Report wrong or missing API
-  details, such as summaries, descriptions and schemas, to the CAWS team instead of patching them here.
+  details, such as summaries, descriptions, schemas and security, to the CAWS team instead of patching
+  them here.
 - `content/docs/backend-api/meta.json` lists the written pages, then `---Endpoints---` and the
-  `---Links---` group. `src/lib/source.ts` inserts the endpoint groups after `---Endpoints---`.
-- Written pages follow the concept page rules. Link an endpoint page by its URL and check the link in
-  `bun run dev`.
+  `---Links---` group, whose rows are the OpenAPI document, the Swagger UI and GitHub.
+  `src/lib/source.ts` inserts the endpoint groups after `---Endpoints---`.
+- `index.mdx` is the section's landing page: it opens with what the API is, follows the concept page rules
+  and ends with `## Next steps`. The section has no changelog, and `api-reference.mdx` links it with a See
+  sentence, not a Card.
+- Link an endpoint page by its URL and check the link in `bun run dev`.
 
 ## Components
 
@@ -1140,6 +1148,11 @@ These rules apply when you change `src/`.
   `package.json`. Upgrade both together. To keep the fix, run `bun patch @m3e/web`, make the changes again in
   `node_modules/@m3e/web` and run `bun patch --commit node_modules/@m3e/web`. To drop it, delete the patch file
   and its `patchedDependencies` entry.
+- `fumadocs-openapi` and `fumadocs-ui` are pinned to 12.5.4 and 16.17.1, which work with `fumadocs-core`
+  16.17.1; a newer `fumadocs-openapi` needs a newer core, so upgrade all of them together. `fumadocs-openapi` is
+  patched the same way as `@m3e/web`: its select triggers get accessible names (`aria-label`) and its
+  playground dialog `aria-modal`. On an upgrade, check whether the new version does this itself, and redo or
+  drop the patch. A running dev server keeps the old files until it restarts.
 - The theme is shared with the template repository `iarata/fumadocs-material-3-theme` (git remote `template`).
   The two are not synced; theme changes come over one commit at a time with `git cherry-pick`. This
   repository's `src` is the source of truth here.

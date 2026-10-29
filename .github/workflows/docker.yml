@@ -71,8 +71,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # The public URL for canonical links, Open Graph and the sitemap. Override it with a
-          # SITE_URL repository variable.
-          build-args: VITE_SITE_URL=${{ vars.SITE_URL || 'https://docs.carp.dk' }}
+          # SITE_URL repository variable. A new BACKEND_API_REVISION makes every run rebuild the site,
+          # so it fetches the current Backend API document even when the cache has the commit.
+          build-args: |
+            VITE_SITE_URL=${{ vars.SITE_URL || 'https://docs.carp.dk' }}
+            BACKEND_API_REVISION=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -70,9 +70,9 @@ Services (CAWS) REST API. Its endpoint pages are generated with
 `https://dev.carp.dk/doc/v3/api-docs`:
 
 - `vite.config.ts` fetches the document once per build (and when `bun run dev` starts) and builds it
-  into the server, so the running site never calls dev.carp.dk. API changes appear after the next
-  build. A build fails when the document cannot be fetched; the dev server warns and shows the section
-  without endpoint pages.
+  into the server, so the running server never calls dev.carp.dk. API changes appear after the next
+  run of the deployment pipeline. A build fails when the document cannot be fetched; the dev server
+  warns and shows the section without endpoint pages.
 - `src/lib/backend-api.ts` groups the endpoints by tag and names the pages; `src/lib/openapi.ts` makes
   the pages, and `src/components/api-page.tsx` renders them with the theme's components and colours.
 - Each endpoint page has an API playground. It sends requests from the browser, so it works only for

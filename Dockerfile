@@ -3,7 +3,7 @@
 # Production image for the CARP docs: a Node server (Nitro) that serves the prerendered pages,
 # search, Ask AI and the Open Graph images. Built and published by .github/workflows/docker.yml.
 
-# --- Build: install with Bun (it applies the M3E patch in patches/) and build the site ---
+# --- Build: install with Bun (it applies the patches in patches/) and build the site ---
 FROM oven/bun:1.4.4 AS build
 # Vite runs on Node, as in local builds, rather than on Bun's Node fallback: Bun counts packages
 # such as undici and ws as built-in modules, so a build on Bun leaves them out of the server bundle,
@@ -19,6 +19,9 @@ COPY . .
 # The public URL used for canonical links, Open Graph and the sitemap.
 ARG VITE_SITE_URL=https://docs.carp.dk
 ENV VITE_SITE_URL=$VITE_SITE_URL NITRO_PRESET=node-server
+# The build fetches the Backend API's OpenAPI document from dev.carp.dk. The pipeline passes a new
+# revision on every run, so a cached build layer never ships an old document.
+ARG BACKEND_API_REVISION
 # A production build: minified, prerendered, with precompressed static files.
 RUN NODE_ENV=production bun run build
 
@@ -28,10 +31,18 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /app/.output ./.output
 USER node
-# Fail the image build when the server cannot serve pages from .output alone, for example when the
-# bundle imports a package that the build left out.
+# Fail the image build when a page was not prerendered (the prerender step only logs failures), or
+# when the server cannot serve pages from .output alone, for example because the bundle imports a
+# package that the build left out.
 RUN node --input-type=module <<'EOF'
 import { spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+const pages = [...readFileSync('.output/public/sitemap.xml', 'utf8').matchAll(/<loc>https?:\/\/[^/<]+([^<]*)<\/loc>/g)].map(([, path]) => path);
+const unrendered = pages.filter(path => !existsSync(`.output/public${path}/index.html`));
+if (!pages.length || unrendered.length) {
+  console.error(`The build did not prerender ${unrendered.length || 'the'} pages${unrendered.length ? `: ${unrendered.slice(0, 10).join(', ')}` : ''}.`);
+  process.exit(1);
+}
 const server = spawn(process.execPath, ['.output/server/index.mjs'], { env: { ...process.env, HOST: '127.0.0.1', PORT: '3999' }, stdio: 'inherit' });
 let failure = 'the server did not answer';
 for (let attempt = 0; attempt < 40 && failure; attempt++) {

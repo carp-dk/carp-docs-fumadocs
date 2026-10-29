@@ -43,6 +43,9 @@ export async function fetchBackendApiDocument(url = backendApiDocumentUrl): Prom
   if (!response.ok) throw new Error(`${url} returned ${response.status} ${response.statusText}`);
   const document = await response.json() as BackendApiDocument;
   if (typeof document?.openapi !== 'string' || typeof document.paths !== 'object') throw new Error(`${url} is not an OpenAPI document`);
+  // The section has pages for operations only (CAWS has no webhooks today).
+  const webhooks = Object.keys(document.webhooks ?? {});
+  if (webhooks.length) console.warn(`[backend-api] The document's webhooks get no pages: ${webhooks.join(', ')}`);
   return normalizeDocument(document);
 }
 
@@ -98,9 +101,12 @@ export function dedent(text: string) {
 export interface BackendApiOperation {
   path: string;
   method: HttpMethod;
-  /** The page's file name: the operation ID without springdoc's `_1` suffix, in kebab case. */
+  /**
+   * The page's file name: the service name for /api/<name>-service, else the operation ID without
+   * springdoc's `_1` suffix, in kebab case. Names that repeat in a group get qualifiers (unique()).
+   */
   slug: string;
-  /** The summary, or a title made from the operation ID ("getAll_4" → "Get all") or service. */
+  /** The summary, else the service name or a title made from the operation ID ("getAll_4" → "Get all"). */
   title: string;
   /** The method and path, for search results, link previews and llms.txt. */
   description: string;
@@ -115,9 +121,13 @@ export interface BackendApiGroup {
   operations: BackendApiOperation[];
 }
 
+// A page named `index` would become its folder's overview, and a folder named `index` the section's.
+const reserved = new Set(['index']);
+
 /**
  * The endpoint pages: one folder per tag, sorted by title, with one page per operation, sorted by
- * path and method. Pages live at /docs/backend-api/<group slug>/<operation slug>.
+ * path and method. Pages live at /docs/backend-api/<group slug>/<operation slug>. Tags whose names
+ * give the same folder share it.
  */
 export function planBackendApiPages(document: BackendApiDocument): BackendApiGroup[] {
   const groups = new Map<string, BackendApiGroup & { entries: { path: string; method: HttpMethod; operation: OpenAPIV3_1.OperationObject }[] }>();
@@ -127,45 +137,76 @@ export function planBackendApiPages(document: BackendApiDocument): BackendApiGro
       if (!operation) continue;
       // An operation with several tags gets one page, in its first tag's group.
       const tag = operation.tags?.[0] ?? 'other';
-      let group = groups.get(tag);
-      if (!group) {
-        const tagObject = document.tags?.find(item => item.name === tag) as (OpenAPIV3_1.TagObject & { 'x-displayName'?: unknown }) | undefined;
-        const displayName = typeof tagObject?.['x-displayName'] === 'string' ? tagObject['x-displayName'] : undefined;
-        const title = displayName ?? groupNames[tag]?.title ?? sentenceCase(tag.replace(/-controller$/, '').replace(/[-_]+/g, ' '));
-        groups.set(tag, group = { tag, slug: kebabCase(title), title, icon: groupNames[tag]?.icon, operations: [], entries: [] });
-      }
+      const tagObject = document.tags?.find(item => item.name === tag) as (OpenAPIV3_1.TagObject & { 'x-displayName'?: unknown }) | undefined;
+      const displayName = typeof tagObject?.['x-displayName'] === 'string' ? tagObject['x-displayName'] : undefined;
+      const title = displayName ?? groupNames[tag]?.title ?? sentenceCase(tag.replace(/-controller$/, '').replace(/[-_]+/g, ' '));
+      let slug = kebabCase(title) || 'other';
+      if (reserved.has(slug)) slug += '-endpoints';
+      let group = groups.get(slug);
+      if (!group) groups.set(slug, group = { tag, slug, title, icon: groupNames[tag]?.icon, operations: [], entries: [] });
       group.entries.push({ path, method, operation });
     }
   }
-  return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'en')).map(({ entries, ...group }) => {
+  const plan = [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'en')).map(({ entries, ...group }) => {
     entries.sort((a, b) => a.path.localeCompare(b.path, 'en') || methods.indexOf(a.method) - methods.indexOf(b.method));
-    const named = entries.map(({ path, method, operation }) => {
+    const operations = entries.map(({ path, method, operation }) => {
       const id = operation.operationId?.replace(/_\d+$/, '');
       // Each CARP application service (StudyService, ProtocolService and so on) takes all of its
       // requests at one endpoint, /api/<name>-service, so the page is named after the service.
       const service = /^\/api\/([a-z-]+-service)$/.exec(path)?.[1];
+      const slug = kebabCase(service ?? id ?? `${method} ${path}`);
       return {
         path,
         method,
-        slug: kebabCase(service ?? id ?? `${method} ${path}`),
+        slug: reserved.has(slug) ? `${slug}-${method}` : slug,
         title: operation.summary?.trim() || (service ? sentenceCase(service.replace(/-/g, ' ')) : id ? humanize(id) : `${method.toUpperCase()} ${path}`),
         description: `${method.toUpperCase()} ${path}`,
         deprecated: operation.deprecated ?? false,
       };
     });
-    // Operations that share a name in one group (overloads) are told apart by their path parameters.
-    for (const key of ['title', 'slug'] as const) {
-      const counts = new Map<string, number>();
-      for (const item of named) counts.set(item[key], (counts.get(item[key]) ?? 0) + 1);
-      for (const item of named) {
-        if (counts.get(item[key])! < 2) continue;
-        const parameters = [...item.path.matchAll(/\{([^}]+)\}/g)].map(match => humanize(match[1]).toLowerCase().replace(/\bid\b/g, 'ID'));
-        const qualifier = parameters.length ? `by ${parameters.join(' and ')}` : `${item.method} ${item.path}`;
-        item[key] = key === 'title' ? `${item.title} ${qualifier}` : kebabCase(`${item.slug} ${qualifier}`);
-      }
-    }
-    return { ...group, operations: named };
+    unique(operations, 'title', (title, qualifier) => `${title} ${qualifier}`);
+    unique(operations, 'slug', (slug, qualifier) => kebabCase(`${slug} ${qualifier}`));
+    return { ...group, operations };
   });
+  // Two operations on one page path would silently replace each other.
+  const paths = plan.flatMap(group => group.operations.map(operation => `${group.slug}/${operation.slug}`));
+  const repeated = paths.find((path, index) => paths.indexOf(path) !== index);
+  if (repeated) throw new Error(`[backend-api] Two operations map to the page ${repeated}`);
+  return plan;
+}
+
+/**
+ * Tell apart the operations of a group that share a title or slug (overloads, mostly): add their
+ * path parameters ("by study ID"), else the method, else the path, wherever that separates them,
+ * and number what is left.
+ */
+function unique(operations: BackendApiOperation[], key: 'title' | 'slug', qualify: (value: string, qualifier: string) => string) {
+  const qualifiers = [
+    (operation: BackendApiOperation) => {
+      const parameters = [...operation.path.matchAll(/\{([^}]+)\}/g)].map(match => humanize(match[1]).toLowerCase().replace(/\bid\b/g, 'ID'));
+      return parameters.length ? `by ${parameters.join(' and ')}` : undefined;
+    },
+    (operation: BackendApiOperation) => key === 'title' ? `(${operation.method.toUpperCase()})` : operation.method,
+    (operation: BackendApiOperation) => operation.path,
+  ];
+  for (const qualifier of qualifiers) {
+    const sets = new Map<string, BackendApiOperation[]>();
+    for (const operation of operations) sets.set(operation[key], [...sets.get(operation[key]) ?? [], operation]);
+    for (const set of sets.values()) {
+      if (set.length < 2) continue;
+      const values = set.map(operation => {
+        const added = qualifier(operation);
+        return added ? qualify(operation[key], added) : operation[key];
+      });
+      if (new Set(values).size > 1) set.forEach((operation, index) => operation[key] = values[index]);
+    }
+  }
+  const seen = new Map<string, number>();
+  for (const operation of operations) {
+    const count = (seen.get(operation[key]) ?? 0) + 1;
+    seen.set(operation[key], count);
+    if (count > 1) operation[key] = qualify(operation[key], String(count));
+  }
 }
 
 /** The URL of every endpoint page, for prerendering. */

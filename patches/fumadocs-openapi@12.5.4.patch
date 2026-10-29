@@ -1,0 +1,156 @@
+diff --git a/dist/packages/shared-api/dist/components/dialog.js b/dist/packages/shared-api/dist/components/dialog.js
+index ef14a13c01384843d34d962a0f48976e17a133b0..3a4c1a4f409af79279018e986022c64a83527b9b 100644
+--- a/dist/packages/shared-api/dist/components/dialog.js
++++ b/dist/packages/shared-api/dist/components/dialog.js
+@@ -9,6 +9,7 @@ import { Dialog } from "@base-ui/react/dialog";
+ /** the popup of a dialog, a window on larger screens and the full screen on smaller ones */
+ function DialogPopup({ className, children }) {
+ 	return /* @__PURE__ */ jsxs(Dialog.Portal, { children: [/* @__PURE__ */ jsx(Dialog.Backdrop, { className: "fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0" }), /* @__PURE__ */ jsx(Dialog.Popup, {
++		"aria-modal": true,
+ 		className: cn("fixed inset-0 z-50 flex flex-col overflow-hidden bg-fd-background text-fd-foreground outline-none transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-ending-style:duration-150 data-starting-style:scale-[0.98] data-starting-style:opacity-0 motion-reduce:transition-opacity sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:shadow-2xl", className),
+ 		children
+ 	})] });
+diff --git a/dist/packages/shared-api/dist/components/example.js b/dist/packages/shared-api/dist/components/example.js
+index effbfa6fda1ee7a3ee9ba5f6c821b606b2179239..52510f33ac507257aabb833a9228e07561195710 100644
+--- a/dist/packages/shared-api/dist/components/example.js
++++ b/dist/packages/shared-api/dist/components/example.js
+@@ -94,7 +94,7 @@ function ExampleHeader({ title, description, copy, className, children }) {
+ 	});
+ }
+ /** a single item is a plain label */
+-function ExampleSelect({ items, value, onValueChange, align = "end", className }) {
++function ExampleSelect({ items, value, onValueChange, align = "end", className, "aria-label": ariaLabel }) {
+ 	if (items.length === 1) return /* @__PURE__ */ jsx("span", {
+ 		className: "px-2 text-fd-muted-foreground",
+ 		children: items[0].label
+@@ -104,6 +104,7 @@ function ExampleSelect({ items, value, onValueChange, align = "end", className }
+ 		value,
+ 		onValueChange: (v) => v !== null && onValueChange(v),
+ 		children: [/* @__PURE__ */ jsx(SelectTrigger, {
++			"aria-label": ariaLabel,
+ 			className: cn("h-7 w-fit max-w-40 shrink-0 gap-1.5 border-0 bg-transparent px-2 py-0 text-[0.8125rem] font-medium text-fd-muted-foreground hover:text-fd-accent-foreground focus:ring-0 focus-visible:ring-2 data-popup-open:bg-fd-accent data-popup-open:text-fd-accent-foreground", className),
+ 			children: /* @__PURE__ */ jsx(SelectValue, { className: "min-w-0 truncate" })
+ 		}), /* @__PURE__ */ jsx(SelectContent, {
+diff --git a/dist/packages/shared-api/dist/components/playground/panels.js b/dist/packages/shared-api/dist/components/playground/panels.js
+index ec765cdec5bc1274a83fb031a5bf156512670e82..6267cd47b8d55ac8b57d9cadb1b8080bcf0c0fd6 100644
+--- a/dist/packages/shared-api/dist/components/playground/panels.js
++++ b/dist/packages/shared-api/dist/components/playground/panels.js
+@@ -270,6 +270,7 @@ function RequestExampleSelect({ items, value, onValueChange, disabled }) {
+ 		disabled,
+ 		onValueChange: (v) => v !== null && onValueChange(v),
+ 		children: [/* @__PURE__ */ jsxs(SelectTrigger, {
++			"aria-label": "Example",
+ 			className: "h-8 w-auto max-w-64 gap-1.5 border-0 bg-transparent px-2 text-xs hover:bg-fd-accent focus:ring-0 focus-visible:ring-2",
+ 			children: [/* @__PURE__ */ jsx("span", {
+ 				className: "text-fd-muted-foreground",
+diff --git a/dist/packages/shared-api/dist/components/schema/client.js b/dist/packages/shared-api/dist/components/schema/client.js
+index 4a441b91802cfe3519f14f2047ccae7ce862ef20..dded7a83e6761fb2e2de5a22f9c0f90a6f1b3bd8 100644
+--- a/dist/packages/shared-api/dist/components/schema/client.js
++++ b/dist/packages/shared-api/dist/components/schema/client.js
+@@ -304,6 +304,7 @@ function UnionSelect({ union: { schema, value, select } }) {
+ 		value,
+ 		onValueChange: (v) => v && select(v),
+ 		children: [/* @__PURE__ */ jsx(SelectTrigger, {
++			"aria-label": "Schema variant",
+ 			className: "h-7 w-auto min-w-0 gap-1 border-0 bg-transparent px-1.5 py-0 text-[0.8125rem] font-medium text-fd-foreground hover:bg-fd-accent focus:ring-0 focus-visible:ring-2 focus-visible:ring-inset data-popup-open:bg-fd-accent",
+ 			children: /* @__PURE__ */ jsx(SelectValue, { className: "truncate" })
+ 		}), /* @__PURE__ */ jsx(SelectContent, { children: items.map((item) => /* @__PURE__ */ jsx(SelectItem, {
+diff --git a/dist/ui/operation/index.js b/dist/ui/operation/index.js
+index fbaf40e1270bbefb26ad9088ec0f970e3f5f41bd..eb69f6300c2aeb83b90c125e1b9e1286fb911cbf 100644
+--- a/dist/ui/operation/index.js
++++ b/dist/ui/operation/index.js
+@@ -88,7 +88,7 @@ function OperationContent({ showTitle, showDescription, headingLevel = 2 }) {
+ 					children: /* @__PURE__ */ jsx(MediaContent, {
+ 						schema: content.schema,
+ 						required: requestBody.required,
+-						selector: /* @__PURE__ */ jsx(SelectTabTrigger, { items }),
++						selector: /* @__PURE__ */ jsx(SelectTabTrigger, { items, "aria-label": "Media type" }),
+ 						request: true
+ 					})
+ 				}, mediaType))
+@@ -153,7 +153,7 @@ function OperationContent({ showTitle, showDescription, headingLevel = 2 }) {
+ 				className: "overflow-hidden rounded-xl border bg-fd-card",
+ 				children: [/* @__PURE__ */ jsx("div", {
+ 					className: "flex h-9 items-center border-b ps-1.5 pe-1 text-[0.8125rem] not-prose",
+-					children: /* @__PURE__ */ jsx(SelectTabTrigger, { items })
++					children: /* @__PURE__ */ jsx(SelectTabTrigger, { items, "aria-label": "Security requirement" })
+ 				}), security.map((requirement, i) => /* @__PURE__ */ jsx(SelectTab, {
+ 					value: items[i].value,
+ 					className: "px-3",
+@@ -348,7 +348,7 @@ function ResponseContent({ item: { status, response, content }, onLink }) {
+ 					anchorSegments: [mediaType],
+ 					children: /* @__PURE__ */ jsx(MediaContent, {
+ 						schema: media.schema,
+-						selector: /* @__PURE__ */ jsx(SelectTabTrigger, { items })
++						selector: /* @__PURE__ */ jsx(SelectTabTrigger, { items, "aria-label": "Media type" })
+ 					})
+ 				}, mediaType))]
+ 			})
+diff --git a/dist/ui/operation/usage-tabs.js b/dist/ui/operation/usage-tabs.js
+index af706d4cf7795017f7fdcdd814b7355277810d7c..061fa1c2085a95175841abeca1464448126e6126 100644
+--- a/dist/ui/operation/usage-tabs.js
++++ b/dist/ui/operation/usage-tabs.js
+@@ -85,6 +85,7 @@ function CodeUsages({ title, selectExample = false, className, viewportClassName
+ 		code: code ?? "",
+ 		codeblock: {
+ 			title: example ? /* @__PURE__ */ jsx(ExampleSelect, {
++				"aria-label": "Request example",
+ 				items: examples.items.map((item) => ({
+ 					value: item.id,
+ 					label: item.name,
+@@ -96,6 +97,7 @@ function CodeUsages({ title, selectExample = false, className, viewportClassName
+ 				className: "-ms-2 max-w-full text-fd-foreground"
+ 			}) : title,
+ 			Actions: exampleActions(/* @__PURE__ */ jsx(ExampleSelect, {
++				"aria-label": "Code sample language",
+ 				items,
+ 				value: id,
+ 				onValueChange: (value) => selectCodeUsage(storageKey, value)
+@@ -137,6 +139,7 @@ function ResponseTabsDefaultContent({ tabs }) {
+ 		body = /* @__PURE__ */ jsxs(Fragment$1, { children: [captioned && /* @__PURE__ */ jsxs("div", {
+ 			className: "shrink-0 px-4 pt-2.5",
+ 			children: [examples.length > 1 && /* @__PURE__ */ jsx(ExampleSelect, {
++				"aria-label": "Response example",
+ 				items: examples.map((item, i) => ({
+ 					value: String(i),
+ 					label: item.label
+@@ -175,6 +178,7 @@ function ResponseTabsDefaultContent({ tabs }) {
+ 					children: /* @__PURE__ */ jsx(Switch.Thumb, { className: "size-3 rounded-full bg-fd-muted-foreground transition-[translate,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] data-checked:translate-x-3 data-checked:bg-fd-primary-foreground motion-reduce:transition-none" })
+ 				})]
+ 			}), /* @__PURE__ */ jsx(ExampleSelect, {
++				"aria-label": "Response status",
+ 				items: tabs.map((item) => ({
+ 					value: item.code,
+ 					label: item.code
+@@ -221,6 +225,7 @@ function RequestTabsDefaultContent() {
+ 			/* @__PURE__ */ jsx(ExampleHeader, {
+ 				title: t("Example Requests"),
+ 				children: items.length > 1 && /* @__PURE__ */ jsx(ExampleSelect, {
++					"aria-label": "Request example",
+ 					items: items.map((item) => ({
+ 						value: item.id,
+ 						label: item.id === "_default" ? t("Default") : item.name
+diff --git a/dist/ui/playground/components/request-panel.js b/dist/ui/playground/components/request-panel.js
+index a3e681db2670acaeb57b5b6fee62eeca4645f992..f005fab9fea787b37f8eee8309642633847d56b9 100644
+--- a/dist/ui/playground/components/request-panel.js
++++ b/dist/ui/playground/components/request-panel.js
+@@ -140,6 +140,7 @@ function AuthSection({ auth, onAuthorize }) {
+ 			value: selected,
+ 			onValueChange: (v) => v !== null && select(v),
+ 			children: [/* @__PURE__ */ jsx(SelectTrigger, {
++				"aria-label": "Security requirement",
+ 				className: "h-7 w-auto max-w-60 gap-1.5 @sm:-me-2 border-0 bg-transparent px-2 text-xs hover:bg-fd-accent focus:ring-0 focus-visible:ring-2",
+ 				children: /* @__PURE__ */ jsx(SelectValue, { className: "truncate" })
+ 			}), /* @__PURE__ */ jsx(SelectContent, {
+diff --git a/dist/ui/playground/components/response-panel.js b/dist/ui/playground/components/response-panel.js
+index 6bbb3cdedfc84b863bd951b5bf9dbf6bf41504cd..a0a487360a896713435a547325ef643f29b1e83c 100644
+--- a/dist/ui/playground/components/response-panel.js
++++ b/dist/ui/playground/components/response-panel.js
+@@ -59,6 +59,7 @@ function ResponseExamples() {
+ 						children: t("Response")
+ 					}),
+ 					examples.length > 1 && /* @__PURE__ */ jsx(ExampleSelect, {
++						"aria-label": "Response example",
+ 						items: examples.map((item, i) => ({
+ 							value: String(i),
+ 							label: item.label

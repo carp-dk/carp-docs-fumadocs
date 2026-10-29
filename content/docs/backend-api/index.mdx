@@ -8,52 +8,52 @@ The CARP Web Services (CAWS) REST API is how clients work with CARP's server. It
 
 Apps built with CARP Mobile Sensing (CAMS) call the API through the [`carp_webservices`](https://pub.dev/packages/carp_webservices) package. For the app side, see [CARP Web Services](/docs/data-storage/caws).
 
-The endpoint pages are generated from the [OpenAPI document](https://dev.carp.dk/doc/v3/api-docs) of the CAWS server at `https://dev.carp.dk` each time the docs are built, so they describe the API as deployed there.
+The endpoint pages are generated from the [OpenAPI document](https://dev.carp.dk/doc/v3/api-docs) of the CAWS server at `https://dev.carp.dk`. Each docs build fetches the document again, so the pages show the API as it was at the last build.
 
 ## Authentication
 
 Endpoints need an access token from CARP's Keycloak server, sent in the `Authorization` header as `Bearer <token>`. The OpenAPI document describes the OAuth 2.0 password flow, with the token URL `https://dev.carp.dk/auth/realms/Carp/protocol/openid-connect/token`.
 
-The [self-signup endpoint](/docs/backend-api/self-signup/sign-up) is public: it creates an anonymous participant account from a study code.
+The [self sign-up endpoint](/docs/backend-api/self-signup/sign-up) is public: it creates an anonymous participant account from a study code. The OpenAPI document does not mark it as public, so its page lists the token too.
 
 ## Service endpoints
 
-CAWS hosts the application services of [CARP Core](https://github.com/carp-dk/carp.core-kotlin). Each service takes all of its requests at one endpoint, as a CARP Core request object such as `CreateStudy`, and its page lists the response that each request returns:
+CAWS hosts the application services of [CARP Core](https://github.com/carp-dk/carp.core-kotlin). Each service takes its requests at one endpoint, as CARP Core request objects such as `CreateStudy`. Its page lists the response that each request returns:
 
 | Service | Endpoint | Requests |
 | --- | --- | --- |
-| [Study service](/docs/backend-api/studies/study-service) | `POST /api/study-service` | Create and configure studies, and set them live |
-| [Recruitment service](/docs/backend-api/studies/recruitment-service) | `POST /api/recruitment-service` | Add participants and invite participant groups |
-| [Protocol service](/docs/backend-api/protocols/protocol-service) | `POST /api/protocol-service` | Add study protocols and their versions |
+| [Study service](/docs/backend-api/studies/study-service) | `POST /api/study-service` | Create, configure and remove studies, and set them live |
+| [Recruitment service](/docs/backend-api/studies/recruitment-service) | `POST /api/recruitment-service` | Add participants, and invite and stop participant groups |
+| [Protocol service](/docs/backend-api/protocols/protocol-service) | `POST /api/protocol-service` | Add, update and get study protocols and their versions |
 | [Protocol factory service](/docs/backend-api/protocols/protocol-factory-service) | `POST /api/protocol-factory-service` | Create a custom protocol |
-| [Deployment service](/docs/backend-api/study-deployments/deployment-service) | `POST /api/deployment-service` | Create study deployments and register devices |
-| [Participation service](/docs/backend-api/study-deployments/participation-service) | `POST /api/participation-service` | Get invitations and participant data |
-| [Data stream service](/docs/backend-api/data-streams/data-stream-service) | `POST /api/data-stream-service` | Open, append to, read and close data streams |
+| [Deployment service](/docs/backend-api/study-deployments/deployment-service) | `POST /api/deployment-service` | Create and stop study deployments, and register devices |
+| [Participation service](/docs/backend-api/study-deployments/participation-service) | `POST /api/participation-service` | Get invitations, and get and set participant data |
+| [Data stream service](/docs/backend-api/data-streams/data-stream-service) | `POST /api/data-stream-service` | Open, append to, read, close and remove data streams |
 
-[Handle compressed data](/docs/backend-api/data-streams/handle-compressed-data) takes the data stream requests gzip-compressed, at `POST /api/data-stream-service-zip`. For how request objects work, see [Request objects](https://github.com/carp-dk/carp.core-kotlin#request-objects) in CARP Core.
+The [compressed data stream endpoint](/docs/backend-api/data-streams/handle-compressed-data), `POST /api/data-stream-service-zip`, takes the same requests gzip-compressed, although the OpenAPI document declares a JSON body. For how request objects work, see [Request objects](https://github.com/carp-dk/carp.core-kotlin#request-objects) in CARP Core.
 
-The other groups hold resource endpoints, such as documents, collections, files and exports.
+Besides the services, the groups hold resource endpoints, such as study researchers, documents, collections, files and exports.
 
 ## API playground
 
-Each endpoint page has a playground that sends the request from your browser. CAWS rejects the CORS preflight request of every endpoint that needs a token, so from this site the playground reaches only the public self-signup endpoint. To send other requests, use the [Swagger UI](https://dev.carp.dk/doc/swagger-ui/index.html) on the server or your own client.
+Each endpoint page has a playground that sends the request from your browser. CAWS rejects the CORS preflight request of every endpoint that needs a token. From this site, the playground therefore reaches only the public self sign-up endpoint. To send other requests, use the [Swagger UI](https://dev.carp.dk/doc/swagger-ui/index.html) on the server or your own client.
 
 ## Next steps
 
 <Cards>
 <Card title="CARP Web Services" href="/docs/data-storage/caws" icon="Cloud">
 
-Upload data to CAWS from a CARP Mobile Sensing app.
+Upload data to CAWS from a CAMS app.
 
 </Card>
 <Card title="Study service" href="/docs/backend-api/studies/study-service" icon="Science">
 
-Create, configure and manage studies.
+Create, configure and remove studies, and set them live.
 
 </Card>
 <Card title="Architecture" href="/docs/architecture" icon="Hub">
 
-How the CARP components fit together, from protocol to upload.
+How the CARP components fit together, from study protocol to data upload.
 
 </Card>
 </Cards>

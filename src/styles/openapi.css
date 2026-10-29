@@ -13,10 +13,40 @@
 .docs-api-page h2 { @apply text-m3-title-large; }
 .docs-api-page :is(h3, h4, h5, h6) { @apply text-m3-title-medium; }
 
-/* Code lines take the block's inline padding, as in fumadocs-ui. */
-.docs-api-page .shiki .line { position: relative; padding-inline: 16px var(--padding-right, 16px); }
-.docs-api-page .shiki .line:empty { height: 1lh; }
-.docs-api-page .shiki code { font-family: var(--font-mono); }
+/* The deprecation Callout opens the left column, level with the example column. */
+.docs-api-page .docs-callout:first-child { margin-top: 0; }
+
+/* Code lines take the block's inline padding, as in fumadocs-ui. Its code blocks are figure.shiki,
+   also in the playground dialog, which is portalled outside the page; the site's own code blocks
+   are figure.docs-code-block. */
+figure.shiki .line { position: relative; padding-inline: 16px var(--padding-right, 16px); }
+figure.shiki .line:empty { height: 1lh; }
+figure.shiki code { font-family: var(--font-mono); }
+
+/* The endpoint bar: the method, the path and the playground trigger. The UI scrolls a long path
+   with its scrollbar hidden, which cuts it off, so it wraps between its segments instead, with the
+   method and trigger on the baseline of its first line (align-content keeps a one-line bar
+   centred). In a narrow bar, the path takes a row of its own under them. */
+.docs-api-page div:has(> button[aria-haspopup='dialog']) { container: docs-api-endpoint / inline-size; flex-wrap: wrap; row-gap: 4px; align-items: first baseline; align-content: center; }
+.docs-api-page div:has(> button[aria-haspopup='dialog']) > div { flex-wrap: wrap; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+@container docs-api-endpoint (width < 36rem) {
+  .docs-api-page div:has(> button[aria-haspopup='dialog']) > div { order: 1; flex-basis: 100%; padding-bottom: 4px; }
+  .docs-api-page div:has(> button[aria-haspopup='dialog']) > button { margin-inline-start: auto; }
+}
+/* The trigger is filled with the primary colour, so its ring stands off it, as the site's do. */
+.docs-api-page button[aria-haspopup='dialog']:focus-visible { outline: 2px solid var(--color-fd-ring); outline-offset: 3px; box-shadow: none; }
+
+/* The playground dialog (the mobile drawer is an aside, not this portal). Its rows show focus only
+   as a faint background or a 1px line, and its other controls as box-shadow rings, so all of them
+   take the site's ring instead, drawn inside because the panels clip their overflow. The filled
+   Send button keeps it outside, where it shows. */
+body > [data-base-ui-portal] > [role='dialog'] :is(button, input, textarea, [role='combobox'], [tabindex]):focus-visible,
+body > [data-base-ui-portal] > [role='dialog'] label:has(> input[type='file']:focus-visible) {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: -2px;
+  --tw-ring-shadow: 0 0 transparent;
+}
+body > [data-base-ui-portal] > [role='dialog'] button[type='submit']:focus-visible { outline-offset: 3px; }
 
 /* The OpenAPI UI colours methods, status codes and warnings with Tailwind's palette, which the
    site does not use otherwise; these read the status roles instead, so they meet the site's
@@ -40,13 +70,22 @@
   --color-red-600: var(--md-sys-color-error);
 }
 
-/* Endpoint pages in the sidebar and the page links: the name, then the method (src/lib/openapi.ts). */
-.fd-page-tree-item-name:has(> .docs-api-method) { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.docs-api-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Endpoint pages in the sidebar and the page links: the name, then the method (src/lib/openapi.ts).
+   The pair is only as wide as its text, so the method follows the name, and a long name wraps
+   with the method on its first line. */
+.fd-page-tree-item-name:has(> .docs-api-method) { display: inline-flex; align-items: baseline; gap: 8px; max-width: 100%; }
+.docs-api-nav-name { flex: 1; min-width: 0; white-space: normal; }
 .docs-api-nav-name[data-deprecated] { text-decoration: line-through; }
-.docs-api-method { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.4px; }
+.docs-api-method { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0.4px; }
 .docs-api-method[data-method='get'] { color: var(--docs-success); }
 .docs-api-method[data-method='post'] { color: var(--docs-info); }
 .docs-api-method:is([data-method='put'], [data-method='patch']) { color: var(--docs-warning); }
 .docs-api-method[data-method='delete'] { color: var(--md-sys-color-error); }
 .docs-api-method[data-method='head'] { color: var(--md-sys-color-on-surface-variant); }
+/* Their sidebar rows grow with a wrapped name: M3E fixes the row height, and auto makes its
+   calc() invalid, so the height falls back to auto; the label's padding keeps one-line rows at
+   the 2rem height (20px line). */
+m3e-nav-menu-item:has(> [slot='label'] .docs-api-method) { --m3e-nav-menu-item-height: auto; }
+m3e-nav-menu-item > [slot='label']:has(.docs-api-method) { padding-block: 6px; }
+/* The mobile drawer's rows are 40px (navigation.css). */
+.docs-mobile-drawer m3e-nav-menu-item > [slot='label']:has(.docs-api-method) { padding-block: 10px; }
